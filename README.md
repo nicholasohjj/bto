@@ -100,6 +100,11 @@ src/
   - **Rate changes:** add as many as you like, to model a floating rate (e.g. fixed 2.2% for 3 years, then 3.0%, then 2.8%). Works for HDB and bank loans.
   - **Refinance / switch HDB → bank:** a new rate, an optional new remaining tenure, cash costs, and a lock-in penalty as % of the balance. From an HDB loan it's one-way, and the bank-loan CPF limit applies from then (CPF already used counts).
   - **Tenure changes:** a new remaining tenure from a month.
+  - **Partial prepayments:** a lump sum from cash or CPF OA, once or every year (optional end month).
+    - Then either a lower instalment (same end date) or finishing sooner (same instalment).
+    - CPF used counts towards your CPF refund on sale and the bank-loan CPF limit.
+    - A bank-loan prepayment penalty (% of the amount) can be set; HDB loans have none.
+    - A prepayment can pay the loan off entirely.
   - Each change re-works the instalment on the outstanding balance. The loan panel lists the path. Warnings flag terms past the usual tenure or age limits.
   - **Timing of an HDB → bank switch:**
     - **Before keys:** the bank loan starts at key collection, and the bank's cash rule applies then. At least 5% of the price must be paid in cash across the downpayment (option fee + AFL + keys), so any AFL portion paid with CPF is made up in cash at keys. The bank's MSR/TDSR at its 4% stress rate is checked against income at keys.
@@ -130,6 +135,11 @@ src/
   - Checks the age rule (at least one of you ≤ 30 at application), shows an eligibility checklist, and warns if a grant is set to arrive before keys.
   - Pair it with **"Still studying / in NS"** under Us. Before the work-start month a partner has no salary, CPF or bonus, only the "saved per month until then" amount.
   - Without DIA, having no income at AFL is flagged, with a suggestion to turn DIA on.
+  - **Income above the ceiling at the deferred check:**
+    - Eligibility to buy is still judged on income when applying, so you keep the flat.
+    - The grant is recalculated (none above $9,000).
+    - If income is above the HDB loan ceiling ($16,000 families / $8,000 singles), it's flagged as "no HDB loan". The fix is a "Switch to bank loan" dated at keys, which shows the extra cash for the bank's 5% rule.
+    - The Flat page shows both incomes.
 - **HDB loan rule.** With an HDB loan, OA above the retention limit ($20k each) is used for the downpayment, even if the slider is set lower.
 - **Mortgage.** The mortgage starts the month after keys. It is paid from OA first, then cash (you can change this).
 - **Joint payments** are split by the joint-split slider. With "Pool our cash" on, one partner's cash covers the other's shortfall.
@@ -196,6 +206,7 @@ Users can override any figure for a single scenario under **Advanced settings**.
 | Singles income ceiling $8,000 from 24 Aug 2026 (was $7,000) | Secondary (NDR 2026 news) |
 | Joint Singles Scheme ceiling (assumed $16,000) and families grant table | **Not verified** |
 | Single second-timers can't buy a new flat | **Not verified** |
+| DIA: buying eligibility judged at application; HDB loan not available if deferred income > HDB loan ceiling | Secondary (guides) / **not read on hdb.gov.sg** |
 | Letter of Offer needed before AFL for bank loans | Verified (HDB BTO Annex, Oct 2024 / Feb 2026) |
 | HDB → bank before keys: 5% cash made up at keys; no HDB penalty after keys; no bank → HDB | From you / general guidance; **not read on hdb.gov.sg** |
 | When EHG is credited for a BTO (default: key collection) | Verified for DIA buyers (paid at key collection); otherwise **not verified**, editable per grant |

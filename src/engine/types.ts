@@ -147,6 +147,19 @@ export type LoanChange =
   | { id: string; kind: 'refinance'; from: YearMonth; rate: number; tenureYears?: number; costs: number; penaltyPct: number }
   /** Change the remaining tenure (years from this month). */
   | { id: string; kind: 'tenure'; from: YearMonth; tenureYears: number }
+  /**
+   * Partial prepayment: pay down the loan with a lump sum from cash or CPF OA,
+   * then either lower the instalment (same end date) or finish sooner (same instalment).
+   */
+  | {
+      id: string; kind: 'prepay'; from: YearMonth; amount: number
+      source: 'cash' | 'cpf'; then: 'lowerInstalment' | 'shorterTenure'
+      /** Bank loans in lock-in: penalty as % of the amount prepaid (paid in cash). */
+      penaltyPct: number
+      /** Repeat every year in the same month (optional end month). */
+      repeatYearly?: boolean
+      until?: YearMonth
+    }
 
 export interface Assumptions {
   /** Interest earned on cash savings, % p.a. (compounded monthly). */

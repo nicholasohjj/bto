@@ -6,7 +6,7 @@ import { leaseFactor, normalizeScenario } from './saleType'
 import { resolvePolicy } from './policyOverrides'
 import { round2 } from './stampDuty'
 import { money } from './format'
-import { monthlyInstalment } from './loan'
+import { monthlyInstalment, monthsToRepay } from './loan'
 import type { MonthState, PaidEvent, PartnerId, PotBalances, Scenario, YearMonth } from './types'
 
 export const MONTHS_AFTER_KEYS = 12
@@ -61,9 +61,12 @@ export interface LoanStep {
   monthsLeft: number
   outstanding: number
   /** What changed ('start' for the original loan). */
-  change: 'start' | 'rate' | 'refinance' | 'tenure'
-  /** Cash paid for refinancing (costs + lock-in penalty). */
+  change: 'start' | 'rate' | 'refinance' | 'tenure' | 'prepay'
+  /** Cash paid for refinancing or a prepayment penalty. */
   cost?: number
+  /** Amount prepaid (partial prepayment). */
+  prepaid?: number
+  prepaidFrom?: 'cash' | 'cpf'
 }
 
 export interface SimOptions {
@@ -361,6 +364,56 @@ export function simulateCore(
     // d. Loan changes this month (rate, refinance, tenure), then the mortgage payment.
     for (const c of changesByIdx.get(idx) ?? []) {
       if (outstanding <= 0.005) break
+      if (c.kind === 'prepay') {
+        // Partial prepayment from cash or CPF OA, then re-work the loan.
+        const want = round2(Math.min(Math.max(0, c.amount), outstanding))
+        if (want <= 0) continue
+        let paid = 0
+        let label = `Prepaid ${money(want)} from ${c.source === 'cpf' ? 'CPF OA' : 'cash'}`
+        if (c.source === 'cash') {
+          const ev = payObligation({
+            id: `${c.id}-prepay`, sourceId: c.id, label, kind: 'custom', ym, amount: want,
+            funding: 'cashOnly', minCash: 0, grantFunded: 0, payer: 'joint', housing: false, downpayment: false, delayable: false,
+          }, ym)
+          ev.kind = 'loanChange'
+          monthEvents.push(ev)
+          paid = want
+        } else {
+          const room = Math.max(0, Math.min(want, cpfCap - cpfUsedForFlat))
+          const got = draw('oa', { A: room * splitA, B: room * (1 - splitA) }, true)
+          paid = round2(got.taken.A + got.taken.B)
+          for (const id of IDS) if (got.taken[id] > 0) housingWithdrawals.push({ ym, partner: id, amount: got.taken[id] })
+          cpfUsedForFlat += paid
+          if (paid < want - 0.5) label = `Prepaid ${money(paid)} from CPF OA (only this much was available)`
+          monthEvents.push({ ym, itemId: `${c.id}-prepay`, label, kind: 'loanChange', amount: paid, fromCash: 0, fromCpf: paid, shortfall: 0, cpfFallbackToCash: 0, after: combined() })
+        }
+        outstanding = Math.max(0, outstanding - paid)
+        const penalty = loanType === 'bank' ? round2((Math.max(0, c.penaltyPct) / 100) * paid) : 0
+        if (penalty > 0) {
+          const ev = payObligation({
+            id: `${c.id}-penalty`, sourceId: c.id, label: 'Prepayment penalty', kind: 'custom', ym, amount: penalty,
+            funding: 'cashOnly', minCash: 0, grantFunded: 0, payer: 'joint', housing: false, downpayment: false, delayable: false,
+          }, ym)
+          ev.kind = 'loanChange'
+          monthEvents.push(ev)
+        }
+        if (outstanding <= 0.005) {
+          instalment = 0
+          loanPath.push({ ym, loanType, rate, instalment: 0, monthsLeft: 0, outstanding: 0, change: 'prepay', prepaid: paid, prepaidFrom: c.source, cost: penalty || undefined })
+          continue
+        }
+        let monthsLeft = Math.max(1, loanEndIdx - idx + 1)
+        const n = c.then === 'shorterTenure' ? monthsToRepay(outstanding, rate, instalment) : Infinity
+        if (Number.isFinite(n)) {
+          // Same instalment, fewer months (the last payment is just what's left).
+          monthsLeft = Math.max(1, n)
+          loanEndIdx = idx + monthsLeft - 1
+        } else {
+          instalment = round2(monthlyInstalment(outstanding, rate, monthsLeft / 12))
+        }
+        loanPath.push({ ym, loanType, rate, instalment, monthsLeft, outstanding, change: 'prepay', prepaid: paid, prepaidFrom: c.source, cost: penalty || undefined })
+        continue
+      }
       let cost = 0
       if (c.kind === 'rate') rate = c.rate
       if (c.kind === 'tenure') loanEndIdx = idx + Math.max(1, Math.round(c.tenureYears * 12)) - 1

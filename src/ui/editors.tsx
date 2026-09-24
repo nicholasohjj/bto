@@ -402,8 +402,19 @@ function EligibilitySummary({ el }: { el: ReturnType<typeof assessEligibility> }
   )
   return (
     <dl className="mt-3 space-y-1 rounded-lg bg-surface-2 p-3 text-xs">
-      {row(`Avg household income (12 mths to ${formatYm(el.windowEnd)})`, `${money(el.avgIncome)}/mth`)}
-      {row('Income ceiling for this flat', money(el.incomeCeiling), el.aboveCeiling)}
+      {el.purchaseAvgIncome !== el.avgIncome || el.purchaseAssessedAt !== el.assessedAt ? (
+        <>
+          {row(`Income when applying (${formatYm(el.purchaseAssessedAt)})`, `${money(el.purchaseAvgIncome)}/mth`, el.aboveCeiling)}
+          {row('Income ceiling to buy this flat', money(el.incomeCeiling), el.aboveCeiling)}
+          {row(`Income at deferred check (${formatYm(el.assessedAt)})`, `${money(el.avgIncome)}/mth`, el.hdbLoanBlockedByDia)}
+          {row('HDB loan income ceiling', money(el.hdbLoanIncomeCeiling), el.hdbLoanBlockedByDia)}
+        </>
+      ) : (
+        <>
+          {row(`Avg household income (12 mths to ${formatYm(el.windowEnd)})`, `${money(el.avgIncome)}/mth`)}
+          {row('Income ceiling for this flat', money(el.incomeCeiling), el.aboveCeiling)}
+        </>
+      )}
       {row('Enhanced CPF Housing Grant (estimate)', money(el.ehg))}
       {el.household === 'secondTimers' && row('Step-Up grant (estimate)', money(el.stepUp))}
       {el.premium > 0 && row('Citizen + PR premium', `+${money(el.premium)}`)}
@@ -510,18 +521,20 @@ export function FinancingEditor({ scenario, update, policy }: { scenario: Scenar
 function LoanChangesEditor({ scenario, update }: { scenario: Scenario; update: Update }) {
   const fin = scenario.financing
   const keys = scenario.flat.dates.keys
-  const changes = loanChangesOf(fin, keys)
+  // Show the list as entered (yearly prepayments as one row), plus the old lock-in setting if present.
+  const changes = fin.loanChanges ?? loanChangesOf(fin, keys)
   const hasRefi = changes.some((c) => c.kind === 'refinance')
+  const onBankLoan = fin.loanType === 'bank' || hasRefi
   // Editing moves the old single "rate after lock-in" into the list.
   const edit = (fn: (list: NonNullable<Scenario['financing']['loanChanges']>) => void) =>
     update((d) => {
-      const list = structuredClone(loanChangesOf(d.financing, keys))
+      const list = structuredClone(d.financing.loanChanges ?? loanChangesOf(d.financing, keys))
       fn(list)
       d.financing.loanChanges = list
       delete d.financing.rateAfter
     })
   const inYears = (n: number) => addMonths(keys, n * 12 + 1)
-  const title = { rate: 'Rate change', refinance: fin.loanType === 'HDB' ? 'Switch to a bank loan' : 'Refinance / reprice', tenure: 'Change tenure' }
+  const title = { rate: 'Rate change', refinance: fin.loanType === 'HDB' ? 'Switch to a bank loan' : 'Refinance / reprice', tenure: 'Change tenure', prepay: 'Prepay a lump sum' }
   return (
     <Card>
       <div className="mb-1 flex items-center text-sm font-semibold">Loan changes after key collection<InfoTip term="loanChanges" /></div>
@@ -555,6 +568,30 @@ function LoanChangesEditor({ scenario, update }: { scenario: Scenario; update: U
             {(c.kind === 'rate' || c.kind === 'refinance') && (
               <Field label="New rate"><PercentInput value={c.rate} max={20} onChange={(v) => edit((l) => { (l[ci] as typeof c).rate = v })} ariaLabel="New rate" /></Field>
             )}
+            {c.kind === 'prepay' && (
+              <>
+                <Field label="Amount"><MoneyInput value={c.amount} onChange={(v) => edit((l) => { (l[ci] as typeof c).amount = v })} ariaLabel="Prepayment amount" /></Field>
+                <Field label="Pay with">
+                  <Select value={c.source} onChange={(v) => edit((l) => { (l[ci] as typeof c).source = v })} ariaLabel="Prepay with"
+                    options={[{ value: 'cash', label: 'Cash' }, { value: 'cpf', label: 'CPF OA' }]} />
+                </Field>
+                <Field label="Then">
+                  <Select value={c.then} onChange={(v) => edit((l) => { (l[ci] as typeof c).then = v })} ariaLabel="After prepaying"
+                    options={[{ value: 'lowerInstalment', label: 'Lower instalment' }, { value: 'shorterTenure', label: 'Finish sooner' }]} />
+                </Field>
+                {onBankLoan && (
+                  <Field label="Prepayment penalty" tipText="Banks may charge around 1.5% of the amount you prepay during the lock-in period. HDB loans have no penalty.">
+                    <NumberInput suffix="% of amount" min={0} max={10} value={c.penaltyPct} onChange={(v) => edit((l) => { (l[ci] as typeof c).penaltyPct = v })} ariaLabel="Prepayment penalty" />
+                  </Field>
+                )}
+                <div className="min-[360px]:col-span-2">
+                  <Toggle label="Repeat every year" checked={!!c.repeatYearly} onChange={(v) => edit((l) => { (l[ci] as typeof c).repeatYearly = v })} />
+                </div>
+                {c.repeatYearly && (
+                  <Field label="Until (optional)"><MonthInput value={c.until ?? ''} onChange={(v) => edit((l) => { (l[ci] as typeof c).until = v })} ariaLabel="Repeat until" /></Field>
+                )}
+              </>
+            )}
             {c.kind === 'tenure' && (
               <Field label="Years left from then"><NumberInput suffix="yrs" min={1} max={35} value={c.tenureYears} onChange={(v) => edit((l) => { (l[ci] as typeof c).tenureYears = v })} ariaLabel="Remaining tenure" /></Field>
             )}
@@ -580,6 +617,7 @@ function LoanChangesEditor({ scenario, update }: { scenario: Scenario; update: U
           + {fin.loanType === 'HDB' && !hasRefi ? 'Switch to bank loan' : 'Refinance'}
         </Button>
         <Button variant="ghost" onClick={() => edit((l) => { l.push({ id: newId('lc'), kind: 'tenure', from: inYears(5), tenureYears: Math.max(1, fin.tenureYears - 10) }) })}>+ Change tenure</Button>
+        <Button variant="ghost" onClick={() => edit((l) => { l.push({ id: newId('lc'), kind: 'prepay', from: inYears(2), amount: 20000, source: 'cash', then: 'lowerInstalment', penaltyPct: 0 }) })}>+ Prepay a lump sum</Button>
       </div>
     </Card>
   )

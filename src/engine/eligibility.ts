@@ -30,6 +30,16 @@ export interface Eligibility {
   premium: number
   /** Singles / Joint Singles: problems with eligibility (age, citizenship, flat type, first-timer). */
   singlesIssues: string[]
+  /**
+   * Income used to decide whether you can buy the flat: at the HFE application
+   * (application month), even under DIA — the grant/loan income above is deferred.
+   */
+  purchaseAvgIncome: number
+  purchaseAssessedAt: YearMonth
+  /** HDB loan household income ceiling (families / singles / joint singles). */
+  hdbLoanIncomeCeiling: number
+  /** Under DIA: income at the deferred assessment is above the HDB loan ceiling. */
+  hdbLoanBlockedByDia: boolean
 }
 
 export function tierAmount(income: number, tiers: GrantTier[]): number {
@@ -61,9 +71,18 @@ export function assessEligibility(raw: Scenario, policy: Policy): Eligibility {
   const assessedAt = grantAssessmentMonth(s, policy)
   const windowEnd = addMonths(assessedAt, -el.ehgIncomeLagMonths)
   const months = el.ehgEmploymentMonths
-  let total = 0
-  for (let i = 0; i < months; i++) total += householdIncome(s, addMonths(windowEnd, -i))
-  const avgIncome = total / months
+  const averageTo = (end: YearMonth) => {
+    let total = 0
+    for (let i = 0; i < months; i++) total += householdIncome(s, addMonths(end, -i))
+    return total / months
+  }
+  // Grant (and, under DIA, HDB loan) income: at the HFE application, or deferred under DIA.
+  const avgIncome = averageTo(windowEnd)
+  // Buying the flat is decided at the HFE application, even under DIA.
+  const purchaseAssessedAt = s.flat.dates.application
+  const purchaseAvgIncome = s.financing.deferredIncomeAssessment
+    ? averageTo(addMonths(purchaseAssessedAt, -el.ehgIncomeLagMonths))
+    : avgIncome
 
   const singles = isSinglesPurchase(s)
   const incomeCeiling = isSingle(s)
@@ -127,12 +146,21 @@ export function assessEligibility(raw: Scenario, policy: Policy): Eligibility {
     stepUpReason = 'Eligible.'
   }
 
+  const hdbLoanIncomeCeiling = isSingle(s)
+    ? el.incomeCeilingSingles
+    : s.buyers === 'jointSingles' ? el.incomeCeilingJointSingles : el.incomeCeilingFamilies
+  const hdbLoanBlockedByDia = !!s.financing.deferredIncomeAssessment && s.financing.loanType === 'HDB' && avgIncome > hdbLoanIncomeCeiling
+
   return {
     assessedAt,
     windowEnd,
     avgIncome,
     incomeCeiling,
-    aboveCeiling: avgIncome > incomeCeiling,
+    aboveCeiling: purchaseAvgIncome > incomeCeiling,
+    purchaseAvgIncome,
+    purchaseAssessedAt,
+    hdbLoanIncomeCeiling,
+    hdbLoanBlockedByDia,
     household,
     employmentOk,
     ehg,

@@ -272,9 +272,9 @@ export function buildWarnings(core: CoreResult, extras: WarningExtras = {}): War
   }
   if (el.aboveCeiling) {
     warnings.push({
-      id: 'income-ceiling', severity: 'error', ym: el.assessedAt,
+      id: 'income-ceiling', severity: 'error', ym: el.purchaseAssessedAt,
       title: `${isSingle(s) ? 'Income' : 'Household income'} above the ${money(el.incomeCeiling)} ceiling`,
-      explanation: `Your average ${isSingle(s) ? '' : 'household '}income of about ${money(el.avgIncome)}/month (12 months up to ${formatYm(el.windowEnd)}) is above the income ceiling for this flat type, so you can’t buy this BTO flat.`,
+      explanation: `Your average ${isSingle(s) ? '' : 'household '}income of about ${money(el.purchaseAvgIncome)}/month (12 months before applying in ${formatYm(el.purchaseAssessedAt)}) is above the income ceiling for this flat type, so you can’t buy this flat.`,
       fixes: ['Check the income figures, or look at resale flats / Executive Condominiums.'],
     })
   }
@@ -447,6 +447,20 @@ export function buildWarnings(core: CoreResult, extras: WarningExtras = {}): War
         cash.length ? `${cash.length} top-up${cash.length > 1 ? 's were' : ' was'} cut because there wasn’t enough cash, first in ${formatYm(cash[0].ym)}.` : '',
       ].filter(Boolean).join(' '),
       fixes: [],
+    })
+  }
+
+  if (el.hdbLoanBlockedByDia && !preKeysSwitch(s)) {
+    warnings.push({
+      id: 'dia-loan-ceiling', severity: 'error', ym: el.assessedAt,
+      title: `No HDB loan: income above ${money(el.hdbLoanIncomeCeiling)} at the deferred assessment`,
+      explanation:
+        `With Deferred Income Assessment, HDB checks your income around ${formatYm(el.assessedAt)}: about ${money(el.avgIncome)}/month, above the ${money(el.hdbLoanIncomeCeiling)} ceiling for an HDB loan. ` +
+        `You keep the flat (you qualified when you applied), but you’d need a bank loan instead — with the bank’s 5% cash downpayment rule at key collection — and no Enhanced CPF Housing Grant above ${money(core.policy.eligibility.ehgFamilies.at(-1)?.upTo ?? 9000)}.`,
+      fixes: [
+        'In Loan changes, add “Switch to bank loan” dated at key collection to see the extra cash needed.',
+        'Or choose Bank loan as your loan type from the start.',
+      ],
     })
   }
 

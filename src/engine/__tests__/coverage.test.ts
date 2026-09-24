@@ -517,3 +517,49 @@ describe('singles and the Joint Singles Scheme', () => {
     expect(assessEligibility(base((s) => { s.buyers = 'jointSingles'; s.flat.type = '2R' }), policy).singlesIssues[0]).toMatch(/35 or older/)
   })
 })
+
+describe('partial prepayments', () => {
+  const long = (s: Scenario) => simulateCore(s, undefined, { monthsAfterKeys: 60 })
+  const prepay = (over: Partial<Extract<NonNullable<Scenario['financing']['loanChanges']>[number], { kind: 'prepay' }>> = {}) =>
+    base((s) => { s.financing.loanChanges = [{ id: 'p', kind: 'prepay', from: '2031-01', amount: 50000, source: 'cash', then: 'lowerInstalment', penaltyPct: 0, ...over }] })
+
+  it('cash prepayment lowers the instalment, same end date', () => {
+    const core = long(prepay())
+    const step = core.loanPath.find((p) => p.change === 'prepay')!
+    expect(step.prepaid).toBe(50000)
+    expect(step.instalment).toBeLessThan(core.loanPath[0].instalment - 200)
+    expect(step.monthsLeft).toBe(core.loanPath[0].monthsLeft - 12)
+    expect(core.events.find((e) => e.itemId === 'p-prepay')!.fromCash).toBe(50000)
+  })
+  it('“finish sooner” keeps the instalment and shortens the loan', () => {
+    const core = long(prepay({ then: 'shorterTenure' }))
+    const step = core.loanPath.find((p) => p.change === 'prepay')!
+    expect(step.instalment).toBeCloseTo(core.loanPath[0].instalment, 0)
+    expect(step.monthsLeft).toBeLessThan(core.loanPath[0].monthsLeft - 12 - 24)
+  })
+  it('CPF prepayment comes from OA and counts as CPF used for housing', () => {
+    const s = prepay({ source: 'cpf', amount: 30000 })
+    const core = long(s)
+    const e = core.events.find((x) => x.itemId === 'p-prepay')!
+    expect(e.fromCpf).toBe(30000)
+    expect(e.fromCash).toBe(0)
+    expect(core.housingWithdrawals.filter((w) => w.ym === '2031-01').reduce((a, w) => a + w.amount, 0)).toBeGreaterThanOrEqual(30000)
+  })
+  it('charges a bank-loan penalty but not for HDB loans', () => {
+    const hdb = long(prepay({ penaltyPct: 1.5 }))
+    expect(hdb.events.some((e) => e.itemId === 'p-penalty')).toBe(false)
+    const bank = long(base((s) => {
+      s.financing.loanType = 'bank'
+      s.financing.loanChanges = [{ id: 'p', kind: 'prepay', from: '2031-01', amount: 50000, source: 'cash', then: 'lowerInstalment', penaltyPct: 1.5 }]
+    }))
+    expect(bank.events.find((e) => e.itemId === 'p-penalty')!.fromCash).toBe(750)
+  })
+  it('repeats yearly and can pay the loan off entirely', () => {
+    const core = simulateCore(prepay({ repeatYearly: true, amount: 100000 }), undefined, { monthsAfterKeys: 180 })
+    const steps = core.loanPath.filter((p) => p.change === 'prepay')
+    expect(steps.length).toBeGreaterThanOrEqual(3)
+    expect(steps.at(-1)!.monthsLeft).toBe(0)
+    const lastMortgage = core.events.filter((e) => e.kind === 'mortgage').at(-1)!
+    expect(lastMortgage.ym < '2036-01').toBe(true)
+  })
+})

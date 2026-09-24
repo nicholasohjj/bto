@@ -82,3 +82,38 @@ describe('Deferred Income Assessment', () => {
     expect(r.events.find((e) => e.itemId === 'dp-afl')!.amount).toBe(18000)
   })
 })
+
+describe('DIA when income ends up above the ceiling', () => {
+  const rich = () => {
+    const s = students()
+    for (const p of s.partners) p.grossMonthly = 9000 // $18,000 combined by the deferred check
+    return s
+  }
+  it('still lets you buy: the ceiling is checked on income when applying', () => {
+    const r = runScenario(rich())
+    expect(r.eligibility.purchaseAvgIncome).toBe(0) // students when applying
+    expect(r.eligibility.aboveCeiling).toBe(false)
+    expect(r.warnings.some((w) => w.id === 'income-ceiling')).toBe(false)
+  })
+  it('but flags no HDB loan and no grant at the deferred check', () => {
+    const r = runScenario(rich())
+    expect(r.eligibility.avgIncome).toBeGreaterThan(16000)
+    expect(r.eligibility.hdbLoanBlockedByDia).toBe(true)
+    expect(r.eligibility.ehg).toBe(0)
+    const w = r.warnings.find((x) => x.id === 'dia-loan-ceiling')!
+    expect(w.severity).toBe('error')
+    expect(w.fixes.join(' ')).toMatch(/Switch to bank loan/)
+  })
+  it('clears once a switch to a bank loan at key collection is planned', () => {
+    const s = rich()
+    s.financing.loanChanges = [{ id: 'sw', kind: 'refinance', from: s.flat.dates.keys, rate: 0.025, costs: 2500, penaltyPct: 0 }]
+    const r = runScenario(s)
+    expect(r.warnings.some((w) => w.id === 'dia-loan-ceiling')).toBe(false)
+    expect(r.warnings.some((w) => w.id === 'switch-before-keys')).toBe(true)
+  })
+  it('without DIA, income above the ceiling when applying still blocks buying', () => {
+    const s = students(false)
+    for (const p of s.partners) { p.grossMonthly = 9000; delete p.workStartMonth }
+    expect(runScenario(s).warnings.some((w) => w.id === 'income-ceiling')).toBe(true)
+  })
+})

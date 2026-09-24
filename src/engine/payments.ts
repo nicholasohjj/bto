@@ -118,7 +118,17 @@ export function grantAmount(g: Scenario['flat']['grants'][number], elig: Eligibi
  * as a rate change that many years after key collection.
  */
 export function loanChangesOf(financing: Scenario['financing'], keys: YearMonth): NonNullable<Scenario['financing']['loanChanges']> {
-  const list = [...(financing.loanChanges ?? [])]
+  const list: NonNullable<Scenario['financing']['loanChanges']> = []
+  // Yearly prepayments expand into one entry per year (up to 35 years).
+  for (const c of financing.loanChanges ?? []) {
+    if (c.kind === 'prepay' && c.repeatYearly) {
+      for (let y = 0; y < 35; y++) {
+        const from = addMonths(c.from, y * 12)
+        if (c.until && from > c.until) break
+        list.push({ ...c, id: y === 0 ? c.id : `${c.id}#${y + 1}`, from, repeatYearly: false })
+      }
+    } else list.push(c)
+  }
   if (!financing.loanChanges && financing.rateAfter) {
     list.push({ id: 'legacy-rate-after', kind: 'rate', from: addMonths(keys, Math.round(financing.rateAfter.afterYears * 12) + 1), rate: financing.rateAfter.rate })
   }

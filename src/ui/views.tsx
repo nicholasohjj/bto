@@ -181,15 +181,7 @@ export function LoanPanel({ result, scenario }: { result: SimResult; scenario: S
           <div className="text-xs text-ink-2">Loan</div>
           <div className="text-sm tnum">{money(l.loanAmount)} at {(l.rate * 100).toFixed(2)}% for {l.tenureYears} yrs · {money(l.monthlyInstalment)}/mo</div>
           {result.loanPath.length > 1 && (
-            <ol className="mt-1 space-y-0.5 text-xs text-ink-2 tnum">
-              {result.loanPath.slice(1).map((p) => (
-                <li key={`${p.ym}-${p.change}`}>
-                  From {formatYm(p.ym)}: {p.change === 'refinance' ? `bank loan at ` : ''}{(p.rate * 100).toFixed(2)}% · {money(p.instalment)}/mo
-                  {p.change === 'tenure' || p.change === 'refinance' ? ` · ${Math.round(p.monthsLeft / 12 * 10) / 10} yrs left` : ''}
-                  {p.cost ? ` · ${money(p.cost)} costs` : ''}
-                </li>
-              ))}
-            </ol>
+            <LoanPathList steps={result.loanPath.slice(1)} />
           )}
           {l.effectivePrice !== l.price && <div className="mt-0.5 text-xs text-ink-2">Price incl. citizen + PR premium: {money(l.effectivePrice)}</div>}
           <div className="mt-1 text-xs text-ink-2">Downpayment {money(l.downpaymentTotal)} ({Math.round((1 - l.ltvUsed) * 100)}%){l.grantsTotal > 0 && <> · grants {money(l.grantsTotal)}</>}</div>
@@ -216,6 +208,34 @@ export function LoanPanel({ result, scenario }: { result: SimResult; scenario: S
         </div>
       </div>
     </Card>
+  )
+}
+
+/** Loan changes over time; long runs (e.g. yearly prepayments) collapse after a few rows. */
+function LoanPathList({ steps }: { steps: SimResult['loanPath'] }) {
+  const [all, setAll] = useState(false)
+  const shown = all || steps.length <= 5 ? steps : steps.slice(0, 4)
+  const line = (p: SimResult['loanPath'][number]) => (
+    <>
+      {p.change === 'prepay' ? `${formatYm(p.ym)}: prepaid ${money(p.prepaid ?? 0)} (${p.prepaidFrom === 'cpf' ? 'CPF' : 'cash'}) → ` : `From ${formatYm(p.ym)}: `}
+      {p.change === 'prepay' && p.monthsLeft === 0 ? 'loan fully repaid' : <>{p.change === 'refinance' ? 'bank loan at ' : ''}{(p.rate * 100).toFixed(2)}% · {money(p.instalment)}/mo</>}
+      {(p.change === 'tenure' || p.change === 'refinance' || p.change === 'prepay') && p.monthsLeft > 0 ? ` · ${Math.round(p.monthsLeft / 12 * 10) / 10} yrs left` : ''}
+      {p.cost ? ` · ${money(p.cost)} ${p.change === 'prepay' ? 'penalty' : 'costs'}` : ''}
+    </>
+  )
+  const last = steps[steps.length - 1]
+  return (
+    <ol className="mt-1 space-y-0.5 text-xs text-ink-2 tnum">
+      {shown.map((p) => <li key={`${p.ym}-${p.change}`}>{line(p)}</li>)}
+      {shown.length < steps.length && (
+        <li>
+          <button type="button" className="text-accent" onClick={() => setAll(true)}>
+            + {steps.length - shown.length} more changes
+          </button>
+          {' '}(last: {line(last)})
+        </li>
+      )}
+    </ol>
   )
 }
 
