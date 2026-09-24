@@ -164,7 +164,7 @@ function PartnerCard({ partner: p, startMonth, policy, years, onChange }: {
               </div>
               <Button variant="ghost" ariaLabel="Remove top-up" onClick={() => editTopUps((l) => { l.splice(vi, 1) })}>✕</Button>
             </div>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 gap-2 min-[360px]:grid-cols-2">
               {v.frequency === 'yearly' && (
                 <Field label="Paid">
                   <Select value={String(v.month ?? 12)} onChange={(x) => editTopUps((l) => { l[vi].month = Number(x) })}
@@ -326,7 +326,7 @@ export function FlatEditor({ scenario, update, policy }: { scenario: Scenario; u
       </Card>
       <Card>
         <div className="mb-2 text-sm font-semibold">Key dates</div>
-        <div className={`grid grid-cols-2 gap-3 ${shownMilestones.length === 4 ? 'md:grid-cols-4' : 'md:grid-cols-3'}`}>
+        <div className={`grid grid-cols-1 gap-3 min-[360px]:grid-cols-2 ${shownMilestones.length === 4 ? 'md:grid-cols-4' : 'md:grid-cols-3'}`}>
           {shownMilestones.map((m) => (
             <Field key={m.value} label={completed && m.value === 'keys' ? 'AFL + key collection' : m.value === 'booking' && saleType === 'OBF' ? 'Booking (you apply & book)' : m.label}
               tip={m.value === 'application' ? 'application' : m.value === 'booking' ? 'booking' : m.value === 'afl' ? 'AFL' : 'keys'}>
