@@ -1,9 +1,10 @@
 import type { Policy } from '../config/policy'
 import { ageInMonths, bonusAmount, bonusCpf, cashSavingsAt, isWorking, partnerMonthCpf, prYear, ratesFor, salaryAt } from './cpf'
 import { addMonths, monthOf, ymToIndex } from './dates'
-import { buildSchedule, type Obligation, type Schedule } from './payments'
+import { buildSchedule, cpfCapFor, loanChangesOf, type Obligation, type Schedule } from './payments'
 import { resolvePolicy } from './policyOverrides'
 import { round2 } from './stampDuty'
+import { money } from './format'
 import { monthlyInstalment } from './loan'
 import type { MonthState, PaidEvent, PartnerId, PotBalances, Scenario, YearMonth } from './types'
 
@@ -31,6 +32,10 @@ export interface CoreResult {
   lastMortgageCpf: Record<PartnerId, number>
   /** First month CPF use for the flat hit the Valuation/Withdrawal Limit (bank loans). */
   cpfCapReachedYm?: YearMonth
+  /** Switching HDB → bank before keys: cash needed at keys to meet the bank's cash rule. */
+  bankSwitch?: { ym: YearMonth; cashRequiredTotal: number; cashPaidBefore: number; extraCash: number }
+  /** Mortgage terms over time: the start, then after each loan change. */
+  loanPath: LoanStep[]
   /** Voluntary top-ups cut back by the Annual Limit or by lack of cash. */
   topUpNotes: { ym: YearMonth; partner: PartnerId; planned: number; paid: number; reason: 'limit' | 'cash' }[]
   startMonth: YearMonth
@@ -44,6 +49,20 @@ interface PotState {
   grant: number
   /** OA interest accrued this year, credited in December. */
   pendingInterest: number
+}
+
+export interface LoanStep {
+  ym: YearMonth
+  loanType: 'HDB' | 'bank'
+  rate: number
+  instalment: number
+  /** Months left to pay from this month. */
+  monthsLeft: number
+  outstanding: number
+  /** What changed ('start' for the original loan). */
+  change: 'start' | 'rate' | 'refinance' | 'tenure'
+  /** Cash paid for refinancing (costs + lock-in penalty). */
+  cost?: number
 }
 
 export interface SimOptions {
@@ -65,10 +84,14 @@ export function simulateCore(
   const endIdx = Math.max(keysIdx + (options.monthsAfterKeys ?? MONTHS_AFTER_KEYS), startIdx)
   const cashRate = (scenario.assumptions?.cashInterestPct ?? 0) / 100
   // CPF usable for the flat (Valuation / Withdrawal Limit); Infinity with an HDB loan.
-  const cpfCap = schedule.loan.cpfCap
+  // Changes on refinancing from an HDB loan to a bank loan.
+  let cpfCap = schedule.loan.cpfCap
   let cpfUsedForFlat = 0
   let cpfCapReachedYm: YearMonth | undefined
   const topUpNotes: CoreResult['topUpNotes'] = []
+  // Cash paid towards the downpayment so far (option fee + tranches), for the bank cash rule.
+  let downpaymentCash = 0
+  let bankSwitch: CoreResult['bankSwitch']
 
   // Mandatory CPF per partner per calendar year (for the Annual Limit on voluntary top-ups).
   const mandatoryCache = new Map<string, number>()
@@ -217,12 +240,19 @@ export function simulateCore(
       grantLeft -= t
     }
     const rest = ob.amount - (ob.grantFunded - grantLeft)
-    const minCash = Math.min(rest, ob.minCash)
+    let minCash = Math.min(rest, ob.minCash)
+    // Switching to a bank loan before keys: make up the bank's minimum cash downpayment now.
+    if (ob.cashRuleTotal !== undefined) {
+      const needed = Math.max(0, ob.cashRuleTotal - downpaymentCash)
+      const newMin = Math.min(rest, Math.max(minCash, needed))
+      bankSwitch = { ym, cashRequiredTotal: ob.cashRuleTotal, cashPaidBefore: round2(downpaymentCash), extraCash: round2(Math.max(0, newMin - minCash)) }
+      minCash = newMin
+    }
     const cpfRoom = ob.funding === 'cpfAllowed' ? Math.max(0, rest - minCash) : 0
 
     // 2. Planned CPF share (slider), bumped up by the HDB-loan OA rule for downpayments.
     let planCpf = cpfRoom * (forceCpfShare ?? cpfUsage)
-    if (ob.downpayment && financing.loanType === 'HDB' && forceCpfShare === undefined) {
+    if (ob.downpayment && financing.loanType === 'HDB' && ob.cashRuleTotal === undefined && forceCpfShare === undefined) {
       const usable = IDS.reduce((s, id) => s + Math.max(0, pots[id].oa - policy.hdbLoan.oaRetainMax), 0)
       const mandatory = Math.min(cpfRoom, usable)
       if (mandatory > planCpf + 0.5) {
@@ -281,9 +311,18 @@ export function simulateCore(
   let outstanding = schedule.loan.loanAmount
   let instalment = schedule.loan.monthlyInstalment
   let rate = financing.rate
-  // Rate change after the lock-in (e.g. fixed 2 years, then floating).
-  const rateChangeIdx = financing.rateAfter ? keysIdx + Math.round(financing.rateAfter.afterYears * 12) + 1 : Infinity
-  const loanEndIdx = keysIdx + Math.round(financing.tenureYears * 12)
+  let loanType = financing.loanType
+  let loanEndIdx = keysIdx + Math.round(financing.tenureYears * 12)
+  const firstInstalmentIdx = keysIdx + 1
+  // Loan changes take effect in their month (or at the first instalment if dated earlier).
+  const changesByIdx = new Map<number, NonNullable<Scenario['financing']['loanChanges']>>()
+  for (const c of loanChangesOf(financing, flat.dates.keys)) {
+    const at = Math.max(ymToIndex(c.from), firstInstalmentIdx)
+    changesByIdx.set(at, [...(changesByIdx.get(at) ?? []), c])
+  }
+  const loanPath: LoanStep[] = schedule.loan.loanAmount > 0
+    ? [{ ym: addMonths(flat.dates.keys, 1), loanType, rate, instalment, monthsLeft: loanEndIdx - keysIdx, outstanding, change: 'start' }]
+    : []
 
   for (let idx = startIdx; idx <= endIdx; idx++) {
     const ym = addMonths(start, idx - startIdx)
@@ -311,12 +350,44 @@ export function simulateCore(
     }
 
     // c. Payments due this month.
-    for (const ob of byMonth.get(idx) ?? []) monthEvents.push(payObligation(ob, ym))
+    for (const ob of byMonth.get(idx) ?? []) {
+      const ev = payObligation(ob, ym)
+      if (ob.downpayment || ob.kind === 'optionFee') downpaymentCash += Math.max(0, ev.fromCash)
+      monthEvents.push(ev)
+    }
 
-    // d. Mortgage from the month after key collection.
-    if (idx === rateChangeIdx && financing.rateAfter && outstanding > 0.005) {
-      rate = financing.rateAfter.rate
-      instalment = round2(monthlyInstalment(outstanding, rate, Math.max(1, loanEndIdx - idx + 1) / 12))
+    // d. Loan changes this month (rate, refinance, tenure), then the mortgage payment.
+    for (const c of changesByIdx.get(idx) ?? []) {
+      if (outstanding <= 0.005) break
+      let cost = 0
+      if (c.kind === 'rate') rate = c.rate
+      if (c.kind === 'tenure') loanEndIdx = idx + Math.max(1, Math.round(c.tenureYears * 12)) - 1
+      if (c.kind === 'refinance') {
+        cost = round2(Math.max(0, c.costs) + (Math.max(0, c.penaltyPct) / 100) * outstanding)
+        rate = c.rate
+        if (c.tenureYears) loanEndIdx = idx + Math.max(1, Math.round(c.tenureYears * 12)) - 1
+        if (loanType === 'HDB') {
+          loanType = 'bank'
+          cpfCap = cpfCapFor('bank', schedule.loan.effectivePrice, financing.brsSetAside, policy)
+        }
+      }
+      const monthsLeft = Math.max(1, loanEndIdx - idx + 1)
+      instalment = round2(monthlyInstalment(outstanding, rate, monthsLeft / 12))
+      loanPath.push({ ym, loanType, rate, instalment, monthsLeft, outstanding, change: c.kind, cost: cost || undefined })
+      const what = c.kind === 'rate' ? `Rate now ${(rate * 100).toFixed(2)}%`
+        : c.kind === 'tenure' ? `Tenure changed: ${Math.round(monthsLeft / 12 * 10) / 10} yrs left`
+        : `Refinanced to bank loan at ${(rate * 100).toFixed(2)}%`
+      const label = `${what} → ${money(instalment)}/mo`
+      if (cost > 0) {
+        const ev = payObligation({
+          id: `${c.id}-cost`, sourceId: c.id, label: `${label} (refinancing costs)`, kind: 'custom', ym, amount: cost,
+          funding: 'cashOnly', minCash: 0, grantFunded: 0, payer: 'joint', housing: false, downpayment: false, delayable: false,
+        }, ym)
+        ev.kind = 'loanChange'
+        monthEvents.push(ev)
+      } else {
+        monthEvents.push({ ym, itemId: c.id, label, kind: 'loanChange', amount: 0, fromCash: 0, fromCpf: 0, shortfall: 0, cpfFallbackToCash: 0, after: combined() })
+      }
     }
     if (idx > keysIdx && outstanding > 0.005 && instalment > 0) {
       const interest = outstanding * (rate / 12)
@@ -395,6 +466,8 @@ export function simulateCore(
     lastMortgageCpf,
     cpfCapReachedYm,
     topUpNotes,
+    loanPath,
+    bankSwitch,
     startMonth: start,
     endMonth: addMonths(start, endIdx - startIdx),
   }

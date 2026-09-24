@@ -23,7 +23,14 @@ function bankVariant(seed: Scenario): Scenario {
     ...structuredClone(seed),
     id: 'seed-bank',
     name: 'Example: same flat, bank loan',
-    financing: { ...seed.financing, loanType: 'bank', rate: 0.022, tenureYears: 25, cpfUsagePct: 100, rateAfter: { afterYears: 3, rate: 0.03 } },
+    financing: {
+      ...seed.financing, loanType: 'bank', rate: 0.022, tenureYears: 25, cpfUsagePct: 100,
+      // Fixed 2.2% for 3 years, then floating.
+      loanChanges: [
+        { id: 'float-1', kind: 'rate', from: '2033-10', rate: 0.03 },
+        { id: 'float-2', kind: 'rate', from: '2035-10', rate: 0.028 },
+      ],
+    },
   }
 }
 

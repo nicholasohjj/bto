@@ -21,7 +21,7 @@ export function runScenario(scenario: Scenario, policy: Policy = resolvePolicy(s
     months: core.months,
     events: core.events,
     loan,
-    warnings: buildWarnings(core, { cpfCapReachedYm: longRun.cpfCapReachedYm }),
+    warnings: buildWarnings(core, { cpfCapReachedYm: longRun.cpfCapReachedYm, loanPath: longRun.loanPath }),
     summary: summarize(core),
     accrued: projectAccruedInterest({
       withdrawals: longRun.housingWithdrawals,
@@ -34,6 +34,7 @@ export function runScenario(scenario: Scenario, policy: Policy = resolvePolicy(s
     milestones: scenario.flat.dates,
     eligibility: core.schedule.eligibility,
     cpfCapReachedYm: longRun.cpfCapReachedYm,
+    loanPath: longRun.loanPath,
   }
 }
 

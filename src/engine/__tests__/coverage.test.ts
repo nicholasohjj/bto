@@ -269,3 +269,101 @@ describe('changing pay: job changes, gaps, uneven raises', () => {
     expect(s.partners[1].incomeChanges).toBeUndefined()
   })
 })
+
+describe('loan changes after key collection', () => {
+  const mort = (core: ReturnType<typeof simulateCore>) => core.events.filter((e) => e.kind === 'mortgage')
+  const long = (s: Scenario) => simulateCore(s, undefined, { monthsAfterKeys: 60 })
+
+  it('follows a floating-rate path with several rate changes', () => {
+    const core = long(base((s) => {
+      s.financing.loanType = 'bank'; s.financing.rate = 0.02
+      s.financing.loanChanges = [
+        { id: 'r1', kind: 'rate', from: '2031-01', rate: 0.035 },
+        { id: 'r2', kind: 'rate', from: '2032-01', rate: 0.028 },
+      ]
+    }))
+    const m = mort(core)
+    const at = (ym: string) => m.find((e) => e.ym === ym)!.amount
+    expect(at('2031-01')).toBeGreaterThan(at('2030-12') + 100)
+    expect(at('2032-01')).toBeLessThan(at('2031-12') - 50)
+    expect(core.loanPath.map((p) => p.change)).toEqual(['start', 'rate', 'rate'])
+  })
+  it('refinances from HDB to a bank loan: new rate, cash costs, lock-in penalty, CPF cap from then', () => {
+    const s = base((s) => {
+      s.financing.loanChanges = [{ id: 'rf', kind: 'refinance', from: '2031-06', rate: 0.018, costs: 3000, penaltyPct: 0 }]
+    })
+    const core = long(s)
+    const step = core.loanPath.find((p) => p.change === 'refinance')!
+    expect(step.loanType).toBe('bank')
+    expect(step.instalment).toBeLessThan(core.loanPath[0].instalment)
+    const cost = core.events.find((e) => e.itemId === 'rf-cost')!
+    expect(cost.fromCash).toBe(3000)
+    expect(cost.kind).toBe('loanChange')
+    const r = runScenario(s)
+    expect(r.warnings.some((w) => w.id === 'hdb-to-bank')).toBe(true)
+    expect(r.loanPath.some((p) => p.change === 'refinance')).toBe(true)
+  })
+  it('charges a lock-in penalty as % of the balance', () => {
+    const core = long(base((s) => {
+      s.financing.loanType = 'bank'
+      s.financing.loanChanges = [{ id: 'rf', kind: 'refinance', from: '2030-06', rate: 0.02, costs: 0, penaltyPct: 1.5 }]
+    }))
+    const step = core.loanPath.find((p) => p.change === 'refinance')!
+    expect(step.cost).toBeCloseTo(step.outstanding * 0.015, 1)
+  })
+  it('changes the remaining tenure and re-prices the instalment', () => {
+    const core = long(base((s) => { s.financing.loanChanges = [{ id: 't', kind: 'tenure', from: '2031-01', tenureYears: 15 }] }))
+    const m = mort(core)
+    const before = m.find((e) => e.ym === '2030-12')!.amount
+    const after = m.find((e) => e.ym === '2031-01')!.amount
+    expect(after).toBeGreaterThan(before + 300)
+    expect(core.loanPath.at(-1)!.monthsLeft).toBe(180)
+  })
+  it('warns when a new tenure runs past the limits', () => {
+    const r = runScenario(base((s) => { s.financing.loanChanges = [{ id: 't', kind: 'tenure', from: '2032-01', tenureYears: 30 }] }))
+    expect(r.warnings.some((w) => w.id.startsWith('loan-term-'))).toBe(true)
+  })
+  it('applies changes dated before keys from the first instalment', () => {
+    const r = runScenario(base((s) => { s.financing.loanChanges = [{ id: 'r', kind: 'rate', from: '2027-01', rate: 0.03 }] }))
+    expect(r.loanPath[1].ym).toBe('2030-01')
+    expect(r.warnings.some((w) => w.id === 'loan-change-early')).toBe(true)
+  })
+})
+
+describe('switching from HDB loan to bank loan', () => {
+  const switchAt = (from: string) => base((s) => {
+    s.financing.loanChanges = [{ id: 'sw', kind: 'refinance', from, rate: 0.02, costs: 2500, penaltyPct: 0 }]
+  })
+  it('before keys: makes up the 5% cash downpayment at key collection', () => {
+    // AFL 10% paid fully from CPF (slider 100%); option fee $2,000 in cash → $22,000 more cash at keys.
+    const core = simulateCore(switchAt('2029-06'))
+    const keys = core.events.find((e) => e.itemId === 'dp-keys')!
+    expect(keys.label).toMatch(/switching to bank loan/)
+    expect(keys.fromCash).toBeCloseTo(480000 * 0.05 - 2000, 2)
+    expect(core.bankSwitch).toMatchObject({ cashRequiredTotal: 24000, cashPaidBefore: 2000, extraCash: 22000 })
+    const step = core.loanPath.find((p) => p.change === 'refinance')!
+    expect(step.ym).toBe('2030-01')
+    expect(step.loanType).toBe('bank')
+    const r = runScenario(switchAt('2029-06'))
+    expect(r.warnings.some((w) => w.id === 'switch-before-keys')).toBe(true)
+    expect(r.warnings.some((w) => w.id === 'hdb-to-bank')).toBe(false)
+  })
+  it('counts cash already paid at AFL towards the rule', () => {
+    const core = simulateCore(base((s) => {
+      s.financing.cpfUsagePct = 0
+      for (const p of s.partners) p.cpfOA = 10000 // below the $20k HDB retention, so AFL is paid in cash
+      s.financing.loanChanges = [{ id: 'sw', kind: 'refinance', from: '2029-06', rate: 0.02, costs: 0, penaltyPct: 0 }]
+    }))
+    expect(core.bankSwitch!.cashPaidBefore).toBeGreaterThanOrEqual(24000)
+    expect(core.bankSwitch!.extraCash).toBe(0)
+  })
+  it('after keys: no cash rule, just the refinance', () => {
+    const core = simulateCore(switchAt('2031-01'), undefined, { monthsAfterKeys: 24 })
+    expect(core.bankSwitch).toBeUndefined()
+    expect(core.events.find((e) => e.itemId === 'dp-keys')!.fromCash).toBe(0)
+    expect(runScenario(switchAt('2031-01')).warnings.some((w) => w.id === 'hdb-to-bank')).toBe(true)
+  })
+  it('suggests choosing a bank loan outright if the switch is before AFL', () => {
+    expect(runScenario(switchAt('2026-10')).warnings.some((w) => w.id === 'switch-before-afl')).toBe(true)
+  })
+})

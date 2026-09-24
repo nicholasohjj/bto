@@ -180,8 +180,16 @@ export function LoanPanel({ result, scenario }: { result: SimResult; scenario: S
         <div>
           <div className="text-xs text-ink-2">Loan</div>
           <div className="text-sm tnum">{money(l.loanAmount)} at {(l.rate * 100).toFixed(2)}% for {l.tenureYears} yrs · {money(l.monthlyInstalment)}/mo</div>
-          {scenario.financing.rateAfter && (
-            <div className="mt-0.5 text-xs text-ink-2">Then {(scenario.financing.rateAfter.rate * 100).toFixed(2)}% after {scenario.financing.rateAfter.afterYears} yrs</div>
+          {result.loanPath.length > 1 && (
+            <ol className="mt-1 space-y-0.5 text-xs text-ink-2 tnum">
+              {result.loanPath.slice(1).map((p) => (
+                <li key={`${p.ym}-${p.change}`}>
+                  From {formatYm(p.ym)}: {p.change === 'refinance' ? `bank loan at ` : ''}{(p.rate * 100).toFixed(2)}% · {money(p.instalment)}/mo
+                  {p.change === 'tenure' || p.change === 'refinance' ? ` · ${Math.round(p.monthsLeft / 12 * 10) / 10} yrs left` : ''}
+                  {p.cost ? ` · ${money(p.cost)} costs` : ''}
+                </li>
+              ))}
+            </ol>
           )}
           {l.effectivePrice !== l.price && <div className="mt-0.5 text-xs text-ink-2">Price incl. citizen + PR premium: {money(l.effectivePrice)}</div>}
           <div className="mt-1 text-xs text-ink-2">Downpayment {money(l.downpaymentTotal)} ({Math.round((1 - l.ltvUsed) * 100)}%){l.grantsTotal > 0 && <> · grants {money(l.grantsTotal)}</>}</div>

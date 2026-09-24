@@ -75,7 +75,17 @@ src/
 - **Loan limits.**
   - A bank loan's LTV drops to 55% (with 10% cash) if the tenure is over 25 years, or the loan runs past the borrowers' income-weighted average age of 65.
   - An HDB loan that runs past 65 gets a warning.
-  - Bank loans can have a different rate after the lock-in; the instalment is recalculated from that month.
+- **Loan changes after key collection** (Loan section).
+  - **Rate changes:** add as many as you like, to model a floating rate (e.g. fixed 2.2% for 3 years, then 3.0%, then 2.8%). Works for HDB and bank loans.
+  - **Refinance / switch HDB → bank:** a new rate, an optional new remaining tenure, cash costs, and a lock-in penalty as % of the balance. From an HDB loan it's one-way, and the bank-loan CPF limit applies from then (CPF already used counts).
+  - **Tenure changes:** a new remaining tenure from a month.
+  - Each change re-works the instalment on the outstanding balance. The loan panel lists the path. Warnings flag terms past the usual tenure or age limits.
+  - **Timing of an HDB → bank switch:**
+    - **Before keys:** the bank loan starts at key collection, and the bank's cash rule applies then. At least 5% of the price must be paid in cash across the downpayment (option fee + AFL + keys), so any AFL portion paid with CPF is made up in cash at keys. The bank's MSR/TDSR at its 4% stress rate is checked against income at keys.
+    - **Before AFL:** you're told to just pick "Bank loan".
+    - **After keys:** no HDB penalty and no cash rule.
+  - A bank loan can never go back to an HDB loan.
+  - A bank loan needs the bank's Letter of Offer before AFL (shown under Loan type).
 - **CPF limit for the flat.** With a bank loan, CPF used for the flat is capped at the price. It goes up to 120% if you tick that you've set aside the Basic Retirement Sum. After that, the mortgage is paid in cash. HDB loans have no cap.
 - **Stamp duty with a bank loan.** It's paid in cash at AFL and reimbursed from CPF 2 months later (the CPF share follows the slider).
 - **Money coming in** (Costs section): gifts, hongbao, car sale and similar. Entered as positive amounts and added to the chosen partner's (or both partners') cash in that month. Not counted as payments.
@@ -157,6 +167,8 @@ Users can override any figure for a single scenario under **Advanced settings**.
 | Bank loan LTV 55% if tenure > 25 yrs or past age 65; 10% cash | Secondary (MAS explainer snippet) |
 | HDB loan must end by age 65 | **Not verified** |
 | Bank loan: BSD reimbursed from CPF after 2 months | **Not verified** (estimate) |
+| Letter of Offer needed before AFL for bank loans | Verified (HDB BTO Annex, Oct 2024 / Feb 2026) |
+| HDB → bank before keys: 5% cash made up at keys; no HDB penalty after keys; no bank → HDB | From you / general guidance; **not read on hdb.gov.sg** |
 | When EHG is credited for a BTO (default: key collection) | Verified for DIA buyers (paid at key collection); otherwise **not verified**, editable per grant |
 
 ## Known simplifications

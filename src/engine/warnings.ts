@@ -1,8 +1,10 @@
 import { ageInMonths } from './cpf'
 import { addMonths, formatYm, monthsBetween, ymToIndex } from './dates'
 import { money } from './format'
-import { maxLtvFor, weightedAge } from './payments'
-import { simulateCore, type CoreResult } from './simulate'
+import { loanChangesOf, maxLtvFor, preKeysSwitch, weightedAge } from './payments'
+import { monthlyInstalment } from './loan'
+import { householdIncome } from './eligibility'
+import { simulateCore, type CoreResult, type LoanStep } from './simulate'
 import type { Scenario, Warning, When, YearMonth } from './types'
 
 interface Episode {
@@ -145,6 +147,8 @@ function cashFixes(core: CoreResult, ep: Episode, original: Set<number>): string
 export interface WarningExtras {
   /** From the 15-year run: first month CPF for the flat hits its limit. */
   cpfCapReachedYm?: YearMonth
+  /** From the 15-year run: mortgage terms after each loan change. */
+  loanPath?: LoanStep[]
 }
 
 export function buildWarnings(core: CoreResult, extras: WarningExtras = {}): Warning[] {
@@ -291,6 +295,83 @@ export function buildWarnings(core: CoreResult, extras: WarningExtras = {}): War
       explanation: `With a bank loan you can use CPF up to the flat’s value${s.financing.brsSetAside ? ` × ${core.policy.cpf.withdrawalLimitMultiple} (Withdrawal Limit)` : ''}: ${money(core.schedule.loan.cpfCap)}. After that, the mortgage has to be paid in cash.`,
       fixes: s.financing.brsSetAside ? [] : [`If you have at least the Basic Retirement Sum (${money(core.policy.cpf.basicRetirementSum)}) in CPF, tick “BRS set aside” to use up to ${Math.round(core.policy.cpf.withdrawalLimitMultiple * 100)}%.`],
     })
+  }
+
+  // --- Loan changes after key collection ---
+  const firstInstalment = addMonths(s.flat.dates.keys, 1)
+  const changes = loanChangesOf(s.financing, s.flat.dates.keys)
+  // A refinance dated before keys is a financing switch, explained separately below.
+  const early = changes.filter((c) => c.from < firstInstalment && c.kind !== 'refinance')
+  if (early.length) {
+    warnings.push({
+      id: 'loan-change-early', severity: 'info',
+      title: 'Some loan changes are dated before the loan starts',
+      explanation: `They take effect from the first instalment in ${formatYm(firstInstalment)}.`,
+      fixes: [],
+    })
+  }
+  const sw = preKeysSwitch(s)
+  if (sw) {
+    const b = core.bankSwitch
+    const pct = b ? Math.round((b.cashRequiredTotal / core.schedule.loan.effectivePrice) * 1000) / 10 : 5
+    warnings.push({
+      id: 'switch-before-keys', severity: 'info', ym: s.flat.dates.keys,
+      title: `Switching to a bank loan before key collection`,
+      explanation:
+        `The bank loan starts at key collection (${formatYm(s.flat.dates.keys)}), and the bank’s cash rule applies then: at least ${pct}% of the price in cash across the whole downpayment` +
+        (b ? ` (${money(b.cashRequiredTotal)}; you’ll have paid ${money(b.cashPaidBefore)} in cash before keys, so ${money(b.extraCash)} more cash at keys).` : '.') +
+        ' You won’t be able to switch back to an HDB loan. Based on the rule you described; confirm with HDB and your bank.',
+      fixes: [],
+    })
+    if (sw.from < s.flat.dates.afl) {
+      warnings.push({
+        id: 'switch-before-afl', severity: 'info',
+        title: 'Switch dated before AFL signing',
+        explanation: 'You declare your financing at AFL. If you already know you’ll take a bank loan, choose “Bank loan” as the loan type instead, so AFL follows the bank schedule (20% at AFL, 5% of it in cash) and you get the bank’s Letter of Offer in time.',
+        fixes: ['Set Loan type to Bank loan and remove this switch.'],
+      })
+    }
+    // The bank will assess affordability at its stress rate when the loan starts.
+    const loan = core.schedule.loan
+    const stress = Math.max(sw.rate, core.policy.bankLoan.stressRate)
+    const inst = monthlyInstalment(loan.loanAmount, stress, sw.tenureYears || s.financing.tenureYears)
+    const income = householdIncome(s, s.flat.dates.keys)
+    const otherDebt = s.partners.reduce((a, p) => a + (p.otherMonthlyDebt || 0), 0)
+    if (income > 0 && (inst / income > core.policy.msr || (inst + otherDebt) / income > core.policy.tdsr)) {
+      warnings.push({
+        id: 'switch-msr', severity: 'warning', ym: s.flat.dates.keys,
+        title: 'The bank may not lend the full amount when you switch',
+        explanation: `Tested at ${(stress * 100).toFixed(1)}%, the instalment would be ${money(inst)}/month on ${money(income)} income at key collection: MSR ${(inst / income * 100).toFixed(1)}% (limit ${Math.round(core.policy.msr * 100)}%), TDSR ${((inst + otherDebt) / income * 100).toFixed(1)}% (limit ${Math.round(core.policy.tdsr * 100)}%).`,
+        fixes: ['Keep the HDB loan, or plan to borrow less / choose a longer tenure with the bank.'],
+      })
+    }
+  }
+  const path = extras.loanPath ?? core.loanPath
+  const refi = path.find((p) => p.change === 'refinance')
+  if (refi && isHdb && !preKeysSwitch(s)) {
+    warnings.push({
+      id: 'hdb-to-bank', severity: 'info', ym: refi.ym,
+      title: `Switching from HDB loan to bank loan in ${formatYm(refi.ym)}`,
+      explanation: `Once you leave an HDB loan you can’t switch back. From then, CPF for the flat is capped at its value${s.financing.brsSetAside ? ' × 1.2 (BRS set aside)' : ''}, counting what you’ve already used, and bank rates can change.`,
+      fixes: [],
+    })
+  }
+  for (const step of path.filter((p) => p.change === 'tenure' || p.change === 'refinance')) {
+    const totalYears = (ymToIndex(step.ym) - ymToIndex(firstInstalment) + step.monthsLeft) / 12
+    const maxYears = step.loanType === 'HDB' ? core.policy.hdbLoan.maxTenureYears : core.policy.bankLoan.maxTenureYears
+    const endAge = weightedAge(s, step.ym) + step.monthsLeft / 12
+    const ageLimit = step.loanType === 'HDB' ? core.policy.hdbLoan.maxAgeAtEnd : core.policy.bankLoan.ltvMaxAge
+    if (totalYears > maxYears + 0.05 || endAge > ageLimit + 0.5) {
+      warnings.push({
+        id: `loan-term-${step.ym}`, severity: 'warning', ym: step.ym,
+        title: `Loan term after ${formatYm(step.ym)} may not be allowed`,
+        explanation: [
+          totalYears > maxYears + 0.05 ? `The loan would last about ${Math.round(totalYears)} years in total; ${step.loanType === 'HDB' ? 'HDB' : 'bank'} loans for HDB flats usually max out at ${maxYears}.` : '',
+          endAge > ageLimit + 0.5 ? `You’d be about ${Math.round(endAge)} when it ends; lenders usually want it paid off by ${ageLimit}.` : '',
+        ].filter(Boolean).join(' '),
+        fixes: ['Choose a shorter remaining tenure.'],
+      })
+    }
   }
 
   // --- Voluntary CPF top-ups cut back ---

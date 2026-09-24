@@ -125,11 +125,22 @@ export interface Financing {
   jointSplitA: number
   /** If a partner is short of cash, the other partner's cash covers it. */
   poolCash: boolean
-  /** Bank loans: rate changes after the lock-in period (e.g. fixed 2 yrs, then floating). */
+  /** @deprecated use loanChanges. Read as a rate change `afterYears` after key collection. */
   rateAfter?: { afterYears: number; rate: number }
+  /** Rate changes, refinancing (incl. HDB → bank) and tenure changes after key collection. */
+  loanChanges?: LoanChange[]
   /** Bank loans: you have set aside the BRS, so CPF can go up to the Withdrawal Limit. */
   brsSetAside?: boolean
 }
+
+/** A change to the mortgage after key collection, from a given month. */
+export type LoanChange =
+  /** New interest rate (repeat for a floating-rate path). */
+  | { id: string; kind: 'rate'; from: YearMonth; rate: number }
+  /** Refinance to a bank loan (from HDB, or bank to bank): new rate, optional new tenure, costs. */
+  | { id: string; kind: 'refinance'; from: YearMonth; rate: number; tenureYears?: number; costs: number; penaltyPct: number }
+  /** Change the remaining tenure (years from this month). */
+  | { id: string; kind: 'tenure'; from: YearMonth; tenureYears: number }
 
 export interface Assumptions {
   /** Interest earned on cash savings, % p.a. (compounded monthly). */
@@ -202,7 +213,7 @@ export interface PaidEvent {
   ym: YearMonth
   itemId: string
   label: string
-  kind: CostKind | 'downpayment' | 'grant' | 'mortgage' | 'rent' | 'voluntaryCpf'
+  kind: CostKind | 'downpayment' | 'grant' | 'mortgage' | 'rent' | 'voluntaryCpf' | 'loanChange'
   amount: number
   fromCash: number
   fromCpf: number
@@ -290,4 +301,6 @@ export interface SimResult {
   eligibility: import('./eligibility').Eligibility
   /** First month CPF for the flat hits its limit (bank loans), within 15 years of keys. */
   cpfCapReachedYm?: YearMonth
+  /** Mortgage terms over time (start + each loan change), over 15 years after keys. */
+  loanPath: import('./simulate').LoanStep[]
 }

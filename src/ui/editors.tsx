@@ -1,6 +1,6 @@
 import type { FlatType, Policy } from '../config/policy'
 import { ageInMonths, estimatedLivingCosts, prYear, ratesFor } from '../engine/cpf'
-import { assessmentMonth, autoAmount, downpaymentScheme, grantAmount, maxLtvFor, voluntaryList } from '../engine/payments'
+import { assessmentMonth, autoAmount, downpaymentScheme, grantAmount, loanChangesOf, maxLtvFor, voluntaryList } from '../engine/payments'
 import { assessEligibility } from '../engine/eligibility'
 import { addMonths, formatYm } from '../engine/dates'
 import { money } from '../engine/format'
@@ -379,6 +379,11 @@ export function FinancingEditor({ scenario, update, policy }: { scenario: Scenar
             options={[{ value: 'HDB', label: 'HDB loan' }, { value: 'bank', label: 'Bank loan' }]}
           />
         </Field>
+        <p className="mt-1.5 text-[11px] text-muted">
+          {isHdb
+            ? 'You declare your financing when you sign the AFL. HDB assesses your loan with the HFE letter.'
+            : 'You’ll need the bank’s Letter of Offer before signing the AFL (HDB requirement), and at least the minimum cash downpayment.'}
+        </p>
         <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
           <Field label="Loan-to-value" tip="LTV" hint={ltvRule.reduced ? <span className="text-critical">Max {Math.round(maxLtv * 100)}%: {ltvRule.reason}</span> : `Max ${Math.round(maxLtv * 100)}%`}>
             <PercentInput value={fin.ltv} max={(isHdb ? policy.hdbLoan.maxLtv : policy.bankLoan.maxLtv) * 100} onChange={(v) => update((d) => { d.financing.ltv = v })} ariaLabel="Loan to value" />
@@ -390,25 +395,14 @@ export function FinancingEditor({ scenario, update, policy }: { scenario: Scenar
             <NumberInput suffix="yrs" min={1} max={35} value={fin.tenureYears} onChange={(v) => update((d) => { d.financing.tenureYears = v })} ariaLabel="Tenure" />
           </Field>
         </div>
-        {!isHdb && (
-          <div className="mt-3 space-y-2 border-t border-line pt-3">
-            <Toggle label="Rate changes after lock-in" tip="lockIn" checked={!!fin.rateAfter}
-              onChange={(v) => update((d) => { if (v) d.financing.rateAfter = { afterYears: 2, rate: d.financing.rate + 0.01 }; else delete d.financing.rateAfter })} />
-            {fin.rateAfter && (
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="After (years from keys)">
-                  <NumberInput suffix="yrs" min={0} max={35} value={fin.rateAfter.afterYears} onChange={(v) => update((d) => { d.financing.rateAfter!.afterYears = v })} ariaLabel="Lock-in years" />
-                </Field>
-                <Field label="New rate">
-                  <PercentInput value={fin.rateAfter.rate} max={20} onChange={(v) => update((d) => { d.financing.rateAfter!.rate = v })} ariaLabel="Rate after lock-in" />
-                </Field>
-              </div>
-            )}
+        {(!isHdb || loanChangesOf(fin, scenario.flat.dates.keys).some((c) => c.kind === 'refinance')) && (
+          <div className="mt-3 border-t border-line pt-3">
             <Toggle label={`We’ve set aside the Basic Retirement Sum (${money(policy.cpf.basicRetirementSum)})`} tip="cpfLimit" checked={!!fin.brsSetAside}
               onChange={(v) => update((d) => { d.financing.brsSetAside = v })} />
           </div>
         )}
       </Card>
+      <LoanChangesEditor scenario={scenario} update={update} />
       <Card>
         <Toggle label="Deferred Income Assessment" tip="DIA" checked={!!fin.deferredIncomeAssessment}
           onChange={(v) => update((d) => { d.financing.deferredIncomeAssessment = v })} />
@@ -441,6 +435,84 @@ export function FinancingEditor({ scenario, update, policy }: { scenario: Scenar
         <Toggle label="Pool our cash" tip="poolCash" checked={fin.poolCash} onChange={(v) => update((d) => { d.financing.poolCash = v })} />
       </Card>
     </div>
+  )
+}
+
+function LoanChangesEditor({ scenario, update }: { scenario: Scenario; update: Update }) {
+  const fin = scenario.financing
+  const keys = scenario.flat.dates.keys
+  const changes = loanChangesOf(fin, keys)
+  const hasRefi = changes.some((c) => c.kind === 'refinance')
+  // Editing moves the old single "rate after lock-in" into the list.
+  const edit = (fn: (list: NonNullable<Scenario['financing']['loanChanges']>) => void) =>
+    update((d) => {
+      const list = structuredClone(loanChangesOf(d.financing, keys))
+      fn(list)
+      d.financing.loanChanges = list
+      delete d.financing.rateAfter
+    })
+  const inYears = (n: number) => addMonths(keys, n * 12 + 1)
+  const title = { rate: 'Rate change', refinance: fin.loanType === 'HDB' ? 'Switch to a bank loan' : 'Refinance / reprice', tenure: 'Change tenure' }
+  return (
+    <Card>
+      <div className="mb-1 flex items-center text-sm font-semibold">Loan changes after key collection<InfoTip term="loanChanges" /></div>
+      <p className="mb-2 text-xs text-ink-2">
+        For floating rates, add a rate change for each period you expect. Refinancing and tenure changes re-work the instalment on what you still owe.
+      </p>
+      <ul className="mb-3 list-disc space-y-0.5 pl-4 text-[11px] text-muted">
+        {fin.loanType === 'HDB' ? (
+          <>
+            <li>Switching to a bank loan <b>before keys</b>: the bank loan starts at key collection, and you must have paid at least 5% of the price in cash overall — any AFL part paid with CPF is made up in cash at keys.</li>
+            <li><b>After keys</b>: switch any time; no HDB penalty and no cash rule.</li>
+            <li>Once on a bank loan, you can’t go back to an HDB loan.</li>
+          </>
+        ) : (
+          <li>You can’t switch from a bank loan to an HDB loan, before or after keys. You can refinance to another bank.</li>
+        )}
+      </ul>
+      {changes.map((c, ci) => (
+        <div key={c.id} className="mb-2 space-y-2 rounded-lg border border-line p-2">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs font-medium text-ink">
+              {title[c.kind]}
+              {c.kind === 'refinance' && fin.loanType === 'HDB' && c.from <= keys && (
+                <span className="ml-2 rounded bg-surface-2 px-1.5 py-0.5 text-[10px] font-normal text-ink-2">before keys · 5% cash rule at keys</span>
+              )}
+            </span>
+            <Button variant="ghost" ariaLabel="Remove loan change" onClick={() => edit((l) => { l.splice(ci, 1) })}>✕</Button>
+          </div>
+          <div className="grid grid-cols-1 gap-2 min-[360px]:grid-cols-2">
+            <Field label="From"><MonthInput value={c.from} onChange={(v) => edit((l) => { l[ci].from = v })} ariaLabel="Change from" /></Field>
+            {(c.kind === 'rate' || c.kind === 'refinance') && (
+              <Field label="New rate"><PercentInput value={c.rate} max={20} onChange={(v) => edit((l) => { (l[ci] as typeof c).rate = v })} ariaLabel="New rate" /></Field>
+            )}
+            {c.kind === 'tenure' && (
+              <Field label="Years left from then"><NumberInput suffix="yrs" min={1} max={35} value={c.tenureYears} onChange={(v) => edit((l) => { (l[ci] as typeof c).tenureYears = v })} ariaLabel="Remaining tenure" /></Field>
+            )}
+            {c.kind === 'refinance' && (
+              <>
+                <Field label="Years left (optional)" hint="0 = keep the same end date">
+                  <NumberInput suffix="yrs" min={0} max={35} value={c.tenureYears ?? 0} onChange={(v) => edit((l) => { (l[ci] as typeof c).tenureYears = v > 0 ? v : undefined })} ariaLabel="Remaining tenure after refinancing" />
+                </Field>
+                <Field label="Costs (cash)" tipText="Legal and valuation fees for the new loan. Banks sometimes subsidise these; enter what you’d pay.">
+                  <MoneyInput value={c.costs} onChange={(v) => edit((l) => { (l[ci] as typeof c).costs = v })} ariaLabel="Refinancing costs" />
+                </Field>
+                <Field label="Lock-in penalty" tipText="If you leave a bank loan during its lock-in, banks usually charge around 1.5% of the amount still owed. Leave at 0 when switching from an HDB loan.">
+                  <NumberInput suffix="% of balance" min={0} max={10} value={c.penaltyPct} onChange={(v) => edit((l) => { (l[ci] as typeof c).penaltyPct = v })} ariaLabel="Lock-in penalty" />
+                </Field>
+              </>
+            )}
+          </div>
+        </div>
+      ))}
+      <div className="flex flex-wrap gap-1">
+        <Button variant="ghost" onClick={() => edit((l) => { l.push({ id: newId('lc'), kind: 'rate', from: inYears(2), rate: fin.rate + 0.005 }) })}>+ Rate change</Button>
+        <Button variant="ghost" onClick={() => edit((l) => { l.push({ id: newId('lc'), kind: 'refinance', from: inYears(fin.loanType === 'HDB' && !hasRefi ? 1 : 3), rate: Math.max(0.01, fin.rate - 0.005), costs: 2500, penaltyPct: 0 }) })}>
+          + {fin.loanType === 'HDB' && !hasRefi ? 'Switch to bank loan' : 'Refinance'}
+        </Button>
+        <Button variant="ghost" onClick={() => edit((l) => { l.push({ id: newId('lc'), kind: 'tenure', from: inYears(5), tenureYears: Math.max(1, fin.tenureYears - 10) }) })}>+ Change tenure</Button>
+      </div>
+    </Card>
   )
 }
 

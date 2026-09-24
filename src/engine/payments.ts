@@ -31,6 +31,11 @@ export interface Obligation {
   reimburse?: boolean
   /** Voluntary CPF top-up: cash out, CPF in (capped by the Annual Limit). */
   cpfTopUp?: boolean
+  /**
+   * Switching to a bank loan before keys: total cash across the downpayment
+   * (option fee + AFL + keys) must reach this, so the keys payment makes up the rest.
+   */
+  cashRuleTotal?: number
 }
 
 export interface GrantCredit {
@@ -91,6 +96,44 @@ export function grantAmount(g: Scenario['flat']['grants'][number], elig: Eligibi
   if (g.auto === 'EHG') return elig.ehg
   if (g.auto === 'StepUp') return elig.stepUp
   return g.amount
+}
+
+/**
+ * Loan changes in date order. The old single "rate after lock-in" setting reads
+ * as a rate change that many years after key collection.
+ */
+export function loanChangesOf(financing: Scenario['financing'], keys: YearMonth): NonNullable<Scenario['financing']['loanChanges']> {
+  const list = [...(financing.loanChanges ?? [])]
+  if (!financing.loanChanges && financing.rateAfter) {
+    list.push({ id: 'legacy-rate-after', kind: 'rate', from: addMonths(keys, Math.round(financing.rateAfter.afterYears * 12) + 1), rate: financing.rateAfter.rate })
+  }
+  return list.sort((a, b) => (a.from < b.from ? -1 : a.from > b.from ? 1 : 0))
+}
+
+/**
+ * A switch from an HDB loan to a bank loan dated on or before key collection.
+ * The bank loan then starts at keys, and the bank's minimum cash downpayment
+ * applies at keys (making up any AFL portion paid with CPF). Rule as described
+ * by the user and in bank/HDB guidance; not read on hdb.gov.sg.
+ */
+export function preKeysSwitch(scenario: Scenario) {
+  if (scenario.financing.loanType !== 'HDB') return undefined
+  return loanChangesOf(scenario.financing, scenario.flat.dates.keys).find(
+    (c): c is Extract<typeof c, { kind: 'refinance' }> => c.kind === 'refinance' && c.from <= scenario.flat.dates.keys,
+  )
+}
+
+/** Minimum total cash downpayment (fraction of price) for the bank loan you'd switch to. */
+export function switchCashPct(scenario: Scenario, policy: Policy): number {
+  const sw = preKeysSwitch(scenario)
+  if (!sw) return 0
+  const asBank: Scenario = { ...scenario, financing: { ...scenario.financing, loanType: 'bank', tenureYears: sw.tenureYears || scenario.financing.tenureYears } }
+  return maxLtvFor(asBank, policy).reduced ? policy.bankLoan.reducedMinCashPct : policy.bankLoan.minCashPct
+}
+
+/** CPF usable for the flat under a loan type (Valuation / Withdrawal Limit for bank loans). */
+export function cpfCapFor(loanType: 'HDB' | 'bank', price: number, brsSetAside: boolean | undefined, policy: Policy): number {
+  return loanType === 'HDB' ? Infinity : price * (brsSetAside ? policy.cpf.withdrawalLimitMultiple : 1)
 }
 
 /** Far enough ahead for the 15-year accrued-interest run. */
@@ -217,12 +260,15 @@ export function buildSchedule(scenario: Scenario, policy: Policy): Schedule {
     })
   }
   const keysAmount = keysGross + grantExcess
+  const switching = preKeysSwitch(scenario)
   if (keysAmount > 0) {
     obligations.push({
       ...common,
       id: 'dp-keys',
       sourceId: 'dp-keys',
-      label: grantExcess > 0 ? 'Balance at key collection (incl. grant used to cut loan)' : 'Balance downpayment at key collection',
+      label: (grantExcess > 0 ? 'Balance at key collection (incl. grant used to cut loan)' : 'Balance downpayment at key collection') +
+        (switching ? ' — switching to bank loan' : ''),
+      cashRuleTotal: switching ? round2(switchCashPct(scenario, policy) * price) : undefined,
       kind: 'downpayment',
       ym: dates.keys,
       amount: round2(keysAmount),
@@ -358,9 +404,7 @@ export function buildSchedule(scenario: Scenario, policy: Policy): Schedule {
   const n = Math.round(tenure * 12)
   const maxLoanUnderMsr = maxInstalment <= 0 ? 0 : r === 0 ? maxInstalment * n : (maxInstalment * (1 - Math.pow(1 + r, -n))) / r
 
-  const cpfCap = financing.loanType === 'HDB'
-    ? Infinity
-    : price * (financing.brsSetAside ? policy.cpf.withdrawalLimitMultiple : 1)
+  const cpfCap = cpfCapFor(financing.loanType, price, financing.brsSetAside, policy)
 
   const loan: LoanInfo = {
     price: flat.price,
