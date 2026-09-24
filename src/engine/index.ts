@@ -5,13 +5,15 @@ import { resolvePolicy } from './policyOverrides'
 import { simulateCore, type CoreResult } from './simulate'
 import type { Scenario, SimResult, Summary } from './types'
 import { buildWarnings } from './warnings'
+import { normalizeScenario } from './saleType'
 
 export * from './types'
 export { simulateCore } from './simulate'
 export { resolvePolicy, flattenPolicy } from './policyOverrides'
 
 /** Full run: simulation + warnings + summary + accrued-interest projection. */
-export function runScenario(scenario: Scenario, policy: Policy = resolvePolicy(scenario.policyOverrides)): SimResult {
+export function runScenario(raw: Scenario, policy: Policy = resolvePolicy(raw.policyOverrides)): SimResult {
+  const scenario = normalizeScenario(raw)
   const core = simulateCore(scenario, policy)
   const loan = core.schedule.loan
   const keys = scenario.flat.dates.keys

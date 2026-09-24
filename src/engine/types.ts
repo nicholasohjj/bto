@@ -103,6 +103,12 @@ export interface Flat {
   household?: 'firstTimers' | 'firstAndSecond' | 'secondTimers'
   /** Step-Up grant: currently living in public rental or owning a 2-room flat. */
   fromRentalOr2Room?: boolean
+  /** How you're buying: BTO (default), Sale of Balance Flats, or Open Booking of Flats. */
+  saleType?: 'BTO' | 'SBF' | 'OBF'
+  /** SBF/OBF: the flat is already built — AFL and key collection happen together. */
+  completed?: boolean
+  /** Remaining lease in years when you buy (default 99). Affects CPF use and HDB loan limit. */
+  remainingLeaseYears?: number
 }
 
 export interface Financing {

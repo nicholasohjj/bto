@@ -1,5 +1,5 @@
 import type { Scenario } from '../engine/types'
-import { newId, seedDiaScenario, seedScenario } from './defaults'
+import { newId, seedDiaScenario, seedOpenBookingScenario, seedScenario } from './defaults'
 
 const KEY = 'bto-money-timeline:v1'
 
@@ -14,7 +14,7 @@ export interface AppState {
 export function initialState(): AppState {
   const seed = seedScenario()
   const bank = bankVariant(seed)
-  return { scenarios: [seed, bank, seedDiaScenario()], activeId: seed.id, compareIds: [seed.id, bank.id], wizardDone: false, showPerPartner: false }
+  return { scenarios: [seed, bank, seedDiaScenario(), seedOpenBookingScenario()], activeId: seed.id, compareIds: [seed.id, bank.id], wizardDone: false, showPerPartner: false }
 }
 
 /** Second seeded scenario so comparison has something to show. */

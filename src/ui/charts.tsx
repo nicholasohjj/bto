@@ -105,11 +105,16 @@ export function TimelineChart({ result, perPartner, names }: { result: SimResult
   })
 
   // Milestone labels: stack into rows when they'd overlap.
-  const milestones = (Object.entries(result.milestones) as [Milestone, string][]).filter(([, ym]) => inRange(ym))
+  // Same-month milestones share one line: open booking (apply = book), completed flats (AFL = keys).
+  const ms = result.milestones
+  const milestones = (Object.entries(ms) as [Milestone, string][]).filter(([m, ym]) =>
+    inRange(ym) && !(m === 'application' && ym === ms.booking) && !(m === 'afl' && ym === ms.keys))
+  const labelText = (m: Milestone) =>
+    m === 'keys' && ms.afl === ms.keys ? 'AFL + Keys' : m === 'booking' && ms.application === ms.booking ? 'Book' : MILESTONE_LABEL[m]
   const plotWidth = Math.max(1, boxWidth - Y_AXIS_WIDTH - MARGIN_RIGHT)
   const pxPerMonth = plotWidth / Math.max(1, data.length - 1)
   const { rows: labelRow, x: labelX, rowCount } = layoutLabels(
-    milestones.map(([m, ym]) => ({ key: m, index: data.findIndex((d) => d.ym === ym), text: MILESTONE_LABEL[m] })),
+    milestones.map(([m, ym]) => ({ key: m, index: data.findIndex((d) => d.ym === ym), text: labelText(m) })),
     pxPerMonth,
     plotWidth,
   )
@@ -147,7 +152,7 @@ export function TimelineChart({ result, perPartner, names }: { result: SimResult
                 const y = (props.viewBox?.y ?? 0) - 4 - (labelRow[m] ?? 0) * LABEL_ROW
                 const cx = labelX[m] !== undefined ? Y_AXIS_WIDTH + labelX[m] : (props.viewBox?.x ?? 0)
                 return (
-                  <text x={cx} y={y} textAnchor="middle" fill="var(--ink-2)" fontSize={11}>{MILESTONE_LABEL[m]}</text>
+                  <text x={cx} y={y} textAnchor="middle" fill="var(--ink-2)" fontSize={11}>{labelText(m)}</text>
                 )
               }} />
           ))}

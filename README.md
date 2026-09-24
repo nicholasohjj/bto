@@ -1,6 +1,6 @@
 # BTO Money Timeline Simulator
 
-A client-side web app that plays out, month by month, a couple's **cash** and **CPF Ordinary Account (OA)** from today until 12 months after BTO key collection — and flags any month where a payment can't be covered by the right pot.
+A client-side web app that plays out, month by month, a couple's **cash** and **CPF Ordinary Account (OA)** from today until 12 months after key collection for a new HDB flat (BTO, Sale of Balance Flats or Open Booking) — and flags any month where a payment can't be covered by the right pot.
 
 > **Estimates only.** Not financial advice. Always verify with HDB (your HFE letter and payment notices), CPF Board, IRAS and your bank.
 
@@ -32,6 +32,7 @@ src/
     warnings.ts         Shortfall / MSR / TDSR warnings + a solver that re-runs the
                         simulation to suggest fixes ("use $X more CPF", "delay renovation N months")
     whatIf.ts           "What if one of you loses your job?" stress test
+    saleType.ts         BTO / SBF / open booking dates, completed flats, age-95 lease rule
     eligibility.ts      Household income, income ceiling, EHG / Step-Up grant amounts, citizen/PR rules
     accruedInterest.ts  CPF accrued interest at 5/10/15 years after keys
     compare.ts          Key-number rows for scenario comparison
@@ -62,6 +63,18 @@ src/
   - **Different raise for a year**: overrides the usual raise that January (e.g. 0% one year, 10% the next).
   - A gap in the 12 months before the income assessment breaks the grant's continuous-work rule, and lowers the income used for the grant and loan checks.
 - **What if one of you loses your job?** (Overview, `whatIf.ts`) Re-runs the plan with each partner out of work for 3–12 months, starting now, at AFL or at keys. It shows the lowest cash afterwards and whether cash runs out, and can add the result as a scenario to compare.
+- **How you're buying** (Flat section, `saleType.ts`).
+  - **BTO:** application → booking → AFL → keys.
+  - **SBF (Sale of Balance Flats):** the same, usually with a shorter wait. It can be **completed**.
+  - **Open booking:** no ballot, so application = booking month.
+  - **Completed flat (SBF / open booking):**
+    - AFL and key collection happen together, within 9 months of booking (warned if later).
+    - The full downpayment, stamp duty and fees are paid then; the staggered scheme doesn't apply.
+    - Under DIA, income is assessed at booking.
+  - **Remaining lease (age-95 rule):**
+    - If the lease won't last the youngest of you to 95, CPF use and the HDB loan limit are pro-rated (lease ÷ years to 95).
+    - 20 years or less: no CPF and no HDB loan.
+    - HDB loan tenure ≤ lease − 20.
 - **Eligibility and grants** (`eligibility.ts`).
   - Household income is averaged over 12 months, ending 2 months before the HFE application (assumed to be the application month; under DIA, the assessment month).
   - That income is checked against the ceiling for the flat type.
@@ -167,6 +180,10 @@ Users can override any figure for a single scenario under **Advanced settings**.
 | Bank loan LTV 55% if tenure > 25 yrs or past age 65; 10% cash | Secondary (MAS explainer snippet) |
 | HDB loan must end by age 65 | **Not verified** |
 | Bank loan: BSD reimbursed from CPF after 2 months | **Not verified** (estimate) |
+| Completed SBF / open-booking flats: AFL + keys within 9 months of booking | Secondary (hdb.gov.sg key collection page, snippet) |
+| Open booking: first-come-first-served, book from next working day | Secondary (hdb.gov.sg snippet) |
+| Age-95 lease rule: pro-rated CPF use / HDB LTV; no CPF ≤ 20 yrs; HDB tenure ≤ lease − 20 | Secondary (MND 2019 rules, snippets) |
+| Typical dates for SBF / open booking (booking +3 months to keys for completed flats) | **Not verified** (defaults to adjust) |
 | Letter of Offer needed before AFL for bank loans | Verified (HDB BTO Annex, Oct 2024 / Feb 2026) |
 | HDB → bank before keys: 5% cash made up at keys; no HDB penalty after keys; no bank → HDB | From you / general guidance; **not read on hdb.gov.sg** |
 | When EHG is credited for a BTO (default: key collection) | Verified for DIA buyers (paid at key collection); otherwise **not verified**, editable per grant |

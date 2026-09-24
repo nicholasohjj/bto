@@ -5,6 +5,7 @@ import { buildSchedule, maxLtvFor } from '../payments'
 import { resolvePolicy } from '../policyOverrides'
 import { ordinaryWageCpf, prYear, ratesFor, salaryAt } from '../cpf'
 import { jobLossImpact, withJobLoss } from '../whatIf'
+import { typicalDates } from '../saleType'
 import { assessEligibility, tierAmount } from '../eligibility'
 import { buyersStampDuty } from '../stampDuty'
 import { newScenario } from '../../state/defaults'
@@ -365,5 +366,93 @@ describe('switching from HDB loan to bank loan', () => {
   })
   it('suggests choosing a bank loan outright if the switch is before AFL', () => {
     expect(runScenario(switchAt('2026-10')).warnings.some((w) => w.id === 'switch-before-afl')).toBe(true)
+  })
+})
+
+describe('SBF and open booking', () => {
+  it('completed flat: AFL is signed at key collection and the whole downpayment is due then', () => {
+    const s = base((s) => {
+      s.flat.saleType = 'SBF'; s.flat.completed = true; s.financing.staggered = true
+      s.flat.dates = { application: '2026-02', booking: '2026-05', afl: '2026-06', keys: '2026-09' }
+    })
+    const { obligations, loan } = buildSchedule(s, policy)
+    expect(obligations.find((o) => o.id === 'dp-afl')!.ym).toBe('2026-09')
+    expect(obligations.find((o) => o.id === 'dp-keys')!.ym).toBe('2026-09')
+    expect(obligations.find((o) => o.id === 'bsd')!.ym).toBe('2026-09')
+    // Staggered doesn't apply: standard 10% + 15%
+    expect(obligations.find((o) => o.id === 'dp-afl')!.amount).toBe(48000 - 2000)
+    expect(loan.assessedAt).toBe('2026-09')
+    const r = runScenario(s)
+    expect(r.milestones.afl).toBe('2026-09')
+    expect(r.events.find((e) => e.kind === 'mortgage')!.ym).toBe('2026-10')
+  })
+  it('open booking: no ballot — application is the booking month', () => {
+    const s = base((s) => {
+      s.flat.saleType = 'OBF'; s.flat.completed = true
+      s.flat.dates = { application: '2025-01', booking: '2026-03', afl: '2026-03', keys: '2026-07' }
+    })
+    const el = assessEligibility(s, policy)
+    expect(el.assessedAt).toBe('2026-03')
+    expect(runScenario(s).milestones.application).toBe('2026-03')
+  })
+  it('warns if keys for a completed flat are more than 9 months after booking', () => {
+    const r = runScenario(base((s) => {
+      s.flat.saleType = 'SBF'; s.flat.completed = true
+      s.flat.dates = { application: '2026-02', booking: '2026-04', afl: '2026-04', keys: '2027-06' }
+    }))
+    expect(r.warnings.some((w) => w.id === 'completed-keys')).toBe(true)
+  })
+  it('DIA on a completed flat: income assessed at booking', () => {
+    const s = base((s) => {
+      s.flat.saleType = 'SBF'; s.flat.completed = true; s.financing.deferredIncomeAssessment = true
+      s.flat.dates = { application: '2026-02', booking: '2026-05', afl: '2026-05', keys: '2026-09' }
+    })
+    expect(buildSchedule(s, policy).loan.assessedAt).toBe('2026-05')
+    expect(assessEligibility(s, policy).assessedAt).toBe('2026-05')
+  })
+  it('an uncompleted SBF flat works like a BTO', () => {
+    const s = base((s) => { s.flat.saleType = 'SBF' })
+    expect(buildSchedule(s, policy).obligations.find((o) => o.id === 'dp-afl')!.ym).toBe('2026-12')
+  })
+})
+
+describe('remaining lease (age-95 rule)', () => {
+  it('pro-rates CPF use and the HDB loan limit when the lease falls short of age 95', () => {
+    // Youngest is ~29 at AFL → needs 66 years; 60-year lease → 60/66
+    const s = base((s) => { s.flat.saleType = 'SBF'; s.flat.remainingLeaseYears = 60 })
+    const f = 60 / 66
+    expect(maxLtvFor(s, policy).max).toBeCloseTo(0.75 * f, 6)
+    const { loan } = buildSchedule(s, policy)
+    expect(loan.cpfCap).toBeCloseTo(480000 * f, 2)
+    expect(loan.loanAmount).toBeCloseTo(480000 * 0.75 * f, 0)
+    const r = runScenario(s)
+    expect(r.warnings.some((w) => w.id === 'lease-prorated')).toBe(true)
+    expect(r.warnings.find((w) => w.id === 'ltv')!.title).toMatch(/HDB will lend/)
+    expect(r.warnings.some((w) => w.id === 'lease-tenure')).toBe(false) // 25 ≤ 60 − 20
+  })
+  it('no CPF or HDB loan with 20 years or less', () => {
+    const s = base((s) => { s.flat.saleType = 'SBF'; s.flat.remainingLeaseYears = 20 })
+    const { loan } = buildSchedule(s, policy)
+    expect(loan.cpfCap).toBe(0)
+    expect(loan.loanAmount).toBe(0)
+    const core = simulateCore(s)
+    expect(core.events.filter((e) => e.kind !== 'grant').every((e) => e.fromCpf <= 0.001)).toBe(true)
+    expect(runScenario(s).warnings.some((w) => w.id === 'lease-no-cpf')).toBe(true)
+  })
+  it('limits HDB loan tenure to lease − 20', () => {
+    const r = runScenario(base((s) => { s.flat.saleType = 'SBF'; s.flat.remainingLeaseYears = 40 }))
+    expect(r.warnings.some((w) => w.id === 'lease-tenure')).toBe(true)
+  })
+  it('a 99-year lease is unaffected', () => {
+    expect(buildSchedule(base(), policy).loan.cpfCap).toBe(Infinity)
+  })
+})
+
+describe('typical dates by mode of sale', () => {
+  it('fills sensible dates for each mode', () => {
+    expect(typicalDates('2026-09', 'OBF', true)).toEqual({ application: '2026-10', booking: '2026-10', afl: '2027-01', keys: '2027-01' })
+    const sbf = typicalDates('2026-09', 'SBF', false)
+    expect(sbf.keys > sbf.afl && sbf.afl > sbf.booking && sbf.booking > sbf.application).toBe(true)
+    expect(typicalDates('2026-09', 'BTO', false).keys).toBe('2030-08')
   })
 })

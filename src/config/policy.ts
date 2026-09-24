@@ -105,6 +105,14 @@ export interface Policy {
     hdb: { standard: DownpaymentSchedule; staggered: DownpaymentSchedule; dia: DownpaymentSchedule }
     bank: { standard: DownpaymentSchedule; staggered: DownpaymentSchedule; dia: DownpaymentSchedule }
   }
+  lease: {
+    /** CPF use / HDB LTV are full only if the lease lasts the youngest buyer to this age. */
+    coverToAge: number
+    /** No CPF use (or HDB loan) if the remaining lease is this many years or less. */
+    minYearsForCpf: number
+    /** Completed flats: AFL + key collection within this many months of booking. */
+    completedKeysWithinMonths: number
+  }
   dia: {
     maxAgeYears: number
     assessmentMonthsBeforeKeys: number
@@ -292,6 +300,17 @@ export const DEFAULT_POLICY: Policy = {
       dia: { afl: { pct: 0.025, minCashPct: 0.025 }, keys: { pct: 0.225, minCashPct: 0.025 } },
     },
   },
+  lease: {
+    // Age-95 rule: CPF usage (Valuation Limit) and the HDB loan LTV are pro-rated by how far the
+    // remaining lease covers the youngest buyer to age 95; no CPF if remaining lease ≤ 20 years.
+    // HDB loan tenure ≤ remaining lease − 20. Source: MND "Updated Rules on CPF Usage and HDB
+    // Housing Loan" (2019) via search snippets. SECONDARY 2026-09-25.
+    coverToAge: 95,
+    minYearsForCpf: 20,
+    // Completed SBF / open-booking flats: sign the AFL and collect keys within 9 months of booking.
+    // Source: hdb.gov.sg "Key Collection" (search snippet). SECONDARY 2026-09-25.
+    completedKeysWithinMonths: 9,
+  },
   dia: {
     // At least one applicant must be 30 or below (at HFE application).
     // Source: hdb.gov.sg DIA Annex A, Table A1(b). VERIFIED 2026-09-23.
@@ -412,6 +431,9 @@ export const POLICY_META: Record<string, PolicyMeta> = {
   'downpayment.bank.staggered': { label: 'Bank loan downpayment (staggered)', unit: 'pct', status: 'secondary', source: 'SDS guides' },
   'downpayment.hdb.dia': { label: 'HDB loan downpayment (Deferred Income Assessment)', unit: 'pct', status: 'verified', source: 'HDB DIA Annex A (2024)' },
   'downpayment.bank.dia': { label: 'Bank loan downpayment (Deferred Income Assessment)', unit: 'pct', status: 'secondary', source: 'HDB DIA Annex A + news' },
+  'lease.coverToAge': { label: 'Lease must cover youngest buyer to age', unit: 'years', status: 'secondary', source: 'MND 2019 CPF/HDB loan rules (snippet)' },
+  'lease.minYearsForCpf': { label: 'No CPF / HDB loan if remaining lease ≤', unit: 'years', status: 'secondary', source: 'MND 2019 CPF/HDB loan rules (snippet)' },
+  'lease.completedKeysWithinMonths': { label: 'Completed flats: keys within (months of booking)', unit: 'months', status: 'secondary', source: 'hdb.gov.sg Key Collection (snippet)' },
   'dia.maxAgeYears': { label: 'DIA: at least one applicant aged ≤', unit: 'years', status: 'verified', source: 'HDB DIA Annex A' },
   'dia.assessmentMonthsBeforeKeys': { label: 'DIA: income assessed months before keys', unit: 'months', status: 'verified', source: 'HDB DIA Annex A' },
   'dia.recentGradMonths': { label: 'DIA: finished studies/NS within', unit: 'months', status: 'verified', source: 'HDB DIA Annex A' },

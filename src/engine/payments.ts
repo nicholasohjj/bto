@@ -5,6 +5,7 @@ import { buyersStampDuty, legalFees, optionFee, round2 } from './stampDuty'
 import type { CostItem, CostKind, FundingRule, LoanInfo, Milestone, Payer, PartnerId, Scenario, When, YearMonth } from './types'
 import { ageInMonths, salaryAt } from './cpf'
 import { assessEligibility, type Eligibility } from './eligibility'
+import { isCompleted, leaseFactor, normalizeScenario } from './saleType'
 
 /** One dated payment the simulation must make. */
 export interface Obligation {
@@ -76,9 +77,23 @@ export function weightedAge(scenario: Scenario, ym: YearMonth): number {
  * Highest LTV allowed. Bank loans drop to the reduced LTV if the tenure is
  * over 25 years or the loan runs past (weighted) age 65.
  */
-export function maxLtvFor(scenario: Scenario, policy: Policy): { max: number; reduced: boolean; reason?: string } {
+export function maxLtvFor(raw: Scenario, policy: Policy): { max: number; reduced: boolean; reason?: string } {
+  const scenario = normalizeScenario(raw)
   const f = scenario.financing
-  if (f.loanType === 'HDB') return { max: policy.hdbLoan.maxLtv, reduced: false }
+  if (f.loanType === 'HDB') {
+    // Age-95 rule: HDB loan limit pro-rated if the lease won't last the youngest of you to 95.
+    const lf = leaseFactor(scenario, policy)
+    if (lf.factor < 1) {
+      return {
+        max: policy.hdbLoan.maxLtv * lf.factor,
+        reduced: true,
+        reason: lf.factor === 0
+          ? `the remaining lease is ${policy.lease.minYearsForCpf} years or less`
+          : `the ${lf.lease}-year lease covers the youngest of you only to age ${lf.youngest + lf.lease} (not ${policy.lease.coverToAge})`,
+      }
+    }
+    return { max: policy.hdbLoan.maxLtv, reduced: false }
+  }
   const b = policy.bankLoan
   const ageAtEnd = weightedAge(scenario, scenario.flat.dates.afl) + f.tenureYears
   if (f.tenureYears > b.ltvTenureYears) return { max: b.reducedLtv, reduced: true, reason: `tenure is over ${b.ltvTenureYears} years` }
@@ -131,9 +146,13 @@ export function switchCashPct(scenario: Scenario, policy: Policy): number {
   return maxLtvFor(asBank, policy).reduced ? policy.bankLoan.reducedMinCashPct : policy.bankLoan.minCashPct
 }
 
-/** CPF usable for the flat under a loan type (Valuation / Withdrawal Limit for bank loans). */
-export function cpfCapFor(loanType: 'HDB' | 'bank', price: number, brsSetAside: boolean | undefined, policy: Policy): number {
-  return loanType === 'HDB' ? Infinity : price * (brsSetAside ? policy.cpf.withdrawalLimitMultiple : 1)
+/**
+ * CPF usable for the flat: no cap with an HDB loan, the Valuation Limit (or
+ * 120% with BRS) with a bank loan — both pro-rated by the age-95 lease factor.
+ */
+export function cpfCapFor(loanType: 'HDB' | 'bank', price: number, brsSetAside: boolean | undefined, policy: Policy, lease = 1): number {
+  if (loanType === 'HDB') return lease >= 1 ? Infinity : price * lease
+  return price * (brsSetAside ? policy.cpf.withdrawalLimitMultiple : 1) * lease
 }
 
 /** Far enough ahead for the 15-year accrued-interest run. */
@@ -184,14 +203,18 @@ export function downpaymentScheme(financing: Scenario['financing']): 'standard' 
 }
 
 /** Month whose income is used for loan assessment. */
-export function assessmentMonth(scenario: Scenario, policy: Policy): YearMonth {
+export function assessmentMonth(raw: Scenario, policy: Policy): YearMonth {
+  const scenario = normalizeScenario(raw)
   const { dates } = scenario.flat
   if (!scenario.financing.deferredIncomeAssessment) return dates.afl
+  // DIA on a completed flat: income is assessed at flat booking.
+  if (isCompleted(scenario)) return dates.booking
   const m = addMonths(dates.keys, -policy.dia.assessmentMonthsBeforeKeys)
   return ymToIndex(m) < ymToIndex(dates.afl) ? dates.afl : m
 }
 
-export function buildSchedule(scenario: Scenario, policy: Policy): Schedule {
+export function buildSchedule(raw: Scenario, policy: Policy): Schedule {
+  const scenario = normalizeScenario(raw)
   const { flat, financing } = scenario
   const dates = flat.dates
   const eligibility = assessEligibility(scenario, policy)
@@ -404,7 +427,7 @@ export function buildSchedule(scenario: Scenario, policy: Policy): Schedule {
   const n = Math.round(tenure * 12)
   const maxLoanUnderMsr = maxInstalment <= 0 ? 0 : r === 0 ? maxInstalment * n : (maxInstalment * (1 - Math.pow(1 + r, -n))) / r
 
-  const cpfCap = cpfCapFor(financing.loanType, price, financing.brsSetAside, policy)
+  const cpfCap = cpfCapFor(financing.loanType, price, financing.brsSetAside, policy, leaseFactor(scenario, policy).factor)
 
   const loan: LoanInfo = {
     price: flat.price,

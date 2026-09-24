@@ -4,6 +4,7 @@ import { money } from './format'
 import { loanChangesOf, maxLtvFor, preKeysSwitch, weightedAge } from './payments'
 import { monthlyInstalment } from './loan'
 import { householdIncome } from './eligibility'
+import { isCompleted, leaseFactor } from './saleType'
 import { simulateCore, type CoreResult, type LoanStep } from './simulate'
 import type { Scenario, Warning, When, YearMonth } from './types'
 
@@ -198,7 +199,15 @@ export function buildWarnings(core: CoreResult, extras: WarningExtras = {}): War
   // --- LTV / tenure / age ---
   const ltvRule = maxLtvFor(s, core.policy)
   const maxLtv = ltvRule.max
-  if (s.financing.ltv > maxLtv + 1e-9) {
+  if (s.financing.ltv > maxLtv + 1e-9 && isHdb && ltvRule.reduced) {
+    // HDB loan limit cut by the age-95 lease rule.
+    warnings.push({
+      id: 'ltv', severity: 'error',
+      title: `HDB will lend at most ${Math.round(maxLtv * 1000) / 10}% (not ${Math.round(s.financing.ltv * 100)}%)`,
+      explanation: `The HDB loan limit is reduced because ${ltvRule.reason}. The simulation uses ${Math.round(maxLtv * 1000) / 10}%, so you pay ${money((s.financing.ltv - maxLtv) * core.schedule.loan.effectivePrice)} more upfront.`,
+      fixes: [`Plan for a ${Math.round(maxLtv * 1000) / 10}% loan-to-value, or look at flats with a longer remaining lease.`],
+    })
+  } else if (s.financing.ltv > maxLtv + 1e-9) {
     const b = core.policy.bankLoan
     warnings.push({
       id: 'ltv', severity: ltvRule.reduced ? 'error' : 'warning',
@@ -294,6 +303,44 @@ export function buildWarnings(core: CoreResult, extras: WarningExtras = {}): War
       title: `CPF limit for the flat reached in ${formatYm(extras.cpfCapReachedYm)}`,
       explanation: `With a bank loan you can use CPF up to the flat’s value${s.financing.brsSetAside ? ` × ${core.policy.cpf.withdrawalLimitMultiple} (Withdrawal Limit)` : ''}: ${money(core.schedule.loan.cpfCap)}. After that, the mortgage has to be paid in cash.`,
       fixes: s.financing.brsSetAside ? [] : [`If you have at least the Basic Retirement Sum (${money(core.policy.cpf.basicRetirementSum)}) in CPF, tick “BRS set aside” to use up to ${Math.round(core.policy.cpf.withdrawalLimitMultiple * 100)}%.`],
+    })
+  }
+
+  // --- SBF / open booking: completed flats, remaining lease ---
+  const lp = core.policy.lease
+  if (isCompleted(s)) {
+    const months = monthsBetween(s.flat.dates.booking, s.flat.dates.keys)
+    if (months > lp.completedKeysWithinMonths || months < 0) {
+      warnings.push({
+        id: 'completed-keys', severity: 'warning', ym: s.flat.dates.keys,
+        title: `Key collection is ${months} months after booking`,
+        explanation: `For a completed flat, HDB invites you to sign the AFL and collect keys within ${lp.completedKeysWithinMonths} months of booking.`,
+        fixes: [`Set “AFL + key collection” within ${lp.completedKeysWithinMonths} months of booking.`],
+      })
+    }
+  }
+  const lf = leaseFactor(s, core.policy)
+  if (lf.factor === 0) {
+    warnings.push({
+      id: 'lease-no-cpf', severity: 'error',
+      title: `Remaining lease of ${lf.lease} years is too short for CPF or an HDB loan`,
+      explanation: `With ${lp.minYearsForCpf} years or less left on the lease, you can’t use CPF for the flat or take an HDB loan, so everything is paid in cash.`,
+      fixes: ['Check the remaining lease, or look at flats with a longer lease.'],
+    })
+  } else if (lf.factor < 1) {
+    warnings.push({
+      id: 'lease-prorated', severity: 'warning',
+      title: `Shorter lease: CPF use ${isHdb ? 'and HDB loan ' : ''}limited to ${Math.round(lf.factor * 100)}%`,
+      explanation: `The ${lf.lease}-year remaining lease lasts the youngest of you (${lf.youngest}) only to age ${lf.youngest + lf.lease}, not ${lp.coverToAge}. CPF you can use for the flat${isHdb ? ' and the HDB loan limit are' : ' is'} pro-rated to ${lf.lease}/${lf.needed} = ${Math.round(lf.factor * 100)}%.`,
+      fixes: [],
+    })
+  }
+  if (isHdb && lf.factor > 0 && s.financing.tenureYears > lf.lease - lp.minYearsForCpf) {
+    warnings.push({
+      id: 'lease-tenure', severity: 'warning',
+      title: `HDB loan tenure longer than the lease allows`,
+      explanation: `HDB loan tenure can be at most the remaining lease minus ${lp.minYearsForCpf} years: ${Math.max(0, lf.lease - lp.minYearsForCpf)} years here.`,
+      fixes: [`Use a tenure of ${Math.max(1, lf.lease - lp.minYearsForCpf)} years or less.`],
     })
   }
 
@@ -409,7 +456,9 @@ export function buildWarnings(core: CoreResult, extras: WarningExtras = {}): War
       id: 'dia-info', severity: 'info', ym: loan.assessedAt,
       title: `Deferred Income Assessment: loan and grant assessed around ${formatYm(loan.assessedAt)}`,
       explanation:
-        `HDB will look at your income about ${core.policy.dia.assessmentMonthsBeforeKeys} months before key collection (projected ${money(loan.grossIncomeAtAssessment)}/month combined) to decide your Enhanced CPF Housing Grant and HDB loan. ` +
+        (isCompleted(s)
+          ? `For a completed flat, HDB looks at your income at flat booking (projected`
+          : `HDB will look at your income about ${core.policy.dia.assessmentMonthsBeforeKeys} months before key collection (projected`) + `  ${money(loan.grossIncomeAtAssessment)}/month combined) to decide your Enhanced CPF Housing Grant and HDB loan. ` +
         `The grant is paid at key collection. Both of you must be full-time students/NSFs, or have finished within ${core.policy.dia.recentGradMonths} months, when you apply for the HFE letter.`,
       fixes: [],
     })

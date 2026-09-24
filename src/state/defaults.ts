@@ -140,3 +140,28 @@ export function seedDiaScenario(): Scenario {
   s.costs = s.costs.map((c) => (c.id === 'reno' ? { ...c, amount: 45000 } : c))
   return s
 }
+
+/** Example: open booking of a completed flat — keys within months, full downpayment at once. */
+export function seedOpenBookingScenario(): Scenario {
+  const s = structuredClone(seedScenario())
+  s.id = 'seed-obf'
+  s.name = 'Example: open booking, completed 4-room'
+  s.flat = {
+    ...s.flat,
+    saleType: 'OBF',
+    completed: true,
+    remainingLeaseYears: 95,
+    price: 420000,
+    dates: { application: '2026-10', booking: '2026-10', afl: '2027-01', keys: '2027-01' },
+  }
+  // A completed flat needs the whole downpayment at once, so this couple has saved more.
+  s.partners = [
+    { ...s.partners[0], cpfOA: 52000, cash: 34000 },
+    { ...s.partners[1], cpfOA: 46000, cash: 30000 },
+  ]
+  // No wait for the flat, so no rent after the wedding; a lighter renovation right after keys.
+  s.costs = s.costs
+    .filter((c) => c.id !== 'rent-after-wedding')
+    .map((c) => (c.id === 'reno' ? { ...c, amount: 35000, when: { milestone: 'keys' as const, offsetMonths: 2 } } : c.id === 'furniture' ? { ...c, amount: 12000 } : c))
+  return s
+}

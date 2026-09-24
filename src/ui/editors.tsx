@@ -2,6 +2,7 @@ import type { FlatType, Policy } from '../config/policy'
 import { ageInMonths, estimatedLivingCosts, prYear, ratesFor } from '../engine/cpf'
 import { assessmentMonth, autoAmount, downpaymentScheme, grantAmount, loanChangesOf, maxLtvFor, voluntaryList } from '../engine/payments'
 import { assessEligibility } from '../engine/eligibility'
+import { isCompleted, leaseFactor, typicalDates } from '../engine/saleType'
 import { addMonths, formatYm } from '../engine/dates'
 import { money } from '../engine/format'
 import type { CostItem, Milestone, Partner, Scenario, When } from '../engine/types'
@@ -260,8 +261,38 @@ function IncomeChanges({ partner: p, startMonth, years, onChange }: {
 export function FlatEditor({ scenario, update, policy }: { scenario: Scenario; update: Update; policy: Policy }) {
   const f = scenario.flat
   const el = assessEligibility(scenario, policy)
+  const saleType = f.saleType ?? 'BTO'
+  const completed = isCompleted(scenario)
+  const lf = leaseFactor(scenario, policy)
+  const shownMilestones = MILESTONES.filter((m) =>
+    !(saleType === 'OBF' && m.value === 'application') && !(completed && m.value === 'afl'))
   return (
     <div className="space-y-4">
+      <Card>
+        <Field label="How you’re buying" tip="saleType">
+          <Segmented value={saleType} ariaLabel="Mode of sale"
+            onChange={(v) => update((d) => { d.flat.saleType = v; if (v === 'BTO') d.flat.completed = false; d.flat.dates = typicalDates(d.startMonth, v, !!d.flat.completed && v !== 'BTO') })}
+            options={[{ value: 'BTO', label: 'BTO' }, { value: 'SBF', label: 'SBF' }, { value: 'OBF', label: 'Open booking' }]} />
+        </Field>
+        {saleType !== 'BTO' && (
+          <div className="mt-3 grid grid-cols-1 gap-3 min-[360px]:grid-cols-2">
+            <div className="min-[360px]:col-span-2">
+              <Toggle label="The flat is already completed" tip="completed" checked={!!f.completed}
+                onChange={(v) => update((d) => { d.flat.completed = v; d.flat.dates = typicalDates(d.startMonth, saleType, v) })} />
+            </div>
+            <Field label="Remaining lease" tip="remainingLease"
+              hint={lf.factor < 1 ? <span className="text-critical">CPF use {saleType && scenario.financing.loanType === 'HDB' ? '& HDB loan ' : ''}limited to {Math.round(lf.factor * 100)}%</span> : 'Covers you to age 95'}>
+              <NumberInput suffix="yrs" min={1} max={99} value={f.remainingLeaseYears ?? 99} onChange={(v) => update((d) => { d.flat.remainingLeaseYears = v })} ariaLabel="Remaining lease" />
+            </Field>
+          </div>
+        )}
+        {saleType !== 'BTO' && (
+          <p className="mt-2 text-[11px] text-muted">
+            {saleType === 'SBF' ? 'SBF runs alongside BTO launches, with a ballot. ' : 'Open booking: no ballot — first come, first served, and you can book as early as the next working day. '}
+            {completed ? 'For a completed flat you sign the AFL and collect keys together (within 9 months of booking) and pay the full downpayment then.' : 'Changing this resets the dates to typical ones — adjust them below.'}
+          </p>
+        )}
+      </Card>
       <Card>
         <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
           <Field label="Flat price">
@@ -295,10 +326,15 @@ export function FlatEditor({ scenario, update, policy }: { scenario: Scenario; u
       </Card>
       <Card>
         <div className="mb-2 text-sm font-semibold">Key dates</div>
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-          {MILESTONES.map((m) => (
-            <Field key={m.value} label={m.label} tip={m.value === 'application' ? 'application' : m.value === 'booking' ? 'booking' : m.value === 'afl' ? 'AFL' : 'keys'}>
-              <MonthInput value={f.dates[m.value]} onChange={(v) => update((d) => { d.flat.dates[m.value] = v })} ariaLabel={m.label} />
+        <div className={`grid grid-cols-2 gap-3 ${shownMilestones.length === 4 ? 'md:grid-cols-4' : 'md:grid-cols-3'}`}>
+          {shownMilestones.map((m) => (
+            <Field key={m.value} label={completed && m.value === 'keys' ? 'AFL + key collection' : m.value === 'booking' && saleType === 'OBF' ? 'Booking (you apply & book)' : m.label}
+              tip={m.value === 'application' ? 'application' : m.value === 'booking' ? 'booking' : m.value === 'afl' ? 'AFL' : 'keys'}>
+              <MonthInput value={f.dates[m.value]} onChange={(v) => update((d) => {
+                d.flat.dates[m.value] = v
+                if (completed && m.value === 'keys') d.flat.dates.afl = v
+                if (saleType === 'OBF' && m.value === 'booking') d.flat.dates.application = v
+              })} ariaLabel={m.label} />
             </Field>
           ))}
         </div>
@@ -407,9 +443,11 @@ export function FinancingEditor({ scenario, update, policy }: { scenario: Scenar
         <Toggle label="Deferred Income Assessment" tip="DIA" checked={!!fin.deferredIncomeAssessment}
           onChange={(v) => update((d) => { d.financing.deferredIncomeAssessment = v })} />
         {fin.deferredIncomeAssessment && <DiaChecklist scenario={scenario} policy={policy} />}
-        {fin.deferredIncomeAssessment
-          ? <p className="py-1 text-xs text-ink-2">Staggered downpayment isn’t needed: DIA already means just 2.5% at AFL.</p>
-          : <Toggle label="Staggered downpayment" tip="staggered" checked={fin.staggered} onChange={(v) => update((d) => { d.financing.staggered = v })} />}
+        {isCompleted(scenario)
+          ? <p className="py-1 text-xs text-ink-2">Completed flat: the full downpayment is paid when you sign the AFL and collect keys, so there’s nothing to stagger.</p>
+          : fin.deferredIncomeAssessment
+            ? <p className="py-1 text-xs text-ink-2">Staggered downpayment isn’t needed: DIA already means just 2.5% at AFL.</p>
+            : <Toggle label="Staggered downpayment" tip="staggered" checked={fin.staggered} onChange={(v) => update((d) => { d.financing.staggered = v })} />}
         <DownpaymentPreview scenario={scenario} policy={policy} />
       </Card>
       <Card>
@@ -548,6 +586,16 @@ function DownpaymentPreview({ scenario, policy }: { scenario: Scenario; policy: 
   const total = 1 - ltv
   const afl = Math.min(total, sched.afl.pct)
   const p = scenario.flat.price
+  if (isCompleted(scenario)) {
+    const minCash = sched.afl.minCashPct + sched.keys.minCashPct
+    return (
+      <div className="mt-2 rounded-lg bg-surface-2 p-2 text-sm">
+        <div className="text-xs text-ink-2">At AFL + key collection</div>
+        <div className="tnum font-medium">{pctStr(total)} · {money(total * p)}</div>
+        {minCash > 0 && <div className="text-[11px] text-muted">≥ {pctStr(minCash)} cash</div>}
+      </div>
+    )
+  }
   return (
     <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
       <div className="rounded-lg bg-surface-2 p-2">

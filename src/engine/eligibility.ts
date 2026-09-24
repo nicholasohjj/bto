@@ -2,6 +2,7 @@ import type { GrantTier, Policy } from '../config/policy'
 import { isWorking, salaryAt } from './cpf'
 import { addMonths } from './dates'
 import type { Scenario, YearMonth } from './types'
+import { isCompleted, normalizeScenario } from './saleType'
 
 export interface Eligibility {
   /** Month the HFE letter / income assessment is assumed (application, or DIA assessment). */
@@ -37,8 +38,11 @@ export function tierAmount(income: number, tiers: GrantTier[]): number {
  * Month HDB assesses income for the grant: when you apply for the HFE letter
  * (assumed = BTO application month), or ~3 months before keys under DIA.
  */
-export function grantAssessmentMonth(s: Scenario, policy: Policy): YearMonth {
+export function grantAssessmentMonth(raw: Scenario, policy: Policy): YearMonth {
+  const s = normalizeScenario(raw)
   if (s.financing.deferredIncomeAssessment) {
+    // DIA on a completed flat: assessed at flat booking.
+    if (isCompleted(s)) return s.flat.dates.booking
     return addMonths(s.flat.dates.keys, -policy.dia.assessmentMonthsBeforeKeys)
   }
   return s.flat.dates.application
@@ -48,7 +52,8 @@ export function householdIncome(s: Scenario, ym: YearMonth): number {
   return s.partners.reduce((sum, p) => sum + salaryAt(p, s.startMonth, ym), 0)
 }
 
-export function assessEligibility(s: Scenario, policy: Policy): Eligibility {
+export function assessEligibility(raw: Scenario, policy: Policy): Eligibility {
+  const s = normalizeScenario(raw)
   const el = policy.eligibility
   const assessedAt = grantAssessmentMonth(s, policy)
   const windowEnd = addMonths(assessedAt, -el.ehgIncomeLagMonths)

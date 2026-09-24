@@ -36,7 +36,7 @@ export function Wizard({ onFinish, onSkip, canSkip, firstRun }: { onFinish: (s: 
           <Card>
             <h2 className="text-base font-semibold">See whether you’ll have enough, month by month</h2>
             <p className="mt-2 text-sm text-ink-2">
-              Buying a <T term="BTO">BTO</T> means paying from two separate pots: <T term="cash">cash</T> and your <T term="OA">CPF OA</T>.
+              Buying a new HDB flat — <T term="BTO">BTO</T>, SBF or open booking — means paying from two separate pots: <T term="cash">cash</T> and your <T term="OA">CPF OA</T>.
               Some things (option fee, renovation, furniture) can only be paid in cash. This app plays out both pots for both of you,
               from today until a year after key collection, and flags any month where a payment can’t be covered.
             </p>

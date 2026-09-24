@@ -2,6 +2,7 @@ import type { Policy } from '../config/policy'
 import { ageInMonths, bonusAmount, bonusCpf, cashSavingsAt, isWorking, partnerMonthCpf, prYear, ratesFor, salaryAt } from './cpf'
 import { addMonths, monthOf, ymToIndex } from './dates'
 import { buildSchedule, cpfCapFor, loanChangesOf, type Obligation, type Schedule } from './payments'
+import { leaseFactor, normalizeScenario } from './saleType'
 import { resolvePolicy } from './policyOverrides'
 import { round2 } from './stampDuty'
 import { money } from './format'
@@ -72,10 +73,11 @@ export interface SimOptions {
 
 /** Month-by-month simulation (no warnings). Pure: same input → same output. */
 export function simulateCore(
-  scenario: Scenario,
-  policy: Policy = resolvePolicy(scenario.policyOverrides),
+  raw: Scenario,
+  policy: Policy = resolvePolicy(raw.policyOverrides),
   options: SimOptions = {},
 ): CoreResult {
+  const scenario = normalizeScenario(raw)
   const schedule = buildSchedule(scenario, policy)
   const { flat, financing } = scenario
   const start = scenario.startMonth
@@ -368,7 +370,7 @@ export function simulateCore(
         if (c.tenureYears) loanEndIdx = idx + Math.max(1, Math.round(c.tenureYears * 12)) - 1
         if (loanType === 'HDB') {
           loanType = 'bank'
-          cpfCap = cpfCapFor('bank', schedule.loan.effectivePrice, financing.brsSetAside, policy)
+          cpfCap = cpfCapFor('bank', schedule.loan.effectivePrice, financing.brsSetAside, policy, leaseFactor(scenario, policy).factor)
         }
       }
       const monthsLeft = Math.max(1, loanEndIdx - idx + 1)

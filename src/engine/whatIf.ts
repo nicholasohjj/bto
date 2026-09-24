@@ -4,6 +4,7 @@ import { addMonths } from './dates'
 import { resolvePolicy } from './policyOverrides'
 import { simulateCore } from './simulate'
 import type { Scenario, YearMonth } from './types'
+import { normalizeScenario } from './saleType'
 
 export interface JobLossResult {
   partnerIndex: 0 | 1
@@ -52,7 +53,8 @@ function leanest(s: Scenario, policy: Policy, from: YearMonth) {
  * living costs paid from savings for `months`, starting at `from` (default: key
  * collection, usually the tightest time).
  */
-export function jobLossImpact(s: Scenario, months = 6, from: YearMonth = s.flat.dates.keys, policy: Policy = resolvePolicy(s.policyOverrides)): JobLossResult[] {
+export function jobLossImpact(raw: Scenario, months = 6, from: YearMonth = normalizeScenario(raw).flat.dates.keys, policy: Policy = resolvePolicy(raw.policyOverrides)): JobLossResult[] {
+  const s = normalizeScenario(raw)
   const base = leanest(s, policy, from)
   return ([0, 1] as const).map((i) => {
     const trial = withJobLoss(s, i, from, months)
