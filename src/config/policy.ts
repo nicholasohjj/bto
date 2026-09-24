@@ -1,0 +1,447 @@
+/**
+ * ALL policy figures used by the simulator live in this file.
+ *
+ * Every figure has a comment giving its source and the date it was last
+ * verified. "VERIFIED" means the figure was read directly on an official
+ * page (hdb.gov.sg / cpf.gov.sg / iras.gov.sg). "SECONDARY" means it was
+ * only confirmed via news/secondary sources. "UNVERIFIED" means it is from
+ * general knowledge and could not be confirmed in the last check.
+ *
+ * Every numeric leaf here can be overridden per scenario in the UI under
+ * "Advanced settings" (see engine/policyOverrides.ts). The labels shown in
+ * the UI come from POLICY_META at the bottom of this file.
+ *
+ * To update: change the number, update the comment's source + date, and bump
+ * POLICY_VERSION_DATE. Run `npm test` afterwards.
+ */
+
+export const POLICY_VERSION_DATE = '2026-09-23'
+
+export type FlatType = '2R' | '3R' | '4R' | '5R' | '3Gen' | 'Exec'
+
+export interface ContributionBand {
+  /** Band applies while age (in months) is <= maxAgeYears * 12. */
+  maxAgeYears: number
+  employer: number
+  employee: number
+  /** Share of the total contribution that goes to the Ordinary Account. */
+  oaRatio: number
+}
+
+export interface SprBand {
+  maxAgeYears: number
+  employer: number
+  employee: number
+}
+
+export interface GrantTier {
+  /** Average monthly income up to and including this amount gets `amount`. */
+  upTo: number
+  amount: number
+}
+
+export interface Tier {
+  /** Width of this tier in dollars (Infinity for the last tier). */
+  width: number
+  rate: number
+}
+
+export interface Tranche {
+  /** Portion of flat price payable at this milestone. */
+  pct: number
+  /** Portion of flat price at this milestone that must be paid in cash. */
+  minCashPct: number
+}
+
+export interface DownpaymentSchedule {
+  afl: Tranche
+  /** Keys tranche absorbs any remaining downpayment: (1 - LTV) - afl.pct. */
+  keys: Tranche
+}
+
+export interface Policy {
+  cpf: {
+    bands: ContributionBand[]
+    owCeilingMonthly: number
+    annualSalaryCeiling: number
+    oaInterestRate: number
+    accruedInterestRate: number
+    /** Graduated rates for Singapore PRs in their 1st and 2nd year (OA ratio as SC). */
+    spr: { year1: SprBand[]; year2: SprBand[] }
+    lowWage: { nilUpTo: number; employerOnlyUpTo: number; phaseInUpTo: number; employeeFactor: number }
+    /** With a bank loan: CPF usable up to this multiple of the Valuation Limit if BRS set aside. */
+    withdrawalLimitMultiple: number
+    basicRetirementSum: number
+    /** Max total CPF contributions (mandatory + voluntary) per person per calendar year. */
+    annualLimit: number
+  }
+  hdbLoan: {
+    interestRate: number
+    maxLtv: number
+    stressRate: number
+    maxTenureYears: number
+    oaRetainMax: number
+    maxAgeAtEnd: number
+  }
+  bankLoan: {
+    defaultInterestRate: number
+    maxLtv: number
+    minCashPct: number
+    stressRate: number
+    maxTenureYears: number
+    /** LTV drops to this if tenure > ltvTenureYears or the loan runs past ltvMaxAge. */
+    reducedLtv: number
+    reducedMinCashPct: number
+    ltvTenureYears: number
+    ltvMaxAge: number
+    /** With a bank loan, BSD is paid in cash first and reimbursed from CPF this many months later. */
+    bsdReimburseMonths: number
+  }
+  msr: number
+  tdsr: number
+  bsdTiers: Tier[]
+  optionFee: Record<FlatType, number>
+  downpayment: {
+    hdb: { standard: DownpaymentSchedule; staggered: DownpaymentSchedule; dia: DownpaymentSchedule }
+    bank: { standard: DownpaymentSchedule; staggered: DownpaymentSchedule; dia: DownpaymentSchedule }
+  }
+  dia: {
+    maxAgeYears: number
+    assessmentMonthsBeforeKeys: number
+    recentGradMonths: number
+  }
+  eligibility: {
+    incomeCeilingFamilies: number
+    incomeCeiling2RFlexi: number
+    incomeCeilingExtended: number
+    scSprPremium: number
+    ehgFamilies: GrantTier[]
+    ehgSingles: GrantTier[]
+    ehgEmploymentMonths: number
+    ehgIncomeLagMonths: number
+    stepUpAmount: number
+    stepUpIncomeCeiling: number
+  }
+  fees: {
+    conveyancingTiers: Tier[]
+    conveyancingRoundTo: number
+    conveyancingMin: number
+    gst: number
+    caveatFee: number
+    surveyFee: Record<FlatType, number>
+    bankLegalFee: number
+    fireInsurance5yr: Record<FlatType, number>
+  }
+}
+
+export const DEFAULT_POLICY: Policy = {
+  cpf: {
+    // CPF contribution rates (private sector, SC / 3rd-year SPR, wages > $750)
+    // and OA allocation ratios, both effective 1 Jan 2026.
+    // Source: cpf.gov.sg "How much CPF contributions to pay" +
+    //   "CPF Allocation Rates from 1 January 2026" (PDF).
+    // VERIFIED 2026-09-23.
+    // Note: from 1 Jan 2027 rates for ages >55–65 rise (35.5% / 26%), but the
+    // increase goes to the RA, not the OA, so OA inflows are unaffected.
+    bands: [
+      { maxAgeYears: 35, employer: 0.17, employee: 0.2, oaRatio: 0.6217 },
+      { maxAgeYears: 45, employer: 0.17, employee: 0.2, oaRatio: 0.5677 },
+      { maxAgeYears: 50, employer: 0.17, employee: 0.2, oaRatio: 0.5136 },
+      { maxAgeYears: 55, employer: 0.17, employee: 0.2, oaRatio: 0.4055 },
+      { maxAgeYears: 60, employer: 0.16, employee: 0.18, oaRatio: 0.353 },
+      { maxAgeYears: 65, employer: 0.125, employee: 0.125, oaRatio: 0.14 },
+      { maxAgeYears: 70, employer: 0.09, employee: 0.075, oaRatio: 0.0607 },
+      { maxAgeYears: 200, employer: 0.075, employee: 0.05, oaRatio: 0.08 },
+    ],
+    // Ordinary Wage ceiling, $8,000/month from 1 Jan 2026.
+    // Source: cpf.gov.sg "What is the Ordinary Wage (OW) ceiling?". VERIFIED 2026-09-23.
+    owCeilingMonthly: 8000,
+    // Annual salary ceiling (caps CPF on OW + bonuses). Same source. VERIFIED 2026-09-23.
+    annualSalaryCeiling: 102000,
+    // OA interest rate: floor of 2.5% p.a. (held through 30 Sep 2026).
+    // Source: cpf.gov.sg news release "CPF interest rates from 1 July to 30 September 2026"
+    // (seen in search results; page body not read). SECONDARY 2026-09-23.
+    oaInterestRate: 0.025,
+    // Accrued interest on CPF used for housing = prevailing OA rate (2.5%).
+    // Computed monthly, compounded annually (same as OA interest).
+    // Source: cpf.gov.sg "CPF refund when selling or transferring property" (principal +
+    // accrued interest). Exact rate/method page returned 404. SECONDARY 2026-09-23.
+    accruedInterestRate: 0.025,
+    // Graduated (G/G) rates for SPRs in 1st / 2nd year of PR status (from 1 Jan 2026;
+    // unchanged since 2016). 3rd year onwards = full rates above.
+    // Source: cpf.gov.sg "CPF Contribution Rate Table from 1 January 2026", Tables 2–3. VERIFIED 2026-09-23.
+    // OA share for graduated rates assumed equal to SC allocation ratios. UNVERIFIED.
+    spr: {
+      year1: [
+        { maxAgeYears: 60, employer: 0.04, employee: 0.05 },
+        { maxAgeYears: 200, employer: 0.035, employee: 0.05 },
+      ],
+      year2: [
+        { maxAgeYears: 55, employer: 0.09, employee: 0.15 },
+        { maxAgeYears: 60, employer: 0.06, employee: 0.125 },
+        { maxAgeYears: 65, employer: 0.035, employee: 0.075 },
+        { maxAgeYears: 200, employer: 0.035, employee: 0.05 },
+      ],
+    },
+    // Low wages: ≤$50 nil; $50–500 employer only; $500–750 employee share phased in as
+    // (3 × employee rate) × (TW − $500), e.g. 0.6 for ≤55. Same source, Table 1. VERIFIED 2026-09-23.
+    lowWage: { nilUpTo: 50, employerOnlyUpTo: 500, phaseInUpTo: 750, employeeFactor: 3 },
+    // Withdrawal Limit = 120% of Valuation Limit, only with a bank loan and after setting aside
+    // the BRS. With an HDB loan, CPF can be used up to the full purchase price.
+    // Source: cpf.gov.sg "How much CPF savings you can use for your home purchase". VERIFIED 2026-09-23.
+    withdrawalLimitMultiple: 1.2,
+    // Basic Retirement Sum for the 2026 cohort: $110,200 (FRS $220,400).
+    // Source: cpf.gov.sg retirement sum FAQs (search snippet). SECONDARY 2026-09-23.
+    basicRetirementSum: 110200,
+    // CPF Annual Limit: mandatory + voluntary contributions per calendar year ≤ $37,740.
+    // Voluntary top-ups are allocated to OA/SA/MA using the normal allocation rates.
+    // Source: cpf.gov.sg "Top up Ordinary, Special and MediSave savings" (search snippet). SECONDARY 2026-09-24.
+    annualLimit: 37740,
+  },
+  hdbLoan: {
+    // HDB concessionary rate = OA rate + 0.1% = 2.6% p.a.
+    // Source: hdb.gov.sg "Interest Rate for HDB Housing Loan" (search snippet) and CPF
+    // news releases for Jul–Sep 2026. SECONDARY 2026-09-23.
+    interestRate: 0.026,
+    // LTV limit for HDB loans lowered from 80% to 75% from the Oct 2024 BTO exercise.
+    // Source: hdb.gov.sg Annex C, Oct 2024 BTO sales exercise, footnote 4. VERIFIED 2026-09-23.
+    maxLtv: 0.75,
+    // Interest rate floor HDB uses to assess loan eligibility (3% p.a., from 30 Sep 2022).
+    // Source: MAS/HDB joint release 29 Sep 2022 (MAS page unavailable at check). SECONDARY 2026-09-23.
+    stressRate: 0.03,
+    // Maximum HDB loan tenure. UNVERIFIED (general knowledge, 25 years).
+    maxTenureYears: 25,
+    // With an HDB loan you must use your OA savings for the flat but may keep up to
+    // $20,000 in OA (modelled per person). UNVERIFIED (general knowledge).
+    oaRetainMax: 20000,
+    // HDB loan tenure generally runs to at most age 65. UNVERIFIED (general knowledge).
+    maxAgeAtEnd: 65,
+  },
+  bankLoan: {
+    // Not a policy figure: a typical fixed rate to start from. Edit freely.
+    // Market rates in 2026 seen ~1.5–2.5% (secondary). UNVERIFIED 2026-09-23.
+    defaultInterestRate: 0.025,
+    // LTV for loans from financial institutions: 75%.
+    // Source: hdb.gov.sg Annex C, Oct 2024 BTO sales exercise, footnote 4. VERIFIED 2026-09-23.
+    maxLtv: 0.75,
+    // Minimum cash downpayment with a bank loan (75% LTV): 5% of price.
+    // Source: hdb.gov.sg (search snippet: "at least 5% of the flat price ... must be paid in
+    // cash ... for an FI loan with 75% LTV limit"). SECONDARY 2026-09-23.
+    minCashPct: 0.05,
+    // MAS medium-term interest rate floor for TDSR/MSR on bank loans: 4% p.a.
+    // Source: MAS release 29 Sep 2022 (MAS site unavailable at check). SECONDARY 2026-09-23.
+    stressRate: 0.04,
+    // Max bank loan tenure for HDB flats. UNVERIFIED (general knowledge, 30 years).
+    maxTenureYears: 30,
+    // MAS: for HDB flats, LTV falls to 55% if tenure > 25 years or the loan runs beyond
+    // the (income-weighted average) borrower age of 65; min cash rises to 10%.
+    // Source: MAS "Loan Tenure and Loan-to-Value Limits" (search snippet) + SDS guides. SECONDARY 2026-09-23.
+    reducedLtv: 0.55,
+    reducedMinCashPct: 0.1,
+    ltvTenureYears: 25,
+    ltvMaxAge: 65,
+    // With a bank loan, BSD is usually paid by the lawyer from your cash first, then
+    // reimbursed from CPF OA. Delay is an estimate. UNVERIFIED.
+    bsdReimburseMonths: 2,
+  },
+  // Mortgage Servicing Ratio cap (HDB flats & ECs): 30% of gross monthly income.
+  // Source: MAS "Macroprudential policies in Singapore" (search snippet). SECONDARY 2026-09-23.
+  msr: 0.3,
+  // Total Debt Servicing Ratio cap: 55% of gross monthly income (bank loans).
+  // Source: MAS "Calculating TDSR" (search snippet). SECONDARY 2026-09-23.
+  tdsr: 0.55,
+  // Buyer's Stamp Duty, residential, for acquisitions on/after 15 Feb 2023.
+  // Rounded down to the nearest dollar. Payable within 14 days of signing (the AFL).
+  // Source: iras.gov.sg "Buyer's Stamp Duty (BSD)". VERIFIED 2026-09-23.
+  bsdTiers: [
+    { width: 180000, rate: 0.01 },
+    { width: 180000, rate: 0.02 },
+    { width: 640000, rate: 0.03 },
+    { width: 500000, rate: 0.04 },
+    { width: 1500000, rate: 0.05 },
+    { width: Infinity, rate: 0.06 },
+  ],
+  // Option fee by flat type; forms part of the downpayment; paid by NETS (cash).
+  // Source: hdb.gov.sg Annex C, Oct 2024 BTO sales exercise, para 12. VERIFIED 2026-09-23.
+  // (Exec is not sold as BTO today; treated like 4-room and bigger.)
+  optionFee: { '2R': 500, '3R': 1000, '4R': 2000, '5R': 2000, '3Gen': 2000, Exec: 2000 },
+  downpayment: {
+    hdb: {
+      // HDB loan: 10% at AFL. Remaining downpayment (to 25% at 75% LTV) at keys. CPF allowed.
+      // Source: hdb.gov.sg Annex C, Oct 2024, para 13 ("10% ... when they sign the AFL ...
+      // payable by CPF savings and/or cash"). VERIFIED 2026-09-23.
+      standard: { afl: { pct: 0.1, minCashPct: 0 }, keys: { pct: 0.15, minCashPct: 0 } },
+      // Staggered Downpayment Scheme: 2.5% at AFL, rest at keys.
+      // Source: hdb.gov.sg Annex C footnote 3 (2.5% for couples eligible for deferred income
+      // assessment, VERIFIED) and dollarsandsense.sg SDS guide (2.5% / 22.5%). SECONDARY 2026-09-23.
+      staggered: { afl: { pct: 0.025, minCashPct: 0 }, keys: { pct: 0.225, minCashPct: 0 } },
+      // Deferred Income Assessment (uncompleted flat): 2.5% at AFL, rest at keys.
+      // Source: hdb.gov.sg "Annex A: Details on Deferred Income Assessment" (Greater Support for
+      // Young Couples, 2024), Table A2(b). VERIFIED 2026-09-23.
+      dia: { afl: { pct: 0.025, minCashPct: 0 }, keys: { pct: 0.225, minCashPct: 0 } },
+    },
+    bank: {
+      // Bank loan: 20% at AFL (of which 5% cash), remaining 5% at keys.
+      // Source: hdb.gov.sg Annex C, Oct 2024, para 13 (20% at AFL) VERIFIED; 5% cash SECONDARY.
+      standard: { afl: { pct: 0.2, minCashPct: 0.05 }, keys: { pct: 0.05, minCashPct: 0 } },
+      // Staggered with bank loan: 2.5% cash at AFL; 22.5% at keys of which 2.5% cash.
+      // Source: dollarsandsense.sg SDS guide. SECONDARY 2026-09-23.
+      staggered: { afl: { pct: 0.025, minCashPct: 0.025 }, keys: { pct: 0.225, minCashPct: 0.025 } },
+      // DIA with a bank loan: 2.5% at AFL "regardless of the financing option" (HDB Annex A /
+      // news reports). Cash split assumed same as bank staggered. SECONDARY 2026-09-23.
+      dia: { afl: { pct: 0.025, minCashPct: 0.025 }, keys: { pct: 0.225, minCashPct: 0.025 } },
+    },
+  },
+  dia: {
+    // At least one applicant must be 30 or below (at HFE application).
+    // Source: hdb.gov.sg DIA Annex A, Table A1(b). VERIFIED 2026-09-23.
+    maxAgeYears: 30,
+    // Income for EHG + HDB loan assessed at the last Probable Completion Date update,
+    // "about 3 months before the flat completion". Grant disbursed at key collection.
+    // Source: hdb.gov.sg DIA Annex A, Table A2(a). VERIFIED 2026-09-23.
+    assessmentMonthsBeforeKeys: 3,
+    // Both must be full-time students/NSF, or have completed studies/NS within the last
+    // 12 months (at HFE application). Source: DIA Annex A, Table A1(a). VERIFIED 2026-09-23.
+    recentGradMonths: 12,
+  },
+  eligibility: {
+    // Household income ceiling for BTO (families): raised from $14,000 to $16,000 from
+    // 24 Aug 2026 (National Day Rally 2026). News reports, confirmed by the user 2026-09-24;
+    // not yet read on hdb.gov.sg ($14,000 VERIFIED in HDB Feb 2026 BTO Annex B, Table B(1)).
+    incomeCeilingFamilies: 16000,
+    // 2-room Flexi (99-year lease): $7,000 in HDB Feb 2026 Annex B (VERIFIED); may have been
+    // raised after 24 Aug 2026. Extended families: $21,000 (VERIFIED, Feb 2026).
+    incomeCeiling2RFlexi: 7000,
+    incomeCeilingExtended: 21000,
+    // SC/SPR households pay a $10,000 premium on a new flat (Citizen Top-Up refunds it when
+    // the SPR becomes an SC). Source: HDB (search snippet). SECONDARY 2026-09-23.
+    scSprPremium: 10000,
+    // Enhanced CPF Housing Grant (families), by average gross monthly household income over
+    // 12 months. Max $120,000; ceiling $9,000 (unchanged by the Aug 2026 ceiling increase).
+    // Source: cpf.gov.sg EHG guide (max + ceiling VERIFIED); band amounts from ohmyhome.com. SECONDARY 2026-09-23.
+    ehgFamilies: [
+      { upTo: 1500, amount: 120000 }, { upTo: 2000, amount: 110000 }, { upTo: 2500, amount: 105000 },
+      { upTo: 3000, amount: 95000 }, { upTo: 3500, amount: 90000 }, { upTo: 4000, amount: 80000 },
+      { upTo: 4500, amount: 70000 }, { upTo: 5000, amount: 65000 }, { upTo: 5500, amount: 55000 },
+      { upTo: 6000, amount: 50000 }, { upTo: 6500, amount: 40000 }, { upTo: 7000, amount: 30000 },
+      { upTo: 7500, amount: 25000 }, { upTo: 8000, amount: 20000 }, { upTo: 8500, amount: 10000 },
+      { upTo: 9000, amount: 5000 },
+    ],
+    // EHG (Singles): used for first-timer + second-timer couples, on HALF the household income
+    // (ceiling $4,500). Source: mynicehome.gov.sg (rule VERIFIED); bands from ohmyhome.com SECONDARY.
+    ehgSingles: [
+      { upTo: 750, amount: 60000 }, { upTo: 1000, amount: 55000 }, { upTo: 1250, amount: 52500 },
+      { upTo: 1500, amount: 47500 }, { upTo: 1750, amount: 45000 }, { upTo: 2000, amount: 40000 },
+      { upTo: 2250, amount: 35000 }, { upTo: 2500, amount: 32500 }, { upTo: 2750, amount: 27500 },
+      { upTo: 3000, amount: 25000 }, { upTo: 3250, amount: 20000 }, { upTo: 3500, amount: 15000 },
+      { upTo: 3750, amount: 12500 }, { upTo: 4000, amount: 10000 }, { upTo: 4250, amount: 5000 },
+      { upTo: 4500, amount: 2500 },
+    ],
+    // Worked continuously ≥12 months and working at HFE application; income averaged over the
+    // 12 months up to 2 months before the HFE application. Source: mynicehome.gov.sg. VERIFIED 2026-09-23.
+    ehgEmploymentMonths: 12,
+    ehgIncomeLagMonths: 2,
+    // Step-Up CPF Housing Grant: $15,000 for second-timer families moving from public rental / a
+    // 2-room flat to a 2-room Flexi or 3-room Standard flat; income ≤ $7,000.
+    // Source: HDB Step-Up grant page (search snippet) + guides. SECONDARY 2026-09-23.
+    stepUpAmount: 15000,
+    stepUpIncomeCeiling: 7000,
+  },
+  fees: {
+    // HDB conveyancing fee (when HDB acts for you): per $1,000 of price, tiered, rounded
+    // up to the next $1,000, plus GST. First tier ($0.90 per $1,000 on first $30,000)
+    // from cpf.gov.sg "HDB option fee and housing expenses" (VERIFIED). Later tiers
+    // ($0.72, $0.60) UNVERIFIED (hdb.gov.sg conveyancing rules page blocked the check).
+    conveyancingTiers: [
+      { width: 30000, rate: 0.0009 },
+      { width: 30000, rate: 0.00072 },
+      { width: Infinity, rate: 0.0006 },
+    ],
+    conveyancingRoundTo: 1000,
+    // Minimum legal fee $21.80 incl. GST. SECONDARY 2026-09-23.
+    conveyancingMin: 21.8,
+    // Singapore GST 9% (since 1 Jan 2024). UNVERIFIED this session (general knowledge).
+    gst: 0.09,
+    // Caveat registration $64.45 incl. GST, CPF allowed.
+    // Source: cpf.gov.sg "HDB option fee and housing expenses". VERIFIED 2026-09-23.
+    caveatFee: 64.45,
+    // Survey fee range $163.50–$408.75 by flat type (cpf.gov.sg, VERIFIED range);
+    // the per-type split below is interpolated. UNVERIFIED per type.
+    surveyFee: { '2R': 163.5, '3R': 218, '4R': 299.75, '5R': 354.25, '3Gen': 408.75, Exec: 408.75 },
+    // Private lawyer fees when taking a bank loan: ~$2,500–$3,000 (secondary).
+    // Not a policy figure: an estimate to edit. UNVERIFIED.
+    bankLegalFee: 2500,
+    // HDB Fire Insurance 5-year premium (cash only, Etiqa): $1.11–$6.68 by flat type;
+    // 4-room ~ $5.94. SECONDARY 2026-09-23; other types interpolated.
+    fireInsurance5yr: { '2R': 2.5, '3R': 4.2, '4R': 5.94, '5R': 6.68, '3Gen': 6.68, Exec: 6.68 },
+  },
+}
+
+/** Human labels + verification status for Advanced settings, keyed by path prefix. */
+export interface PolicyMeta {
+  label: string
+  /** 'pct' values are stored as fractions and displayed as %. */
+  unit: 'pct' | 'sgd' | 'years' | 'months' | 'ratio' | 'number'
+  status: 'verified' | 'secondary' | 'unverified'
+  source: string
+}
+
+export const POLICY_META: Record<string, PolicyMeta> = {
+  'cpf.bands': { label: 'CPF contribution & OA allocation by age', unit: 'pct', status: 'verified', source: 'cpf.gov.sg contribution & allocation tables, 1 Jan 2026' },
+  'cpf.owCeilingMonthly': { label: 'CPF monthly salary ceiling', unit: 'sgd', status: 'verified', source: 'cpf.gov.sg OW ceiling FAQ' },
+  'cpf.annualSalaryCeiling': { label: 'CPF annual salary ceiling', unit: 'sgd', status: 'verified', source: 'cpf.gov.sg OW ceiling FAQ' },
+  'cpf.oaInterestRate': { label: 'CPF OA interest rate', unit: 'pct', status: 'secondary', source: 'CPF interest rate releases, 2026' },
+  'cpf.accruedInterestRate': { label: 'CPF accrued interest rate on housing', unit: 'pct', status: 'secondary', source: 'cpf.gov.sg housing refund pages' },
+  'hdbLoan.interestRate': { label: 'HDB loan interest rate', unit: 'pct', status: 'secondary', source: 'hdb.gov.sg interest rate page / CPF releases' },
+  'hdbLoan.maxLtv': { label: 'HDB loan max LTV', unit: 'pct', status: 'verified', source: 'HDB BTO Annex C, Oct 2024' },
+  'hdbLoan.stressRate': { label: 'HDB loan assessment rate floor', unit: 'pct', status: 'secondary', source: 'MAS/HDB release, Sep 2022' },
+  'hdbLoan.maxTenureYears': { label: 'HDB loan max tenure', unit: 'years', status: 'unverified', source: 'General knowledge' },
+  'hdbLoan.oaRetainMax': { label: 'OA you may keep with HDB loan (per person)', unit: 'sgd', status: 'unverified', source: 'General knowledge' },
+  'bankLoan.defaultInterestRate': { label: 'Bank loan default rate (estimate)', unit: 'pct', status: 'unverified', source: 'Market estimate' },
+  'bankLoan.maxLtv': { label: 'Bank loan max LTV', unit: 'pct', status: 'verified', source: 'HDB BTO Annex C, Oct 2024' },
+  'bankLoan.minCashPct': { label: 'Bank loan min cash downpayment', unit: 'pct', status: 'secondary', source: 'hdb.gov.sg (snippet)' },
+  'bankLoan.stressRate': { label: 'Bank loan MSR/TDSR rate floor', unit: 'pct', status: 'secondary', source: 'MAS release, Sep 2022' },
+  'bankLoan.maxTenureYears': { label: 'Bank loan max tenure (HDB flat)', unit: 'years', status: 'unverified', source: 'General knowledge' },
+  msr: { label: 'Mortgage Servicing Ratio cap', unit: 'pct', status: 'secondary', source: 'MAS' },
+  tdsr: { label: 'Total Debt Servicing Ratio cap', unit: 'pct', status: 'secondary', source: 'MAS' },
+  bsdTiers: { label: "Buyer's Stamp Duty tiers", unit: 'pct', status: 'verified', source: 'iras.gov.sg BSD page' },
+  optionFee: { label: 'Option fee by flat type', unit: 'sgd', status: 'verified', source: 'HDB BTO Annex C, Oct 2024' },
+  'downpayment.hdb.standard': { label: 'HDB loan downpayment (standard)', unit: 'pct', status: 'verified', source: 'HDB BTO Annex C, Oct 2024' },
+  'downpayment.hdb.staggered': { label: 'HDB loan downpayment (staggered)', unit: 'pct', status: 'secondary', source: 'HDB Annex C fn 3 + SDS guides' },
+  'downpayment.bank.standard': { label: 'Bank loan downpayment (standard)', unit: 'pct', status: 'secondary', source: 'HDB Annex C + secondary' },
+  'downpayment.bank.staggered': { label: 'Bank loan downpayment (staggered)', unit: 'pct', status: 'secondary', source: 'SDS guides' },
+  'downpayment.hdb.dia': { label: 'HDB loan downpayment (Deferred Income Assessment)', unit: 'pct', status: 'verified', source: 'HDB DIA Annex A (2024)' },
+  'downpayment.bank.dia': { label: 'Bank loan downpayment (Deferred Income Assessment)', unit: 'pct', status: 'secondary', source: 'HDB DIA Annex A + news' },
+  'dia.maxAgeYears': { label: 'DIA: at least one applicant aged ≤', unit: 'years', status: 'verified', source: 'HDB DIA Annex A' },
+  'dia.assessmentMonthsBeforeKeys': { label: 'DIA: income assessed months before keys', unit: 'months', status: 'verified', source: 'HDB DIA Annex A' },
+  'dia.recentGradMonths': { label: 'DIA: finished studies/NS within', unit: 'months', status: 'verified', source: 'HDB DIA Annex A' },
+  'cpf.spr': { label: 'PR graduated CPF rates (1st/2nd year)', unit: 'pct', status: 'verified', source: 'cpf.gov.sg contribution tables 2–3, 1 Jan 2026' },
+  'cpf.lowWage': { label: 'CPF for wages ≤ $750', unit: 'sgd', status: 'verified', source: 'cpf.gov.sg contribution table 1' },
+  'cpf.withdrawalLimitMultiple': { label: 'Withdrawal Limit (× Valuation Limit, bank loan)', unit: 'ratio', status: 'verified', source: 'cpf.gov.sg home purchase guide' },
+  'cpf.basicRetirementSum': { label: 'Basic Retirement Sum (2026)', unit: 'sgd', status: 'secondary', source: 'cpf.gov.sg FAQ (snippet)' },
+  'hdbLoan.maxAgeAtEnd': { label: 'HDB loan: latest age at end of loan', unit: 'years', status: 'unverified', source: 'General knowledge' },
+  'bankLoan.reducedLtv': { label: 'Bank loan reduced LTV (long tenure / past 65)', unit: 'pct', status: 'secondary', source: 'MAS explainer (snippet)' },
+  'bankLoan.reducedMinCashPct': { label: 'Bank loan min cash at reduced LTV', unit: 'pct', status: 'secondary', source: 'SDS guides' },
+  'bankLoan.ltvTenureYears': { label: 'Bank loan: tenure above which LTV is reduced', unit: 'years', status: 'secondary', source: 'MAS explainer (snippet)' },
+  'bankLoan.ltvMaxAge': { label: 'Bank loan: age above which LTV is reduced', unit: 'years', status: 'secondary', source: 'MAS explainer (snippet)' },
+  'bankLoan.bsdReimburseMonths': { label: 'Bank loan: months until BSD reimbursed from CPF', unit: 'months', status: 'unverified', source: 'Estimate' },
+  'eligibility.incomeCeilingFamilies': { label: 'BTO income ceiling (families)', unit: 'sgd', status: 'secondary', source: 'NDR 2026 (from 24 Aug 2026); confirmed by you' },
+  'cpf.annualLimit': { label: 'CPF Annual Limit (mandatory + voluntary)', unit: 'sgd', status: 'secondary', source: 'cpf.gov.sg (snippet)' },
+  'eligibility.incomeCeiling2RFlexi': { label: 'Income ceiling: 2-room Flexi (99-yr)', unit: 'sgd', status: 'verified', source: 'HDB Feb 2026 Annex B (may have changed Aug 2026)' },
+  'eligibility.incomeCeilingExtended': { label: 'Income ceiling: extended family / 3Gen', unit: 'sgd', status: 'verified', source: 'HDB Feb 2026 Annex B' },
+  'eligibility.scSprPremium': { label: 'SC/SPR household premium on new flat', unit: 'sgd', status: 'secondary', source: 'HDB (snippet)' },
+  'eligibility.ehgFamilies': { label: 'Enhanced CPF Housing Grant (families) by income', unit: 'sgd', status: 'secondary', source: 'Max/ceiling cpf.gov.sg; bands ohmyhome.com' },
+  'eligibility.ehgSingles': { label: 'EHG (singles table; FT+ST couples use half income)', unit: 'sgd', status: 'secondary', source: 'mynicehome.gov.sg + ohmyhome.com' },
+  'eligibility.ehgEmploymentMonths': { label: 'EHG: months of continuous work needed', unit: 'months', status: 'verified', source: 'mynicehome.gov.sg' },
+  'eligibility.ehgIncomeLagMonths': { label: 'EHG: income window ends months before HFE', unit: 'months', status: 'verified', source: 'mynicehome.gov.sg' },
+  'eligibility.stepUpAmount': { label: 'Step-Up CPF Housing Grant', unit: 'sgd', status: 'secondary', source: 'HDB (snippet) + guides' },
+  'eligibility.stepUpIncomeCeiling': { label: 'Step-Up grant income ceiling', unit: 'sgd', status: 'secondary', source: 'HDB (snippet) + guides' },
+  'fees.conveyancingTiers': { label: 'HDB conveyancing fee tiers (per $)', unit: 'ratio', status: 'unverified', source: 'First tier verified on cpf.gov.sg' },
+  'fees.conveyancingRoundTo': { label: 'Conveyancing: round price up to', unit: 'sgd', status: 'unverified', source: 'General knowledge' },
+  'fees.conveyancingMin': { label: 'Conveyancing minimum fee', unit: 'sgd', status: 'secondary', source: 'Secondary' },
+  'fees.gst': { label: 'GST', unit: 'pct', status: 'unverified', source: 'General knowledge' },
+  'fees.caveatFee': { label: 'Caveat registration fee', unit: 'sgd', status: 'verified', source: 'cpf.gov.sg housing expenses article' },
+  'fees.surveyFee': { label: 'Survey fee by flat type', unit: 'sgd', status: 'unverified', source: 'Range verified on cpf.gov.sg; split interpolated' },
+  'fees.bankLegalFee': { label: 'Private lawyer fee (bank loan)', unit: 'sgd', status: 'unverified', source: 'Estimate' },
+  'fees.fireInsurance5yr': { label: 'HDB fire insurance (5-yr premium)', unit: 'sgd', status: 'secondary', source: 'Etiqa / secondary' },
+}
