@@ -129,6 +129,9 @@ export interface Policy {
     ehgIncomeLagMonths: number
     stepUpAmount: number
     stepUpIncomeCeiling: number
+    incomeCeilingSingles: number
+    incomeCeilingJointSingles: number
+    singlesMinAge: number
   }
   fees: {
     conveyancingTiers: Tier[]
@@ -365,6 +368,14 @@ export const DEFAULT_POLICY: Policy = {
     // Source: HDB Step-Up grant page (search snippet) + guides. SECONDARY 2026-09-23.
     stepUpAmount: 15000,
     stepUpIncomeCeiling: 7000,
+    // Singles (SC, 35+) buying a 2-room Flexi: $7,000 until 23 Aug 2026, $8,000 from 24 Aug 2026
+    // (National Day Rally 2026). Source: news reports of the change. SECONDARY 2026-09-25.
+    incomeCeilingSingles: 8000,
+    // Joint Singles Scheme (2–4 singles): assumed the same as the families' ceiling. UNVERIFIED.
+    incomeCeilingJointSingles: 16000,
+    // Singles and joint singles must be Singapore Citizens aged 35 or above; new flats: 2-room
+    // Flexi only (any location). Source: HDB via guides (search snippets). SECONDARY 2026-09-25.
+    singlesMinAge: 35,
   },
   fees: {
     // HDB conveyancing fee (when HDB acts for you): per $1,000 of price, tiered, rounded
@@ -456,6 +467,9 @@ export const POLICY_META: Record<string, PolicyMeta> = {
   'eligibility.ehgSingles': { label: 'EHG (singles table; FT+ST couples use half income)', unit: 'sgd', status: 'secondary', source: 'mynicehome.gov.sg + ohmyhome.com' },
   'eligibility.ehgEmploymentMonths': { label: 'EHG: months of continuous work needed', unit: 'months', status: 'verified', source: 'mynicehome.gov.sg' },
   'eligibility.ehgIncomeLagMonths': { label: 'EHG: income window ends months before HFE', unit: 'months', status: 'verified', source: 'mynicehome.gov.sg' },
+  'eligibility.incomeCeilingSingles': { label: 'Income ceiling: singles', unit: 'sgd', status: 'secondary', source: 'NDR 2026 news ($7k → $8k)' },
+  'eligibility.incomeCeilingJointSingles': { label: 'Income ceiling: Joint Singles Scheme', unit: 'sgd', status: 'unverified', source: 'Assumed = families' },
+  'eligibility.singlesMinAge': { label: 'Singles: minimum age', unit: 'years', status: 'secondary', source: 'HDB via guides (snippet)' },
   'eligibility.stepUpAmount': { label: 'Step-Up CPF Housing Grant', unit: 'sgd', status: 'secondary', source: 'HDB (snippet) + guides' },
   'eligibility.stepUpIncomeCeiling': { label: 'Step-Up grant income ceiling', unit: 'sgd', status: 'secondary', source: 'HDB (snippet) + guides' },
   'fees.conveyancingTiers': { label: 'HDB conveyancing fee tiers (per $)', unit: 'ratio', status: 'unverified', source: 'First tier verified on cpf.gov.sg' },

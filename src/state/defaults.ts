@@ -165,3 +165,28 @@ export function seedOpenBookingScenario(): Scenario {
     .map((c) => (c.id === 'reno' ? { ...c, amount: 35000, when: { milestone: 'keys' as const, offsetMonths: 2 } } : c.id === 'furniture' ? { ...c, amount: 12000 } : c))
   return s
 }
+
+/** Example: a single, 37, buying a 2-room Flexi BTO. */
+export function seedSingleScenario(): Scenario {
+  const start = '2026-09'
+  const s = newScenario('Example: single, 2-room Flexi BTO', start)
+  s.id = 'seed-single'
+  s.buyers = 'single'
+  s.partners = [
+    {
+      ...blankPartner('A', start), name: 'You', birthYearMonth: '1989-05',
+      grossMonthly: 4200, annualRaisePct: 2.5, cpfOA: 68000, cash: 38000, monthlyCashSavings: 1100,
+      bonuses: [{ months: 1, paidInMonth: 12 }], bonusSavedPct: 80,
+    },
+    blankPartner('B', start),
+  ]
+  s.flat = {
+    price: 210000,
+    type: '2R',
+    classification: 'Standard',
+    dates: { application: '2026-10', booking: '2027-03', afl: '2027-09', keys: '2030-09' },
+    grants: [{ id: 'ehg', name: 'Enhanced CPF Housing Grant', amount: 0, auto: 'EHG', splitA: 100, when: { milestone: 'keys' } }],
+  }
+  s.costs = s.costs.map((c) => (c.id === 'reno' ? { ...c, amount: 25000 } : c.id === 'furniture' ? { ...c, amount: 8000 } : c))
+  return s
+}

@@ -210,7 +210,7 @@ export function LoanPanel({ result, scenario }: { result: SimResult; scenario: S
             </>
           )}
           <div className="mt-1 text-[11px] text-muted">
-            Based on combined income of {money(l.grossIncomeAtAssessment)}/mo in {formatYm(l.assessedAt)}
+            Based on {scenario.buyers === 'single' ? 'your' : 'combined'} income of {money(l.grossIncomeAtAssessment)}/mo in {formatYm(l.assessedAt)}
             {scenario.financing.deferredIncomeAssessment ? ' (Deferred Income Assessment)' : ' (at AFL)'}.
           </div>
         </div>
@@ -221,7 +221,7 @@ export function LoanPanel({ result, scenario }: { result: SimResult; scenario: S
 
 // ---------------- Accrued interest ----------------
 
-export function AccruedView({ result, names }: { result: SimResult; names: [string, string] }) {
+export function AccruedView({ result, names, single = false }: { result: SimResult; names: [string, string]; single?: boolean }) {
   return (
     <div className="space-y-3">
       <Card>
@@ -243,8 +243,12 @@ export function AccruedView({ result, names }: { result: SimResult; names: [stri
             <dl className="mt-3 space-y-1 text-sm tnum">
               <div className="flex justify-between"><dt className="text-ink-2">CPF used</dt><dd>{money(a.principal)}</dd></div>
               <div className="flex justify-between"><dt className="text-ink-2">Accrued interest</dt><dd>{money(a.accrued)}</dd></div>
-              <div className="flex justify-between border-t border-line pt-1 text-xs"><dt className="text-ink-2">{names[0]}</dt><dd>{money(a.perPartner.A.principal + a.perPartner.A.accrued)}</dd></div>
-              <div className="flex justify-between text-xs"><dt className="text-ink-2">{names[1]}</dt><dd>{money(a.perPartner.B.principal + a.perPartner.B.accrued)}</dd></div>
+              {!single && (
+                <>
+                  <div className="flex justify-between border-t border-line pt-1 text-xs"><dt className="text-ink-2">{names[0]}</dt><dd>{money(a.perPartner.A.principal + a.perPartner.A.accrued)}</dd></div>
+                  <div className="flex justify-between text-xs"><dt className="text-ink-2">{names[1]}</dt><dd>{money(a.perPartner.B.principal + a.perPartner.B.accrued)}</dd></div>
+                </>
+              )}
             </dl>
           </Card>
         ))}
@@ -359,11 +363,13 @@ export function JobLossCard({ scenario, onAddScenario }: { scenario: Scenario; o
   const [months, setMonths] = useState(6)
   const [when, setWhen] = useState<'now' | 'afl' | 'keys'>('keys')
   const from = when === 'now' ? scenario.startMonth : when === 'afl' ? scenario.flat.dates.afl : scenario.flat.dates.keys
-  const results = useMemo(() => jobLossImpact(scenario, months, from), [scenario, months, from])
+  const single = scenario.buyers === 'single'
+  const all = useMemo(() => jobLossImpact(scenario, months, from), [scenario, months, from])
+  const results = single ? all.slice(0, 1) : all
   return (
     <Card>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="flex items-center text-sm font-semibold">What if one of you loses your job?<InfoTip term="whatIf" /></h2>
+        <h2 className="flex items-center text-sm font-semibold">{single ? 'What if you lose your job?' : 'What if one of you loses your job?'}<InfoTip term="whatIf" /></h2>
       </div>
       <div className="mt-2 grid grid-cols-2 gap-2 sm:max-w-md">
         <Select value={String(months)} onChange={(v) => setMonths(Number(v))} ariaLabel="How long"

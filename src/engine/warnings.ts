@@ -4,7 +4,7 @@ import { money } from './format'
 import { loanChangesOf, maxLtvFor, preKeysSwitch, weightedAge } from './payments'
 import { monthlyInstalment } from './loan'
 import { householdIncome } from './eligibility'
-import { isCompleted, leaseFactor } from './saleType'
+import { isCompleted, isSingle, isSinglesPurchase, leaseFactor } from './saleType'
 import { simulateCore, type CoreResult, type LoanStep } from './simulate'
 import type { Scenario, Warning, When, YearMonth } from './types'
 
@@ -244,7 +244,18 @@ export function buildWarnings(core: CoreResult, extras: WarningExtras = {}): War
 
   // --- Eligibility, household & grants ---
   const el = core.schedule.eligibility
-  if (el.bothSpr) {
+  const singles = isSinglesPurchase(s)
+  if (el.singlesIssues.length) {
+    warnings.push({
+      id: 'singles-eligibility', severity: 'error',
+      title: isSingle(s) ? 'You may not be able to buy this flat as a single' : 'You may not qualify under the Joint Singles Scheme',
+      explanation: el.singlesIssues.join(' '),
+      fixes: s.flat.type !== '2R' ? ['Set the flat type to 2-room Flexi.'] : [],
+    })
+  }
+  if (singles) {
+    // Citizenship is covered by the singles check above.
+  } else if (el.bothSpr) {
     warnings.push({
       id: 'both-spr', severity: 'error',
       title: 'Two PRs can’t buy a BTO flat',
@@ -262,8 +273,8 @@ export function buildWarnings(core: CoreResult, extras: WarningExtras = {}): War
   if (el.aboveCeiling) {
     warnings.push({
       id: 'income-ceiling', severity: 'error', ym: el.assessedAt,
-      title: `Household income above the ${money(el.incomeCeiling)} ceiling`,
-      explanation: `Your average household income of about ${money(el.avgIncome)}/month (12 months up to ${formatYm(el.windowEnd)}) is above the income ceiling for this flat type, so you can’t buy this BTO flat.`,
+      title: `${isSingle(s) ? 'Income' : 'Household income'} above the ${money(el.incomeCeiling)} ceiling`,
+      explanation: `Your average ${isSingle(s) ? '' : 'household '}income of about ${money(el.avgIncome)}/month (12 months up to ${formatYm(el.windowEnd)}) is above the income ceiling for this flat type, so you can’t buy this BTO flat.`,
       fixes: ['Check the income figures, or look at resale flats / Executive Condominiums.'],
     })
   }
@@ -288,7 +299,7 @@ export function buildWarnings(core: CoreResult, extras: WarningExtras = {}): War
       })
     }
   }
-  if (el.household === 'secondTimers') {
+  if (el.household === 'secondTimers' && !singles) {
     warnings.push({
       id: 'second-timers', severity: 'info',
       title: 'Second-timers: resale levy not included',

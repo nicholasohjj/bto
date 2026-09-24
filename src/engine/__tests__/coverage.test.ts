@@ -456,3 +456,64 @@ describe('typical dates by mode of sale', () => {
     expect(typicalDates('2026-09', 'BTO', false).keys).toBe('2030-08')
   })
 })
+
+describe('singles and the Joint Singles Scheme', () => {
+  const single = (fn: (s: Scenario) => void = () => {}) => base((s) => {
+    s.buyers = 'single'
+    s.flat.type = '2R'
+    s.flat.price = 180000
+    s.partners[0].birthYearMonth = '1988-01'
+    s.partners[0].grossMonthly = 4000
+    fn(s)
+  })
+  it('only the single buyer’s money counts; everything is paid by them', () => {
+    const core = simulateCore(single((s) => { s.costs.push({ id: 'x', label: 'X', kind: 'custom', amount: 1000, auto: false, when: { date: '2026-03' }, funding: 'cashOnly', payer: 'B' }) }))
+    expect(core.months[0].perPartner.B.cash).toBe(0)
+    expect(core.months[0].perPartner.B.oa).toBe(0)
+    expect(core.months.every((m) => m.oaContribution.B === 0)).toBe(true)
+    expect(core.months.every((m) => m.perPartner.B.cash === 0)).toBe(true)
+    expect(core.months[0].combined.cash).toBe(60000)
+  })
+  it('uses the singles income ceiling and grant table', () => {
+    const el = assessEligibility(single(), policy)
+    expect(el.incomeCeiling).toBe(8000)
+    expect(el.avgIncome).toBe(4000)
+    expect(el.ehg).toBe(10000) // singles table: $3,751–$4,000 → $10,000
+    expect(el.singlesIssues).toEqual([])
+  })
+  it('assesses the loan on the single buyer’s income and age', () => {
+    const { loan } = buildSchedule(single(), policy)
+    expect(loan.grossIncomeAtAssessment).toBe(4000)
+  })
+  it('flags singles under 35, non-2-room flats, PRs and second-timers', () => {
+    const el = assessEligibility(single((s) => {
+      s.partners[0].birthYearMonth = '1995-01'
+      s.flat.type = '4R'
+      s.partners[0].citizenship = 'SPR'
+      s.flat.household = 'secondTimers'
+    }), policy)
+    expect(el.singlesIssues).toHaveLength(4)
+    expect(el.ehg).toBe(0)
+    const r = runScenario(single((s) => { s.flat.type = '4R' }))
+    expect(r.warnings.some((w) => w.id === 'singles-eligibility')).toBe(true)
+    expect(r.warnings.some((w) => w.id === 'both-spr')).toBe(false)
+  })
+  it('turns off the staggered scheme and DIA for singles', () => {
+    const s = single((s) => { s.financing.staggered = true; s.financing.deferredIncomeAssessment = true })
+    const { obligations } = buildSchedule(s, policy)
+    expect(obligations.find((o) => o.id === 'dp-afl')!.amount).toBe(180000 * 0.1 - 500)
+  })
+  it('Joint Singles Scheme: both incomes, families grant table, JSS ceiling', () => {
+    const s = base((s) => {
+      s.buyers = 'jointSingles'
+      s.flat.type = '2R'
+      for (const p of s.partners) { p.birthYearMonth = '1988-01'; p.grossMonthly = 3500 }
+    })
+    const el = assessEligibility(s, policy)
+    expect(el.avgIncome).toBe(7000)
+    expect(el.incomeCeiling).toBe(16000)
+    expect(el.ehg).toBe(30000)
+    expect(el.singlesIssues).toEqual([])
+    expect(assessEligibility(base((s) => { s.buyers = 'jointSingles'; s.flat.type = '2R' }), policy).singlesIssues[0]).toMatch(/35 or older/)
+  })
+})

@@ -1,6 +1,6 @@
 # BTO Money Timeline Simulator
 
-A client-side web app that plays out, month by month, a couple's **cash** and **CPF Ordinary Account (OA)** from today until 12 months after key collection for a new HDB flat (BTO, Sale of Balance Flats or Open Booking) — and flags any month where a payment can't be covered by the right pot.
+A client-side web app that plays out, month by month, a couple's or a single's **cash** and **CPF Ordinary Account (OA)** from today until 12 months after key collection for a new HDB flat (BTO, Sale of Balance Flats or Open Booking) — and flags any month where a payment can't be covered by the right pot.
 
 > **Estimates only.** Not financial advice. Always verify with HDB (your HFE letter and payment notices), CPF Board, IRAS and your bank.
 
@@ -63,6 +63,14 @@ src/
   - **Different raise for a year**: overrides the usual raise that January (e.g. 0% one year, 10% the next).
   - A gap in the 12 months before the income assessment breaks the grant's continuous-work rule, and lowers the income used for the grant and loan checks.
 - **What if one of you loses your job?** (Overview, `whatIf.ts`) Re-runs the plan with each partner out of work for 3–12 months, starting now, at AFL or at keys. It shows the lowest cash afterwards and whether cash runs out, and can add the result as a scenario to compare.
+- **Who's buying** (Us section).
+  - **Couple**, **Single**, or **Two singles** under the Joint Singles Scheme. The scheme allows up to 4 people; the app models 2.
+  - **Singles:**
+    - Must be Singapore Citizens aged 35+ and first-timers, and can buy only a 2-room Flexi when buying new (any location); breaches are flagged.
+    - Income ceiling $8,000 (from 24 Aug 2026). The grant uses the singles table on your income, up to $60,000.
+    - No staggered downpayment or Deferred Income Assessment.
+    - The engine models you with an empty second person (no income, savings or CPF) who pays nothing, and couple-only controls are hidden.
+  - **Joint Singles:** both incomes count, the families grant table applies (up to $120,000), and the ceiling is assumed to be $16,000.
 - **How you're buying** (Flat section, `saleType.ts`).
   - **BTO:** application → booking → AFL → keys.
   - **SBF (Sale of Balance Flats):** the same, usually with a shorter wait. It can be **completed**.
@@ -184,6 +192,10 @@ Users can override any figure for a single scenario under **Advanced settings**.
 | Open booking: first-come-first-served, book from next working day | Secondary (hdb.gov.sg snippet) |
 | Age-95 lease rule: pro-rated CPF use / HDB LTV; no CPF ≤ 20 yrs; HDB tenure ≤ lease − 20 | Secondary (MND 2019 rules, snippets) |
 | Typical dates for SBF / open booking (booking +3 months to keys for completed flats) | **Not verified** (defaults to adjust) |
+| Singles: SC, 35+, 2-room Flexi only for new flats (any location); grant up to $60k | Secondary (HDB via guides, snippets) |
+| Singles income ceiling $8,000 from 24 Aug 2026 (was $7,000) | Secondary (NDR 2026 news) |
+| Joint Singles Scheme ceiling (assumed $16,000) and families grant table | **Not verified** |
+| Single second-timers can't buy a new flat | **Not verified** |
 | Letter of Offer needed before AFL for bank loans | Verified (HDB BTO Annex, Oct 2024 / Feb 2026) |
 | HDB → bank before keys: 5% cash made up at keys; no HDB penalty after keys; no bank → HDB | From you / general guidance; **not read on hdb.gov.sg** |
 | When EHG is credited for a BTO (default: key collection) | Verified for DIA buyers (paid at key collection); otherwise **not verified**, editable per grant |

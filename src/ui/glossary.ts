@@ -30,6 +30,7 @@ export const GLOSSARY = {
   saleType: 'BTO: new flats launched before they’re built (3–4 year wait). SBF (Sale of Balance Flats): leftover or returned flats, sold in launches alongside BTO, often with a shorter wait or already completed. Open booking: flats left after SBF, booked any time without a ballot.',
   completed: 'If the flat is already built, you sign the Agreement for Lease and collect keys at the same appointment, within 9 months of booking, and pay the whole downpayment then.',
   remainingLease: 'Years left on the flat’s 99-year lease. New flats usually have ~99; some SBF flats have less. If the lease won’t last the youngest of you to age 95, the CPF you can use and the HDB loan limit are cut proportionally; with 20 years or less, no CPF or HDB loan.',
+  buyers: 'Couples (married or fiancé/fiancée) can buy any flat type. Singles who are Singapore Citizens aged 35+ can buy a new 2-room Flexi anywhere, alone or with 1–3 other singles under the Joint Singles Scheme. The income ceiling and grants differ.',
   LTV: 'Loan-to-Value: the most you can borrow as a share of the price. 75% for both HDB and bank loans now.',
   hdbLoan: 'Loan from HDB at 2.6% (0.1% above the CPF OA rate). You must use your OA savings first, keeping at most $20k each.',
   bankLoan: 'Loan from a bank. Rates can be lower but may change. At least 5% of the price must be paid in cash, and you need the bank’s Letter of Offer before signing the AFL. You can’t switch from a bank loan to an HDB loan later.',

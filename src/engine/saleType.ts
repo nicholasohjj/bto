@@ -12,12 +12,14 @@ const cache = new WeakMap<Scenario, Scenario>()
  *   there's nothing to stagger (downpayment is paid in full then).
  * Idempotent and cached, so every part of the engine sees the same dates.
  */
-export function normalizeScenario(s: Scenario): Scenario {
-  const hit = cache.get(s)
+export function normalizeScenario(input: Scenario): Scenario {
+  const hit = cache.get(input)
   if (hit) return hit
+  const s = normalizeBuyers(input)
   const type = s.flat.saleType ?? 'BTO'
   const completed = type !== 'BTO' && !!s.flat.completed
   if (type === 'BTO' || (!completed && type !== 'OBF')) {
+    cache.set(input, s)
     cache.set(s, s)
     return s
   }
@@ -29,9 +31,56 @@ export function normalizeScenario(s: Scenario): Scenario {
     flat: { ...s.flat, dates },
     financing: completed ? { ...s.financing, staggered: false } : s.financing,
   }
-  cache.set(s, out)
+  cache.set(input, out)
   cache.set(out, out)
   return out
+}
+
+export function isSingle(s: Scenario): boolean {
+  return s.buyers === 'single'
+}
+
+/** Buying as singles (alone or under the Joint Singles Scheme). */
+export function isSinglesPurchase(s: Scenario): boolean {
+  return s.buyers === 'single' || s.buyers === 'jointSingles'
+}
+
+/**
+ * Singles: the staggered downpayment and Deferred Income Assessment are for
+ * couples, so they're off. A single buyer is modelled with an empty second
+ * person (same age, no income, savings or CPF) so every calculation stays the
+ * same; joint payments and grants all go to you.
+ */
+function normalizeBuyers(s: Scenario): Scenario {
+  if (!isSinglesPurchase(s)) return s
+  const financing = { ...s.financing, staggered: false, deferredIncomeAssessment: false }
+  if (!isSingle(s)) return { ...s, financing }
+  const [a, b] = s.partners
+  const ghost = {
+    ...b,
+    birthYearMonth: a.birthYearMonth,
+    citizenship: a.citizenship,
+    prSinceMonth: a.prSinceMonth,
+    grossMonthly: 0,
+    cash: 0,
+    cpfOA: 0,
+    monthlyCashSavings: 0,
+    preWorkMonthlySavings: 0,
+    otherMonthlyDebt: 0,
+    bonuses: [],
+    incomeChanges: [],
+    voluntaryCpf: [],
+    voluntaryOaMonthly: 0,
+    workStartMonth: undefined,
+    employment: 'employee' as const,
+  }
+  return {
+    ...s,
+    partners: [a, ghost],
+    financing: { ...financing, jointSplitA: 100, poolCash: true },
+    flat: { ...s.flat, grants: s.flat.grants.map((g) => ({ ...g, splitA: 100 })) },
+    costs: s.costs.map((c) => (c.payer === 'B' ? { ...c, payer: 'A' as const } : c)),
+  }
 }
 
 export function isCompleted(s: Scenario): boolean {

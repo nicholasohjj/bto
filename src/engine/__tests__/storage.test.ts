@@ -23,9 +23,9 @@ describe('JSON export / import', () => {
     expect(() => importJson('{"hello":1}', [])).toThrow(/No scenarios/)
     expect(() => importJson('not json', [])).toThrow()
   })
-  it('seeds four valid scenarios on first load', () => {
+  it('seeds five valid scenarios on first load', () => {
     const st = initialState()
-    expect(st.scenarios).toHaveLength(4)
+    expect(st.scenarios).toHaveLength(5)
     expect(st.scenarios.every(isScenario)).toBe(true)
     expect(st.wizardDone).toBe(false)
   })

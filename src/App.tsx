@@ -195,9 +195,11 @@ export default function App() {
               <Card>
                 <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
                   <h2 className="text-sm font-semibold">Cash and CPF OA over time</h2>
-                  <div className="w-44"><Toggle label="Each partner" checked={state.showPerPartner} onChange={(v) => setState((st) => ({ ...st, showPerPartner: v }))} /></div>
+                  {active.buyers !== 'single' && (
+                    <div className="w-44"><Toggle label="Each person" checked={state.showPerPartner} onChange={(v) => setState((st) => ({ ...st, showPerPartner: v }))} /></div>
+                  )}
                 </div>
-                <TimelineChart result={result} perPartner={state.showPerPartner} names={names} />
+                <TimelineChart result={result} perPartner={state.showPerPartner && active.buyers !== 'single'} names={names} />
                 <p className="mt-1 text-[11px] text-muted">Solid vertical lines mark milestones; dotted lines mark other payments over $1,000. Red shading = cash below zero. Tap the chart for details.</p>
               </Card>
               <div className="space-y-3">
@@ -216,7 +218,7 @@ export default function App() {
         )}
 
         {result && tab === 'schedule' && <ScheduleTable result={result} />}
-        {result && tab === 'cpf' && <AccruedView result={result} names={names} />}
+        {result && tab === 'cpf' && <AccruedView result={result} names={names} single={active.buyers === 'single'} />}
 
         {tab === 'edit' && (
           <div className="space-y-4">

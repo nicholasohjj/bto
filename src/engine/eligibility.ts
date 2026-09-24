@@ -2,7 +2,8 @@ import type { GrantTier, Policy } from '../config/policy'
 import { isWorking, salaryAt } from './cpf'
 import { addMonths } from './dates'
 import type { Scenario, YearMonth } from './types'
-import { isCompleted, normalizeScenario } from './saleType'
+import { ageInMonths } from './cpf'
+import { isCompleted, isSingle, isSinglesPurchase, normalizeScenario } from './saleType'
 
 export interface Eligibility {
   /** Month the HFE letter / income assessment is assumed (application, or DIA assessment). */
@@ -27,6 +28,8 @@ export interface Eligibility {
   bothSpr: boolean
   /** Extra paid on the flat by SC/SPR households. */
   premium: number
+  /** Singles / Joint Singles: problems with eligibility (age, citizenship, flat type, first-timer). */
+  singlesIssues: string[]
 }
 
 export function tierAmount(income: number, tiers: GrantTier[]): number {
@@ -62,8 +65,12 @@ export function assessEligibility(raw: Scenario, policy: Policy): Eligibility {
   for (let i = 0; i < months; i++) total += householdIncome(s, addMonths(windowEnd, -i))
   const avgIncome = total / months
 
-  const incomeCeiling =
-    s.flat.type === '2R' ? el.incomeCeiling2RFlexi : s.flat.type === '3Gen' ? el.incomeCeilingExtended : el.incomeCeilingFamilies
+  const singles = isSinglesPurchase(s)
+  const incomeCeiling = isSingle(s)
+    ? el.incomeCeilingSingles
+    : s.buyers === 'jointSingles'
+      ? el.incomeCeilingJointSingles
+      : s.flat.type === '2R' ? el.incomeCeiling2RFlexi : s.flat.type === '3Gen' ? el.incomeCeilingExtended : el.incomeCeilingFamilies
   const household = s.flat.household ?? 'firstTimers'
 
   // Employment: someone worked every month of the 12-month window (no gaps) and is working at assessment.
@@ -77,9 +84,26 @@ export function assessEligibility(raw: Scenario, policy: Policy): Eligibility {
   const bothSpr = cit.every((c) => c === 'SPR')
   const scSpr = !bothSpr && cit.includes('SPR')
 
+  // Singles: SC, 35+, first-timers, 2-room Flexi for new flats.
+  const singlesIssues: string[] = []
+  if (singles) {
+    const people = isSingle(s) ? [s.partners[0]] : s.partners
+    const ages = people.map((p) => Math.floor(ageInMonths(p.birthYearMonth, s.flat.dates.application) / 12))
+    if (ages.some((a) => a < el.singlesMinAge)) singlesIssues.push(`Singles must be ${el.singlesMinAge} or older when applying (${isSingle(s) ? `you’ll be ${ages[0]}` : `you’ll be ${ages.join(' and ')}`}).`)
+    if (people.some((p) => (p.citizenship ?? 'SC') !== 'SC')) singlesIssues.push('Singles must be Singapore Citizens to buy an HDB flat.')
+    if (household !== 'firstTimers') singlesIssues.push('Singles who have owned a subsidised flat or had a housing grant before can’t buy a new flat from HDB.')
+    if (s.flat.type !== '2R') singlesIssues.push('Singles can only buy a 2-room Flexi when buying a new flat (BTO, SBF or open booking), in any location.')
+  }
+
   let ehg = 0
   let ehgReason: string
-  if (bothSpr) ehgReason = 'Two PRs can’t buy a BTO flat or get the grant.'
+  if (singlesIssues.length) ehgReason = 'Not eligible as singles: ' + singlesIssues[0]
+  else if (isSingle(s)) {
+    ehg = employmentOk ? tierAmount(avgIncome, el.ehgSingles) : 0
+    ehgReason = !employmentOk
+      ? `Needs you to have worked continuously for ${months} months when HDB assesses income.`
+      : ehg > 0 ? 'Singles grant table, based on your average income.' : `Your average income is above the $${(el.ehgSingles.at(-1)?.upTo ?? 0).toLocaleString()} grant ceiling for singles.`
+  } else if (bothSpr) ehgReason = 'Two PRs can’t buy a BTO flat or get the grant.'
   else if (household === 'secondTimers') ehgReason = 'Second-timer couples don’t get the Enhanced CPF Housing Grant.'
   else if (!employmentOk) ehgReason = `Needs at least one of you to have worked continuously for ${months} months when HDB assesses income.`
   else if (household === 'firstAndSecond') {
@@ -118,5 +142,6 @@ export function assessEligibility(raw: Scenario, policy: Policy): Eligibility {
     scSpr,
     bothSpr,
     premium: scSpr && household !== 'secondTimers' ? el.scSprPremium : 0,
+    singlesIssues,
   }
 }

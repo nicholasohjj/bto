@@ -197,6 +197,8 @@ export interface Scenario {
   schemaVersion: 1
   id: string
   name: string
+  /** Who's buying: a couple (default), one single, or two singles (Joint Singles Scheme). */
+  buyers?: 'couple' | 'single' | 'jointSingles'
   /** First simulated month (defaults to the month the scenario was created). */
   startMonth: YearMonth
   partners: [Partner, Partner]

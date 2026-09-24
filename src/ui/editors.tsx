@@ -2,7 +2,7 @@ import type { FlatType, Policy } from '../config/policy'
 import { ageInMonths, estimatedLivingCosts, prYear, ratesFor } from '../engine/cpf'
 import { assessmentMonth, autoAmount, downpaymentScheme, grantAmount, loanChangesOf, maxLtvFor, voluntaryList } from '../engine/payments'
 import { assessEligibility } from '../engine/eligibility'
-import { isCompleted, leaseFactor, typicalDates } from '../engine/saleType'
+import { isCompleted, isSingle, isSinglesPurchase, leaseFactor, normalizeScenario, typicalDates } from '../engine/saleType'
 import { addMonths, formatYm } from '../engine/dates'
 import { money } from '../engine/format'
 import type { CostItem, Milestone, Partner, Scenario, When } from '../engine/types'
@@ -30,11 +30,32 @@ const MILESTONES: { value: Milestone; label: string }[] = [
 
 export function PartnersEditor({ scenario, update, policy }: { scenario: Scenario; update: Update; policy: Policy }) {
   const years = yearOptions(scenario)
+  const single = isSingle(scenario)
+  const people = single ? scenario.partners.slice(0, 1) : scenario.partners
   return (
-    <div className="grid gap-4 md:grid-cols-2">
-      {scenario.partners.map((p, i) => (
-        <PartnerCard key={p.id} partner={p} startMonth={scenario.startMonth} policy={policy} years={years} onChange={(fn) => update((d) => fn(d.partners[i]))} />
-      ))}
+    <div className="space-y-4">
+      <Card>
+        <Field label="Who’s buying" tip="buyers">
+          <Segmented value={scenario.buyers ?? 'couple'} ariaLabel="Who's buying"
+            onChange={(v) => update((d) => {
+              d.buyers = v
+              // Singles can only buy a 2-room Flexi when buying new.
+              if (v !== 'couple') d.flat.type = '2R'
+            })}
+            options={[{ value: 'couple', label: 'Couple' }, { value: 'single', label: 'Single' }, { value: 'jointSingles', label: 'Two singles' }]} />
+        </Field>
+        {scenario.buyers === 'single' && (
+          <p className="mt-2 text-[11px] text-muted">Singles (Singapore Citizens, 35+) can buy a 2-room Flexi in any BTO, SBF or open-booking project. Income ceiling {money(policy.eligibility.incomeCeilingSingles)}; grant up to {money(policy.eligibility.ehgSingles[0].amount)}.</p>
+        )}
+        {scenario.buyers === 'jointSingles' && (
+          <p className="mt-2 text-[11px] text-muted">Joint Singles Scheme: 2–4 singles aged 35+ buying a 2-room Flexi together. This app models two of you.</p>
+        )}
+      </Card>
+      <div className={`grid gap-4 ${single ? '' : 'md:grid-cols-2'}`}>
+        {people.map((p, i) => (
+          <PartnerCard key={p.id} partner={p} startMonth={scenario.startMonth} policy={policy} years={years} onChange={(fn) => update((d) => fn(d.partners[i]))} />
+        ))}
+      </div>
     </div>
   )
 }
@@ -308,11 +329,13 @@ export function FlatEditor({ scenario, update, policy }: { scenario: Scenario; u
           <div className="col-span-2 md:col-span-3">
             <Field label="You are" tip="household">
               <Select value={f.household ?? 'firstTimers'} onChange={(v) => update((d) => { d.flat.household = v })} ariaLabel="Household status"
-                options={[
-                  { value: 'firstTimers', label: 'Both first-timers' },
-                  { value: 'firstAndSecond', label: 'One first-timer, one second-timer' },
-                  { value: 'secondTimers', label: 'Both second-timers' },
-                ]} />
+                options={isSingle(scenario)
+                  ? [{ value: 'firstTimers', label: 'A first-timer' }, { value: 'secondTimers', label: 'A second-timer' }]
+                  : [
+                    { value: 'firstTimers', label: 'Both first-timers' },
+                    { value: 'firstAndSecond', label: 'One first-timer, one second-timer' },
+                    { value: 'secondTimers', label: 'Both second-timers' },
+                  ]} />
             </Field>
           </div>
           {f.household === 'secondTimers' && (
@@ -440,10 +463,16 @@ export function FinancingEditor({ scenario, update, policy }: { scenario: Scenar
       </Card>
       <LoanChangesEditor scenario={scenario} update={update} />
       <Card>
-        <Toggle label="Deferred Income Assessment" tip="DIA" checked={!!fin.deferredIncomeAssessment}
-          onChange={(v) => update((d) => { d.financing.deferredIncomeAssessment = v })} />
-        {fin.deferredIncomeAssessment && <DiaChecklist scenario={scenario} policy={policy} />}
-        {isCompleted(scenario)
+        {isSinglesPurchase(scenario) ? (
+          <p className="py-1 text-xs text-ink-2">Singles pay the standard downpayment: the staggered scheme and Deferred Income Assessment are for couples.</p>
+        ) : (
+          <>
+            <Toggle label="Deferred Income Assessment" tip="DIA" checked={!!fin.deferredIncomeAssessment}
+              onChange={(v) => update((d) => { d.financing.deferredIncomeAssessment = v })} />
+            {fin.deferredIncomeAssessment && <DiaChecklist scenario={scenario} policy={policy} />}
+          </>
+        )}
+        {isSinglesPurchase(scenario) ? null : isCompleted(scenario)
           ? <p className="py-1 text-xs text-ink-2">Completed flat: the full downpayment is paid when you sign the AFL and collect keys, so there’s nothing to stagger.</p>
           : fin.deferredIncomeAssessment
             ? <p className="py-1 text-xs text-ink-2">Staggered downpayment isn’t needed: DIA already means just 2.5% at AFL.</p>
@@ -452,7 +481,7 @@ export function FinancingEditor({ scenario, update, policy }: { scenario: Scenar
       </Card>
       <Card>
         <Field label={<>Pay CPF-allowed items with CPF: <span className="ml-1 tnum text-ink">{fin.cpfUsagePct}%</span></>} tip="cpfSlider"
-          hint={isHdb ? `HDB loan rule: OA above ${money(policy.hdbLoan.oaRetainMax)} each is used for the downpayment even if the slider is lower.` : 'Min cash rules for bank loans are always applied.'}>
+          hint={isHdb ? `HDB loan rule: OA above ${money(policy.hdbLoan.oaRetainMax)}${isSingle(scenario) ? '' : ' each'} is used for the downpayment even if the slider is lower.` : 'Min cash rules for bank loans are always applied.'}>
           <div className="flex items-center gap-3 text-xs text-muted">
             <span>Cash</span>
             <Slider value={fin.cpfUsagePct} onChange={(v) => update((d) => { d.financing.cpfUsagePct = v })} ariaLabel="CPF usage" />
@@ -466,12 +495,14 @@ export function FinancingEditor({ scenario, update, policy }: { scenario: Scenar
           </Field>
         </div>
       </Card>
-      <Card>
-        <Field label={<>Joint payments: {a.name} {fin.jointSplitA}% · {b.name} {100 - fin.jointSplitA}%</>} tip="jointSplit">
-          <Slider value={fin.jointSplitA} onChange={(v) => update((d) => { d.financing.jointSplitA = v })} ariaLabel="Joint split" />
-        </Field>
-        <Toggle label="Pool our cash" tip="poolCash" checked={fin.poolCash} onChange={(v) => update((d) => { d.financing.poolCash = v })} />
-      </Card>
+      {!isSingle(scenario) && (
+        <Card>
+          <Field label={<>Joint payments: {a.name} {fin.jointSplitA}% · {b.name} {100 - fin.jointSplitA}%</>} tip="jointSplit">
+            <Slider value={fin.jointSplitA} onChange={(v) => update((d) => { d.financing.jointSplitA = v })} ariaLabel="Joint split" />
+          </Field>
+          <Toggle label="Pool our cash" tip="poolCash" checked={fin.poolCash} onChange={(v) => update((d) => { d.financing.poolCash = v })} />
+        </Card>
+      )}
     </div>
   )
 }
@@ -579,7 +610,8 @@ function DiaChecklist({ scenario, policy }: { scenario: Scenario; policy: Policy
   )
 }
 
-function DownpaymentPreview({ scenario, policy }: { scenario: Scenario; policy: Policy }) {
+function DownpaymentPreview({ scenario: raw, policy }: { scenario: Scenario; policy: Policy }) {
+  const scenario = normalizeScenario(raw)
   const fin = scenario.financing
   const sched = policy.downpayment[fin.loanType === 'HDB' ? 'hdb' : 'bank'][downpaymentScheme(fin)]
   const ltv = Math.min(fin.ltv, fin.loanType === 'HDB' ? policy.hdbLoan.maxLtv : policy.bankLoan.maxLtv)
