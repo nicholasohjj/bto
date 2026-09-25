@@ -6,7 +6,7 @@ import { monthlyInstalment } from './loan'
 import { householdIncome } from './eligibility'
 import { isCompleted, isSingle, isSinglesPurchase, leaseFactor } from './saleType'
 import { simulateCore, type CoreResult, type LoanStep } from './simulate'
-import type { Scenario, Warning, When, YearMonth } from './types'
+import type { Milestone, Scenario, Warning, When, YearMonth } from './types'
 
 interface Episode {
   start: YearMonth
@@ -157,6 +157,31 @@ export function buildWarnings(core: CoreResult, extras: WarningExtras = {}): War
   const { loan } = core.schedule
   const warnings: Warning[] = []
   const isHdb = s.financing.loanType === 'HDB'
+
+  // --- Key dates: before today or out of order make every number below wrong ---
+  const d = s.flat.dates
+  if (d.keys < core.startMonth) {
+    warnings.push({
+      id: 'keys-past', severity: 'error', ym: d.keys,
+      title: `Key collection (${formatYm(d.keys)}) is before ${formatYm(core.startMonth)}`,
+      explanation: 'This plan runs from today to 12 months after key collection, so payments dated earlier are treated as already paid and the numbers here leave them out.',
+      fixes: ['Set the key collection date (Flat section) to when you expect to get your keys.'],
+    })
+  }
+  const order: [Milestone, string][] = [['application', 'Application'], ['booking', 'Booking'], ['afl', 'AFL signing'], ['keys', 'Key collection']]
+  for (let i = 1; i < order.length; i++) {
+    const [prev, prevLabel] = order[i - 1]
+    const [cur, curLabel] = order[i]
+    if (d[cur] < d[prev]) {
+      warnings.push({
+        id: 'dates-order', severity: 'error', ym: d[cur],
+        title: `${curLabel} (${formatYm(d[cur])}) is before ${prevLabel.toLowerCase()} (${formatYm(d[prev])})`,
+        explanation: 'Key dates must go application → booking → AFL signing → key collection. Out of order, payments land in the wrong months (e.g. the key-collection downpayment before the AFL one).',
+        fixes: [`Check the ${curLabel.toLowerCase()} and ${prevLabel.toLowerCase()} dates (Flat section).`],
+      })
+      break
+    }
+  }
 
   // --- Cash shortfalls ---
   const original = negativeCashMonths(core)
@@ -462,6 +487,39 @@ export function buildWarnings(core: CoreResult, extras: WarningExtras = {}): War
         'Or choose Bank loan as your loan type from the start.',
       ],
     })
+  }
+
+  // --- Staggered Downpayment Scheme eligibility (HDB tells you at booking; DIA takes precedence) ---
+  if (s.financing.staggered && !s.financing.deferredIncomeAssessment && !isCompleted(s)) {
+    const sp = core.policy.staggered
+    const problems: string[] = []
+    const standardAfl = core.policy.downpayment[isHdb ? 'hdb' : 'bank'].standard.afl.pct
+    if ((s.flat.household ?? 'firstTimers') === 'secondTimers') {
+      if (!sp.rightSizerFlatTypes.includes(s.flat.type)) {
+        problems.push('Second-timer couples qualify only when right-sizing from a flat they own to a 3-room or smaller flat.')
+      } else {
+        warnings.push({
+          id: 'staggered-rightsizer', severity: 'warning', ym: s.flat.dates.application,
+          title: 'Staggered downpayment: only if you’re right-sizing',
+          explanation: 'As second-timers, you qualify only if you own a flat and haven’t sold it (or completed the sale) when you apply for the HFE letter.',
+          fixes: [`If that’s not you, turn off Staggered downpayment: you’d pay ${pctStr(standardAfl)} at AFL.`],
+        })
+      }
+    } else {
+      if (!sp.flatTypes.includes(s.flat.type)) problems.push('Only 5-room or smaller flats qualify.')
+      const youngest = Math.min(...s.partners.map((p) => ageInMonths(p.birthYearMonth, s.flat.dates.application)))
+      if (youngest > sp.maxYoungerAgeYears * 12) {
+        problems.push(`The HFE letter must be applied for on or before the younger applicant’s ${sp.maxYoungerAgeYears}th birthday; at application (${formatYm(s.flat.dates.application)}) the younger of you will be ${Math.floor(youngest / 12)}.`)
+      }
+    }
+    if (problems.length) {
+      warnings.push({
+        id: 'staggered-eligibility', severity: 'error', ym: s.flat.dates.application,
+        title: 'Probably not eligible for the staggered downpayment',
+        explanation: problems.join(' ') + ` Without it you pay ${pctStr(standardAfl)} at AFL instead of ${pctStr(core.policy.downpayment[isHdb ? 'hdb' : 'bank'].staggered.afl.pct)}.`,
+        fixes: ['Turn off Staggered downpayment (Loan section) to see the standard payments.'],
+      })
+    }
   }
 
   // --- Deferred Income Assessment ---

@@ -1,4 +1,4 @@
-import type { Policy } from '../config/policy'
+import type { Policy, Tranche } from '../config/policy'
 import { addMonths, ymToIndex } from './dates'
 import { monthlyInstalment } from './loan'
 import { buyersStampDuty, legalFees, optionFee, round2 } from './stampDuty'
@@ -212,6 +212,14 @@ export function downpaymentScheme(financing: Scenario['financing']): 'standard' 
   return financing.staggered ? 'staggered' : 'standard'
 }
 
+/** The downpayment table for this plan: loan type, scheme, and the 55% LTV variant for bank loans. */
+export function downpaymentSchedule(raw: Scenario, policy: Policy): { afl: Tranche; keys: Tranche } {
+  const scenario = normalizeScenario(raw)
+  const f = scenario.financing
+  const sched = policy.downpayment[f.loanType === 'HDB' ? 'hdb' : 'bank'][downpaymentScheme(f)]
+  return f.loanType === 'bank' && sched.reducedLtv && maxLtvFor(scenario, policy).reduced ? sched.reducedLtv : sched
+}
+
 /** Month whose income is used for loan assessment. */
 export function assessmentMonth(raw: Scenario, policy: Policy): YearMonth {
   const scenario = normalizeScenario(raw)
@@ -231,8 +239,7 @@ export function buildSchedule(raw: Scenario, policy: Policy): Schedule {
   const price = flat.price + eligibility.premium
   const ltvRule = maxLtvFor(scenario, policy)
   const ltv = effectiveLtv(scenario, policy)
-  const loanKey = financing.loanType === 'HDB' ? 'hdb' : 'bank'
-  const sched = policy.downpayment[loanKey][downpaymentScheme(financing)]
+  const sched = downpaymentSchedule(scenario, policy)
 
   const optionFeeItem = scenario.costs.find((c) => c.kind === 'optionFee')
   const optFee = optionFeeItem ? autoAmount(optionFeeItem, scenario, policy, 0, price) : 0

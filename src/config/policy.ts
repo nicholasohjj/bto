@@ -15,7 +15,7 @@
  * POLICY_VERSION_DATE. Run `npm test` afterwards.
  */
 
-export const POLICY_VERSION_DATE = '2026-09-23'
+export const POLICY_VERSION_DATE = '2026-09-26'
 
 export type FlatType = '2R' | '3R' | '4R' | '5R' | '3Gen' | 'Exec'
 
@@ -57,6 +57,8 @@ export interface DownpaymentSchedule {
   afl: Tranche
   /** Keys tranche absorbs any remaining downpayment: (1 - LTV) - afl.pct. */
   keys: Tranche
+  /** Bank loans whose LTV drops to 55% (long tenure / past age 65): HDB gives separate splits. */
+  reducedLtv?: { afl: Tranche; keys: Tranche }
 }
 
 export interface Policy {
@@ -112,6 +114,14 @@ export interface Policy {
     minYearsForCpf: number
     /** Completed flats: AFL + key collection within this many months of booking. */
     completedKeysWithinMonths: number
+  }
+  staggered: {
+    /** HFE letter applied for on or before the younger applicant's birthday at this age. */
+    maxYoungerAgeYears: number
+    /** Right-sizing flat owners: 3-room or smaller only. */
+    rightSizerFlatTypes: FlatType[]
+    /** Couples: 5-room or smaller. */
+    flatTypes: FlatType[]
   }
   dia: {
     maxAgeYears: number
@@ -282,25 +292,32 @@ export const DEFAULT_POLICY: Policy = {
       // Source: hdb.gov.sg Annex C, Oct 2024, para 13 ("10% ... when they sign the AFL ...
       // payable by CPF savings and/or cash"). VERIFIED 2026-09-23.
       standard: { afl: { pct: 0.1, minCashPct: 0 }, keys: { pct: 0.15, minCashPct: 0 } },
-      // Staggered Downpayment Scheme: 2.5% at AFL, rest at keys.
-      // Source: hdb.gov.sg Annex C footnote 3 (2.5% for couples eligible for deferred income
-      // assessment, VERIFIED) and dollarsandsense.sg SDS guide (2.5% / 22.5%). SECONDARY 2026-09-23.
-      staggered: { afl: { pct: 0.025, minCashPct: 0 }, keys: { pct: 0.225, minCashPct: 0 } },
-      // Deferred Income Assessment (uncompleted flat): 2.5% at AFL, rest at keys.
-      // Source: hdb.gov.sg "Annex A: Details on Deferred Income Assessment" (Greater Support for
-      // Young Couples, 2024), Table A2(b). VERIFIED 2026-09-23.
+      // Staggered Downpayment Scheme (HDB loan or no loan): 5% at AFL, 20% at keys.
+      // Source: hdb.gov.sg "Staggered Downpayment Scheme" page (text supplied by the user). VERIFIED 2026-09-26.
+      staggered: { afl: { pct: 0.05, minCashPct: 0 }, keys: { pct: 0.2, minCashPct: 0 } },
+      // Deferred Income Assessment (uncompleted flat, June 2024 sales exercise onwards):
+      // 2.5% at AFL, 22.5% at keys.
+      // Source: hdb.gov.sg "Staggered Downpayment Scheme" page, DIA table. VERIFIED 2026-09-26.
       dia: { afl: { pct: 0.025, minCashPct: 0 }, keys: { pct: 0.225, minCashPct: 0 } },
     },
     bank: {
       // Bank loan: 20% at AFL (of which 5% cash), remaining 5% at keys.
       // Source: hdb.gov.sg Annex C, Oct 2024, para 13 (20% at AFL) VERIFIED; 5% cash SECONDARY.
       standard: { afl: { pct: 0.2, minCashPct: 0.05 }, keys: { pct: 0.05, minCashPct: 0 } },
-      // Staggered with bank loan: 2.5% cash at AFL; 22.5% at keys of which 2.5% cash.
-      // Source: dollarsandsense.sg SDS guide. SECONDARY 2026-09-23.
-      staggered: { afl: { pct: 0.025, minCashPct: 0.025 }, keys: { pct: 0.225, minCashPct: 0.025 } },
-      // DIA with a bank loan: 2.5% at AFL "regardless of the financing option" (HDB Annex A /
-      // news reports). Cash split assumed same as bank staggered. SECONDARY 2026-09-23.
-      dia: { afl: { pct: 0.025, minCashPct: 0.025 }, keys: { pct: 0.225, minCashPct: 0.025 } },
+      // Staggered with a bank loan. 75% LTV: 10% at AFL (at least 5% cash), 15% at keys.
+      // 55% LTV: 10% at AFL, cash only; 35% at keys.
+      // Source: hdb.gov.sg "Staggered Downpayment Scheme" page. VERIFIED 2026-09-26.
+      staggered: {
+        afl: { pct: 0.1, minCashPct: 0.05 }, keys: { pct: 0.15, minCashPct: 0 },
+        reducedLtv: { afl: { pct: 0.1, minCashPct: 0.1 }, keys: { pct: 0.35, minCashPct: 0 } },
+      },
+      // DIA with a bank loan. 75% LTV: 2.5% at AFL, cash only; 22.5% at keys (at least 2.5% cash).
+      // 55% LTV: 2.5% at AFL, cash only; 42.5% at keys (at least 7.5% cash).
+      // Source: hdb.gov.sg "Staggered Downpayment Scheme" page, DIA table. VERIFIED 2026-09-26.
+      dia: {
+        afl: { pct: 0.025, minCashPct: 0.025 }, keys: { pct: 0.225, minCashPct: 0.025 },
+        reducedLtv: { afl: { pct: 0.025, minCashPct: 0.025 }, keys: { pct: 0.425, minCashPct: 0.075 } },
+      },
     },
   },
   lease: {
@@ -313,6 +330,15 @@ export const DEFAULT_POLICY: Policy = {
     // Completed SBF / open-booking flats: sign the AFL and collect keys within 9 months of booking.
     // Source: hdb.gov.sg "Key Collection" (search snippet). SECONDARY 2026-09-25.
     completedKeysWithinMonths: 9,
+  },
+  // Staggered Downpayment Scheme eligibility: couples (first-timers, or first-timer + second-timer)
+  // who applied for the HFE letter on or before the younger applicant's 30th birthday and booked an
+  // uncompleted 5-room or smaller flat; or flat owners right-sizing to an uncompleted 3-room or smaller.
+  // Source: hdb.gov.sg "Staggered Downpayment Scheme" page. VERIFIED 2026-09-26.
+  staggered: {
+    maxYoungerAgeYears: 30,
+    flatTypes: ['2R', '3R', '4R', '5R'],
+    rightSizerFlatTypes: ['2R', '3R'],
   },
   dia: {
     // At least one applicant must be 30 or below (at HFE application).
@@ -437,14 +463,15 @@ export const POLICY_META: Record<string, PolicyMeta> = {
   bsdTiers: { label: "Buyer's Stamp Duty tiers", unit: 'pct', status: 'verified', source: 'iras.gov.sg BSD page' },
   optionFee: { label: 'Option fee by flat type', unit: 'sgd', status: 'verified', source: 'HDB BTO Annex C, Oct 2024' },
   'downpayment.hdb.standard': { label: 'HDB loan downpayment (standard)', unit: 'pct', status: 'verified', source: 'HDB BTO Annex C, Oct 2024' },
-  'downpayment.hdb.staggered': { label: 'HDB loan downpayment (staggered)', unit: 'pct', status: 'secondary', source: 'HDB Annex C fn 3 + SDS guides' },
+  'downpayment.hdb.staggered': { label: 'HDB loan downpayment (staggered)', unit: 'pct', status: 'verified', source: 'hdb.gov.sg Staggered Downpayment Scheme page (Sep 2026)' },
   'downpayment.bank.standard': { label: 'Bank loan downpayment (standard)', unit: 'pct', status: 'secondary', source: 'HDB Annex C + secondary' },
-  'downpayment.bank.staggered': { label: 'Bank loan downpayment (staggered)', unit: 'pct', status: 'secondary', source: 'SDS guides' },
+  'downpayment.bank.staggered': { label: 'Bank loan downpayment (staggered)', unit: 'pct', status: 'verified', source: 'hdb.gov.sg Staggered Downpayment Scheme page (Sep 2026)' },
   'downpayment.hdb.dia': { label: 'HDB loan downpayment (Deferred Income Assessment)', unit: 'pct', status: 'verified', source: 'HDB DIA Annex A (2024)' },
-  'downpayment.bank.dia': { label: 'Bank loan downpayment (Deferred Income Assessment)', unit: 'pct', status: 'secondary', source: 'HDB DIA Annex A + news' },
+  'downpayment.bank.dia': { label: 'Bank loan downpayment (Deferred Income Assessment)', unit: 'pct', status: 'verified', source: 'hdb.gov.sg Staggered Downpayment Scheme page (Sep 2026)' },
   'lease.coverToAge': { label: 'Lease must cover youngest buyer to age', unit: 'years', status: 'secondary', source: 'MND 2019 CPF/HDB loan rules (snippet)' },
   'lease.minYearsForCpf': { label: 'No CPF / HDB loan if remaining lease ≤', unit: 'years', status: 'secondary', source: 'MND 2019 CPF/HDB loan rules (snippet)' },
   'lease.completedKeysWithinMonths': { label: 'Completed flats: keys within (months of booking)', unit: 'months', status: 'secondary', source: 'hdb.gov.sg Key Collection (snippet)' },
+  'staggered.maxYoungerAgeYears': { label: 'Staggered downpayment: younger applicant aged ≤ at HFE', unit: 'years', status: 'verified', source: 'hdb.gov.sg Staggered Downpayment Scheme page (Sep 2026)' },
   'dia.maxAgeYears': { label: 'DIA: at least one applicant aged ≤', unit: 'years', status: 'verified', source: 'HDB DIA Annex A' },
   'dia.assessmentMonthsBeforeKeys': { label: 'DIA: income assessed months before keys', unit: 'months', status: 'verified', source: 'HDB DIA Annex A' },
   'dia.recentGradMonths': { label: 'DIA: finished studies/NS within', unit: 'months', status: 'verified', source: 'HDB DIA Annex A' },

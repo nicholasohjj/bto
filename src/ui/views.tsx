@@ -283,8 +283,11 @@ export function AccruedView({ result, names, single = false }: { result: SimResu
 export function CompareView({ scenarios, results, compareIds, onToggle }: {
   scenarios: Scenario[]; results: Map<string, SimResult>; compareIds: string[]; onToggle: (id: string) => void
 }) {
-  const chosen = compareIds.map((id) => scenarios.find((s) => s.id === id)).filter((s): s is Scenario => !!s).slice(0, 3)
-  const rs = chosen.map((s) => results.get(s.id)!).filter(Boolean)
+  const picked = compareIds.map((id) => scenarios.find((s) => s.id === id)).filter((s): s is Scenario => !!s).slice(0, 3)
+  // Plans that can't be simulated are left out, keeping names and results lined up.
+  const chosen = picked.filter((s) => results.has(s.id))
+  const broken = picked.filter((s) => !results.has(s.id))
+  const rs = chosen.map((s) => results.get(s.id)!)
   const rows = rs.length ? compareRows(rs) : []
   return (
     <div className="space-y-4">
@@ -298,12 +301,13 @@ export function CompareView({ scenarios, results, compareIds, onToggle }: {
               <button key={s.id} type="button" onClick={() => onToggle(s.id)} aria-pressed={on}
                 disabled={!on && compareIds.length >= 3}
                 className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm disabled:opacity-40 ${on ? 'border-accent bg-surface-2' : 'border-line'}`}>
-                {on && <span className="h-2 w-2 rounded-full" style={{ background: `var(--series-${idx + 1})` }} aria-hidden />}
+                {on && chosen.includes(s) && <span className="h-2 w-2 rounded-full" style={{ background: `var(--series-${chosen.indexOf(s) + 1})` }} aria-hidden />}
                 {s.name}
               </button>
             )
           })}
         </div>
+        {broken.length > 0 && <p className="mt-2 text-xs text-critical">Left out because {broken.length > 1 ? 'they' : 'it'} can’t be simulated: {broken.map((s) => s.name).join(', ')}. Open it and check the dates.</p>}
         <p className="mt-2 text-[11px] text-muted">Tip: use “Duplicate” on a scenario, change one thing (loan type, price, CPF slider), then compare.</p>
       </Card>
       {rs.length >= 2 ? (

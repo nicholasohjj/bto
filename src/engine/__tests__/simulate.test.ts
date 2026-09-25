@@ -47,13 +47,35 @@ describe('payment schedule', () => {
     expect(keys.amount).toBe(24000)
     expect(keys.minCash).toBe(0)
   })
-  it('bank loan, staggered: 2.5% cash at AFL; 22.5% at keys with 2.5% cash', () => {
+  // Figures from hdb.gov.sg "Staggered Downpayment Scheme" (Sep 2026).
+  it('HDB loan, staggered: 5% at AFL, 20% at keys', () => {
+    const s = base((s) => { s.financing.staggered = true })
+    const { obligations } = buildSchedule(s, resolvePolicy())
+    expect(obligations.find((o) => o.id === 'dp-afl')!.amount).toBe(22000) // 5% of 480k less $2,000 option fee
+    expect(obligations.find((o) => o.id === 'dp-keys')!.amount).toBe(96000)
+  })
+  it('bank loan, staggered: 10% at AFL (5% cash), 15% at keys', () => {
     const s = base((s) => { s.financing.loanType = 'bank'; s.financing.staggered = true })
+    const { obligations } = buildSchedule(s, resolvePolicy())
+    expect(obligations.find((o) => o.id === 'dp-afl')!.amount).toBe(46000)
+    expect(obligations.find((o) => o.id === 'dp-afl')!.minCash).toBe(22000)
+    expect(obligations.find((o) => o.id === 'dp-keys')!.amount).toBe(72000)
+    expect(obligations.find((o) => o.id === 'dp-keys')!.minCash).toBe(0)
+  })
+  it('bank loan at 55% LTV, staggered: 10% cash only at AFL, 35% at keys', () => {
+    const s = base((s) => { s.financing.loanType = 'bank'; s.financing.staggered = true; s.financing.tenureYears = 30 })
+    const { obligations } = buildSchedule(s, resolvePolicy())
+    expect(obligations.find((o) => o.id === 'dp-afl')!.amount).toBe(46000)
+    expect(obligations.find((o) => o.id === 'dp-afl')!.minCash).toBe(46000)
+    expect(obligations.find((o) => o.id === 'dp-keys')!.amount).toBe(168000)
+  })
+  it('bank loan at 55% LTV with DIA: 2.5% cash at AFL, 42.5% at keys with 7.5% cash', () => {
+    const s = base((s) => { s.financing.loanType = 'bank'; s.financing.deferredIncomeAssessment = true; s.financing.tenureYears = 30 })
     const { obligations } = buildSchedule(s, resolvePolicy())
     expect(obligations.find((o) => o.id === 'dp-afl')!.amount).toBe(10000)
     expect(obligations.find((o) => o.id === 'dp-afl')!.minCash).toBe(10000)
-    expect(obligations.find((o) => o.id === 'dp-keys')!.amount).toBe(108000)
-    expect(obligations.find((o) => o.id === 'dp-keys')!.minCash).toBe(12000)
+    expect(obligations.find((o) => o.id === 'dp-keys')!.amount).toBe(204000)
+    expect(obligations.find((o) => o.id === 'dp-keys')!.minCash).toBe(36000)
   })
   it('grants pay tranches first and any excess reduces the loan', () => {
     const s = base((s) => {
@@ -61,9 +83,9 @@ describe('payment schedule', () => {
       s.flat.grants = [{ id: 'g', name: 'EHG', amount: 150000, splitA: 50, when: { milestone: 'afl' } }]
     })
     const { obligations, loan } = buildSchedule(s, resolvePolicy())
-    expect(obligations.find((o) => o.id === 'dp-afl')!.grantFunded).toBe(10000)
+    expect(obligations.find((o) => o.id === 'dp-afl')!.grantFunded).toBe(22000)
     const keys = obligations.find((o) => o.id === 'dp-keys')!
-    expect(keys.grantFunded).toBe(140000)
+    expect(keys.grantFunded).toBe(128000) // everything left after AFL; $32,000 more than the tranche reduces the loan
     expect(loan.loanAmount).toBe(360000 - 32000)
   })
   it('lower LTV adds to the keys tranche', () => {

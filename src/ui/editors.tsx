@@ -1,6 +1,6 @@
 import type { Policy } from '../config/policy'
 import { ageInMonths, estimatedLivingCosts, prYear, ratesFor } from '../engine/cpf'
-import { assessmentMonth, autoAmount, downpaymentScheme, grantAmount, loanChangesOf, maxLtvFor, voluntaryList } from '../engine/payments'
+import { assessmentMonth, autoAmount, downpaymentSchedule, effectiveLtv, grantAmount, loanChangesOf, maxLtvFor, voluntaryList } from '../engine/payments'
 import { assessEligibility } from '../engine/eligibility'
 import { isCompleted, isSingle, isSinglesPurchase, leaseFactor, normalizeScenario, typicalDates } from '../engine/saleType'
 import { addMonths, formatYm } from '../engine/dates'
@@ -636,9 +636,8 @@ function DiaChecklist({ scenario, policy }: { scenario: Scenario; policy: Policy
 
 function DownpaymentPreview({ scenario: raw, policy }: { scenario: Scenario; policy: Policy }) {
   const scenario = normalizeScenario(raw)
-  const fin = scenario.financing
-  const sched = policy.downpayment[fin.loanType === 'HDB' ? 'hdb' : 'bank'][downpaymentScheme(fin)]
-  const ltv = Math.min(fin.ltv, fin.loanType === 'HDB' ? policy.hdbLoan.maxLtv : policy.bankLoan.maxLtv)
+  const sched = downpaymentSchedule(scenario, policy)
+  const ltv = effectiveLtv(scenario, policy)
   const total = 1 - ltv
   const afl = Math.min(total, sched.afl.pct)
   const p = scenario.flat.price

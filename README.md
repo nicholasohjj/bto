@@ -126,7 +126,8 @@ src/
   - Interest on cash, compounded monthly.
   - Cost inflation, applied to your own costs and rent (not official fees).
 - **Downpayment and loan.**
-  - The downpayment is split into an AFL tranche and a key-collection tranche, following the policy table for your loan type (standard or staggered).
+  - The downpayment is split into an AFL tranche and a key-collection tranche, following the policy table for your loan type and scheme (standard, staggered or DIA). Bank loans at 55% LTV use HDB's separate splits.
+  - Staggered downpayment is flagged if you probably don't qualify: HFE letter after the younger applicant's 30th birthday, a flat bigger than 5-room, or second-timers not right-sizing to a 3-room or smaller.
   - The option fee counts towards the AFL tranche. Minimum cash rules for bank loans are enforced.
 - **Grants.**
   - Grants are credited to OA on the chosen milestone and applied to the next tranche.
@@ -179,11 +180,11 @@ Users can override any figure for a single scenario under **Advanced settings**.
 | Option fees ($500 / $1,000 / $2,000) | Verified (HDB BTO Annex C) |
 | HDB loan LTV 75%; downpayment 10% (HDB) / 20% (bank) at AFL | Verified (HDB BTO Annex C) |
 | Deferred Income Assessment: eligibility, 2.5% at AFL, income assessed ~3 months before completion, grant paid at keys | Verified (HDB "Annex A: Details on Deferred Income Assessment", 2024) |
-| DIA with a bank loan: 2.5% at AFL; cash split assumed same as bank staggered | Secondary |
+| DIA with a bank loan: 2.5% cash at AFL; keys 22.5% (≥ 2.5% cash), or 42.5% (≥ 7.5% cash) at 55% LTV | Verified (hdb.gov.sg Staggered Downpayment Scheme page, checked 2026-09-26) |
 | Caveat fee $64.45; first conveyancing tier $0.90 per $1,000 | Verified (cpf.gov.sg) |
 | OA interest 2.5%, HDB loan rate 2.6% | Secondary (CPF releases seen in search; page not read) |
 | Accrued interest = OA rate, monthly/compounded yearly | Secondary (CPF page for the method returned 404) |
-| Staggered downpayment 2.5% at AFL (both loan types) and bank-loan cash splits | Secondary (HDB footnote + guides) |
+| Staggered downpayment: HDB loan 5% at AFL / 20% at keys; bank loan 10% at AFL (≥ 5% cash) / 15%, or 10% cash / 35% at 55% LTV; eligibility (HFE by younger's 30th birthday, ≤ 5-room, right-sizers ≤ 3-room) | Verified (hdb.gov.sg Staggered Downpayment Scheme page, checked 2026-09-26) |
 | Bank loan min 5% cash | Secondary |
 | MSR 30%, TDSR 55%, stress rates 3% HDB / 4% bank | Secondary (MAS site was down) |
 | Fire insurance premiums | Secondary |
