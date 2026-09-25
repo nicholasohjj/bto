@@ -1,6 +1,7 @@
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
+import { Component, useDeferredValue, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { runScenario } from './engine'
 import { resolvePolicy } from './engine/policyOverrides'
+import { scenarioProblem } from './engine/validate'
 import type { Scenario, SimResult } from './engine/types'
 import { money } from './engine/format'
 import { newId } from './state/defaults'
@@ -86,16 +87,25 @@ export default function App() {
   }, [deferredScenarios])
   const result = results.get(active.id)
 
+  // The plan as it was before the last edit, so a crash can be undone.
+  const beforeEdit = useRef<Scenario | null>(null)
   const update: Update = (fn) =>
     setState((st) => ({
       ...st,
       scenarios: st.scenarios.map((s) => {
         if (s.id !== st.activeId) return s
+        beforeEdit.current = s
         const d = structuredClone(s)
         fn(d)
         return d
       }),
     }))
+  const undoLastEdit = () => {
+    const prev = beforeEdit.current
+    if (!prev) return
+    beforeEdit.current = null
+    setState((st) => ({ ...st, scenarios: st.scenarios.map((s) => (s.id === prev.id ? prev : s)) }))
+  }
 
   const addScenario = (s: Scenario) =>
     setState((st) => ({ ...st, scenarios: [...st.scenarios, s], activeId: s.id, wizardDone: true, compareIds: [...st.compareIds, s.id].slice(-3) }))
@@ -237,7 +247,13 @@ export default function App() {
       )}
 
       <main className="mx-auto max-w-6xl space-y-4 px-4 py-4">
-        {!result && <Card><p className="text-sm text-critical">This scenario couldn’t be simulated. Check the dates (key collection must be after today).</p></Card>}
+        <ErrorBoundary key={`${active.id}-${tab}`} onUndo={undoLastEdit}>
+        {!result && (
+          <Card>
+            <p className="text-sm text-critical">This plan can’t be simulated. {scenarioProblem(active) ?? 'Check the dates (key collection must be after today).'}</p>
+            {tab !== 'edit' && <Button variant="secondary" className="mt-2 text-xs" onClick={() => setTab('edit')}>Edit plan</Button>}
+          </Card>
+        )}
 
         {result && tab === 'overview' && (
           <>
@@ -289,6 +305,7 @@ export default function App() {
 
         {tab === 'compare' && <CompareView scenarios={state.scenarios} results={results} compareIds={state.compareIds} onToggle={toggleCompare} />}
         {tab === 'advanced' && <AdvancedSettings scenario={active} update={update} />}
+        </ErrorBoundary>
 
         <footer className="pt-4 pb-8"><Disclaimer compact /></footer>
       </main>
@@ -418,4 +435,25 @@ function slug(s: string) {
 /** Same plan apart from its id (so opening a link twice doesn't add a copy). */
 function sameContent(a: Scenario, b: Scenario): boolean {
   return JSON.stringify({ ...a, id: '' }) === JSON.stringify({ ...b, id: '' })
+}
+
+/** Keeps one broken view from blanking the whole app. Resets when the plan or tab changes. */
+class ErrorBoundary extends Component<{ children: ReactNode; onUndo: () => void }, { error: Error | null }> {
+  state = { error: null as Error | null }
+  static getDerivedStateFromError(error: Error) {
+    return { error }
+  }
+  componentDidCatch(error: Error) {
+    console.error('View crashed:', error)
+  }
+  render() {
+    if (!this.state.error) return this.props.children
+    return (
+      <Card>
+        <p className="text-sm text-critical">Something in this plan broke this page: {this.state.error.message}</p>
+        <p className="mt-1 text-sm text-ink-2">Your other plans are fine. Undo the last change, or switch to another tab or plan.</p>
+        <Button variant="secondary" className="mt-2 text-xs" onClick={() => { this.props.onUndo(); this.setState({ error: null }) }}>Undo last change</Button>
+      </Card>
+    )
+  }
 }

@@ -130,6 +130,8 @@ export function MonthInput({ value, onChange, ariaLabel }: { value: string; onCh
   return (
     <input
       type="month"
+      min="1900-01"
+      max="2199-12"
       aria-label={ariaLabel}
       className={inputCls}
       value={value}

@@ -8,6 +8,7 @@ import { round2 } from './stampDuty'
 import { money } from './format'
 import { monthlyInstalment, monthsToRepay } from './loan'
 import type { MonthState, PaidEvent, PartnerId, PotBalances, Scenario, YearMonth } from './types'
+import { scenarioProblem } from './validate'
 
 export const MONTHS_AFTER_KEYS = 12
 const IDS: PartnerId[] = ['A', 'B']
@@ -80,6 +81,8 @@ export function simulateCore(
   policy: Policy = resolvePolicy(raw.policyOverrides),
   options: SimOptions = {},
 ): CoreResult {
+  const problem = scenarioProblem(raw)
+  if (problem) throw new Error(problem)
   const scenario = normalizeScenario(raw)
   const schedule = buildSchedule(scenario, policy)
   const { flat, financing } = scenario
