@@ -1,4 +1,4 @@
-import type { FlatType, Policy } from '../config/policy'
+import type { Policy } from '../config/policy'
 import { ageInMonths, estimatedLivingCosts, prYear, ratesFor } from '../engine/cpf'
 import { assessmentMonth, autoAmount, downpaymentScheme, grantAmount, loanChangesOf, maxLtvFor, voluntaryList } from '../engine/payments'
 import { assessEligibility } from '../engine/eligibility'
@@ -7,24 +7,10 @@ import { addMonths, formatYm } from '../engine/dates'
 import { money } from '../engine/format'
 import type { CostItem, Milestone, Partner, Scenario, When } from '../engine/types'
 import { newId } from '../state/defaults'
+import { FLAT_TYPES, MILESTONES } from './labels'
 import { Button, Card, Field, InfoTip, MoneyInput, MonthInput, NumberInput, PercentInput, Segmented, Select, Slider, TextInput, Toggle } from './controls'
 
 export type Update = (fn: (draft: Scenario) => void) => void
-
-const FLAT_TYPES: { value: FlatType; label: string }[] = [
-  { value: '2R', label: '2-room Flexi' },
-  { value: '3R', label: '3-room' },
-  { value: '4R', label: '4-room' },
-  { value: '5R', label: '5-room' },
-  { value: '3Gen', label: '3Gen' },
-  { value: 'Exec', label: 'Executive' },
-]
-const MILESTONES: { value: Milestone; label: string }[] = [
-  { value: 'application', label: 'Application' },
-  { value: 'booking', label: 'Booking' },
-  { value: 'afl', label: 'AFL signing' },
-  { value: 'keys', label: 'Key collection' },
-]
 
 // ---------------- Partners ----------------
 

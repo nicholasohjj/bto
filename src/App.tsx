@@ -5,12 +5,14 @@ import type { Scenario, SimResult } from './engine/types'
 import { money } from './engine/format'
 import { newId } from './state/defaults'
 import { exportJson, importJson, loadState, saveState, type AppState } from './state/storage'
+import { decodeScenario, sharedCode, shareUrl } from './state/share'
 import { AdvancedSettings } from './ui/AdvancedSettings'
 import { TimelineChart } from './ui/charts'
 import { Button, Card, Segmented, Toggle } from './ui/controls'
 import { Disclaimer } from './ui/Disclaimer'
 import { CostsEditor, FinancingEditor, FlatEditor, PartnersEditor, type Update } from './ui/editors'
-import { AccruedView, CompareView, JobLossCard, LoanPanel, ScheduleTable, SummaryCards, WarningsList } from './ui/views'
+import { AccruedView, AffordCard, CompareView, JobLossCard, LoanPanel, ScheduleTable, SummaryCards, WarningsList } from './ui/views'
+import { PrintSummary } from './ui/PrintSummary'
 import { Wizard } from './ui/Wizard'
 
 type Tab = 'overview' | 'schedule' | 'cpf' | 'edit' | 'compare' | 'advanced'
@@ -35,6 +37,33 @@ export default function App() {
   const theme = useTheme()
 
   useEffect(() => saveState(state), [state])
+
+  // Opening a share link (#s=…) adds that plan, or switches to it if it's already here.
+  useEffect(() => {
+    const open = async () => {
+      const code = sharedCode(location.hash)
+      if (!code) return
+      // Clear the hash first so a reload (or StrictMode's second run) doesn't add it again.
+      history.replaceState(null, '', location.pathname + location.search)
+      try {
+        const shared = await decodeScenario(code)
+        setState((st) => {
+          const same = st.scenarios.find((s) => sameContent(s, shared))
+          if (same) return { ...st, activeId: same.id, wizardDone: true }
+          const [added] = importJson(JSON.stringify(shared), st.scenarios)
+          return { ...st, scenarios: [...st.scenarios, added], activeId: added.id, wizardDone: true }
+        })
+        setWizardOpen(false)
+        setTab('overview')
+        setMessage(`Opened “${shared.name}” from a shared link.`)
+      } catch (e) {
+        setMessage(`Couldn’t open the shared link: ${(e as Error).message}`)
+      }
+    }
+    open()
+    window.addEventListener('hashchange', open)
+    return () => window.removeEventListener('hashchange', open)
+  }, [])
   useEffect(() => {
     if (!message) return
     const t = setTimeout(() => setMessage(null), 4000)
@@ -101,6 +130,24 @@ export default function App() {
       setMessage(`Couldn’t import: ${(e as Error).message}`)
     }
   }
+  const share = async () => {
+    try {
+      const url = await shareUrl(active, location.origin + location.pathname)
+      if (navigator.share) {
+        try {
+          await navigator.share({ title: active.name, url })
+          return
+        } catch (e) {
+          if ((e as Error).name === 'AbortError') return
+          // Share sheet failed: fall back to copying.
+        }
+      }
+      await navigator.clipboard.writeText(url)
+      setMessage('Link copied. It contains this plan’s numbers (salaries, savings), so share it only with your partner.')
+    } catch {
+      setMessage('Couldn’t create or copy the link. Use Export (JSON) instead.')
+    }
+  }
   const toggleCompare = (id: string) =>
     setState((st) => ({
       ...st,
@@ -122,7 +169,9 @@ export default function App() {
   const errorCount = result?.warnings.filter((w) => w.severity === 'error').length ?? 0
 
   return (
-    <div className="min-h-screen bg-page">
+    <>
+    {result && <PrintSummary scenario={active} result={result} />}
+    <div className="min-h-screen bg-page print:hidden">
       <header className="sticky top-0 z-30 border-b border-line bg-page/95 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center gap-2 px-4 py-2">
           <div className="mr-auto flex min-w-0 flex-1 items-center gap-2">
@@ -159,6 +208,8 @@ export default function App() {
             onDelete={state.scenarios.length > 1 ? remove : undefined}
             onExport={download}
             onImport={() => fileRef.current?.click()}
+            onShare={share}
+            onPrint={result ? () => window.print() : undefined}
             theme={theme.value}
             onTheme={theme.set}
           />
@@ -208,6 +259,10 @@ export default function App() {
               </div>
             </div>
             <LoanPanel result={result} scenario={active} />
+            <AffordCard scenario={active} onTry={(price) => {
+              addScenario({ ...structuredClone(active), id: newId('sc'), name: `${active.name} — at ${money(price)}`, flat: { ...structuredClone(active.flat), price } })
+              setMessage('Added. Use Compare to see it next to your plan.')
+            }} />
             <JobLossCard scenario={active} onAddScenario={(s) => {
               const gap = s.partners.flatMap((p) => p.incomeChanges ?? []).find((c) => c.id.startsWith('whatif-gap'))
               const who = gap ? s.partners.find((p) => p.incomeChanges?.includes(gap))?.name : ''
@@ -238,6 +293,7 @@ export default function App() {
         <footer className="pt-4 pb-8"><Disclaimer compact /></footer>
       </main>
     </div>
+    </>
   )
 }
 
@@ -282,7 +338,7 @@ function MiniStatus({ result, onOpen }: { result: SimResult; onOpen: () => void 
 
 function ScenarioMenu(props: {
   onRename: () => void; onDuplicate: () => void; onNew: () => void; onDelete?: () => void
-  onExport: (all: boolean) => void; onImport: () => void; theme: ThemePref; onTheme: (t: ThemePref) => void
+  onExport: (all: boolean) => void; onImport: () => void; onShare: () => void; onPrint?: () => void; theme: ThemePref; onTheme: (t: ThemePref) => void
 }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -306,6 +362,9 @@ function ScenarioMenu(props: {
             {item('Rename', props.onRename)}
             {item('Duplicate', props.onDuplicate)}
             {item('New plan (setup wizard)', props.onNew)}
+            <div className="my-1 border-t border-line" />
+            {item('Share link to this scenario', props.onShare)}
+            {item('Print summary (or PDF)', props.onPrint)}
             <div className="my-1 border-t border-line" />
             {item('Export this scenario (JSON)', () => props.onExport(false))}
             {item('Export all scenarios (JSON)', () => props.onExport(true))}
@@ -354,4 +413,9 @@ function useTheme() {
 
 function slug(s: string) {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'scenario'
+}
+
+/** Same plan apart from its id (so opening a link twice doesn't add a copy). */
+function sameContent(a: Scenario, b: Scenario): boolean {
+  return JSON.stringify({ ...a, id: '' }) === JSON.stringify({ ...b, id: '' })
 }

@@ -84,3 +84,8 @@ html, body { background: var(--page); color: var(--ink); }
 body { margin: 0; font-family: var(--font-sans); -webkit-text-size-adjust: 100%; }
 .tnum { font-variant-numeric: tabular-nums; }
 input, select, textarea, button { font: inherit; color: inherit; }
+
+@media print {
+  @page { size: A4; margin: 12mm; }
+  html, body { background: #fff !important; color: #000 !important; color-scheme: light; }
+}

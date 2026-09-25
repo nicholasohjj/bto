@@ -14,7 +14,12 @@ npm run build      # production build in dist/ (static files; host anywhere)
 npm run lint
 ```
 
-Everything runs in the browser. The layout works from 320px phones to desktop. On phones, the payment and comparison tables switch to card lists. Scenarios are saved in `localStorage`. To share with your partner, use **⋯ → Export** (a `.json` file) and **⋯ → Import** on the other phone.
+Everything runs in the browser. The layout works from 320px phones to desktop. On phones, the payment and comparison tables switch to card lists. Scenarios are saved in `localStorage`. To share with your partner:
+
+- **⋯ → Share link** (`state/share.ts`) puts the scenario in the link itself, deflated with the browser's `CompressionStream` and base64url-encoded after `#s=`. The part after `#` is never sent to the server. Opening the link adds the plan, or switches to it if the same plan is already there.
+- **⋯ → Export** (a `.json` file) and **⋯ → Import** on the other phone.
+
+**⋯ → Print summary** prints one page for an HDB or bank appointment (`ui/PrintSummary.tsx`): key dates, the loan, each payment with its cash/CPF split, and the problems to check. Choose "Save as PDF" in the print dialog to get a PDF.
 
 ## Project layout
 
@@ -32,6 +37,7 @@ src/
     warnings.ts         Shortfall / MSR / TDSR warnings + a solver that re-runs the
                         simulation to suggest fixes ("use $X more CPF", "delay renovation N months")
     whatIf.ts           "What if one of you loses your job?" stress test
+    afford.ts           "How much can we afford?": highest price with no cash shortfall and MSR/TDSR within limits
     saleType.ts         BTO / SBF / open booking dates, completed flats, age-95 lease rule
     eligibility.ts      Household income, income ceiling, EHG / Step-Up grant amounts, citizen/PR rules
     accruedInterest.ts  CPF accrued interest at 5/10/15 years after keys
@@ -63,6 +69,7 @@ src/
   - **Different raise for a year**: overrides the usual raise that January (e.g. 0% one year, 10% the next).
   - A gap in the 12 months before the income assessment breaks the grant's continuous-work rule, and lowers the income used for the grant and loan checks.
 - **What if one of you loses your job?** (Overview, `whatIf.ts`) Re-runs the plan with each partner out of work for 3–12 months, starting now, at AFL or at keys. It shows the lowest cash afterwards and whether cash runs out, and can add the result as a scenario to compare.
+- **How much can we afford?** (Overview, `afford.ts`) Binary-searches the flat price, to the nearest $1,000, for the highest price with no month short of cash and MSR (plus TDSR for bank loans) within limits. Everything else stays the same: loan type and LTV, CPF slider, costs, grants and dates. It says which limit stops you. If the plan runs short even at $50,000, the shortfall isn't about the price, and it says so.
 - **Who's buying** (Us section).
   - **Couple**, **Single**, or **Two singles** under the Joint Singles Scheme. The scheme allows up to 4 people; the app models 2.
   - **Singles:**

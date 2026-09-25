@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { compareRows } from '../engine/compare'
 import { addMonths, formatYm } from '../engine/dates'
 import { jobLossImpact, withJobLoss } from '../engine/whatIf'
+import { affordablePrice, type AffordLimit } from '../engine/afford'
 import { money } from '../engine/format'
 import type { Scenario, SimResult, Warning } from '../engine/types'
 import { CompareChart } from './charts'
@@ -426,6 +427,53 @@ export function JobLossCard({ scenario, onAddScenario }: { scenario: Scenario; o
           )
         })}
       </ul>
+    </Card>
+  )
+}
+
+// ---------------- How much can we afford? ----------------
+
+const LIMIT_TEXT: Record<AffordLimit, string> = {
+  cash: 'you’d run short of cash',
+  msr: 'the mortgage would take more than the lender’s limit of your income (MSR)',
+  tdsr: 'your mortgage plus other debts would be above the bank’s limit (TDSR)',
+}
+
+export function AffordCard({ scenario, onTry }: { scenario: Scenario; onTry: (price: number) => void }) {
+  const r = useMemo(() => affordablePrice(scenario), [scenario])
+  const price = scenario.flat.price
+  const diff = r.maxPrice !== undefined ? r.maxPrice - price : 0
+  return (
+    <Card>
+      <h2 className="text-sm font-semibold">How much can {scenario.buyers === 'single' ? 'you' : 'we'} afford?</h2>
+      {r.maxPrice === undefined ? (
+        <p className="mt-2 text-sm text-ink-2">
+          Your plan runs short of cash{r.failsAtMin?.firstShortYm ? <> in <b className="text-critical">{formatYm(r.failsAtMin.firstShortYm)}</b></> : ''} even
+          for a {money(r.min)} flat, so the flat price isn’t the problem. Fix the problems under “What to watch” first, then check back.
+        </p>
+      ) : (
+        <div className="mt-2 flex flex-wrap items-end justify-between gap-3">
+          <div className="min-w-0 text-sm">
+            <div className="text-xs text-ink-2">Highest flat price that works</div>
+            <div className="tnum mt-0.5 text-xl font-semibold">{r.aboveMax ? `Over ${money(r.maxPrice)}` : money(r.maxPrice)}</div>
+            <p className="mt-1 text-ink-2">
+              {r.aboveMax
+                ? 'Price isn’t what limits you.'
+                : <>Above this, {LIMIT_TEXT[r.limitedBy!]}{r.limitedBy === 'cash' && r.next?.firstShortYm ? <> ({formatYm(r.next.firstShortYm)})</> : ''}. </>}
+              {!r.aboveMax && (diff >= 0
+                ? <>That’s <b className="tnum text-good-ink">{money(diff)}</b> more than the {money(price)} you’ve entered.</>
+                : <>That’s <b className="tnum text-critical">{money(-diff)}</b> less than the {money(price)} you’ve entered.</>)}
+            </p>
+          </div>
+          {!r.aboveMax && Math.abs(diff) >= 1000 && (
+            <Button variant="secondary" className="shrink-0 text-xs" onClick={() => onTry(r.maxPrice!)}>Add as scenario at {money(r.maxPrice)}</Button>
+          )}
+        </div>
+      )}
+      <p className="mt-2 text-[11px] text-muted">
+        Keeps everything else the same: loan type and LTV, CPF slider, costs, grants and dates. Stamp duty, fees and the downpayment change with the price.
+        Rounded down to the nearest $1,000.
+      </p>
     </Card>
   )
 }
