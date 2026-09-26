@@ -13,10 +13,11 @@ import { Button, Card, Segmented, Toggle } from './ui/controls'
 import { Disclaimer } from './ui/Disclaimer'
 import { CostsEditor, FinancingEditor, FlatEditor, PartnersEditor, type Update } from './ui/editors'
 import { AccruedView, AffordCard, CompareView, Verdict, JobLossCard, LoanPanel, ScheduleTable, SummaryCards, WarningsList } from './ui/views'
+import { GuidePage } from './ui/GuidePage'
 import { PrintSummary } from './ui/PrintSummary'
 import { Wizard } from './ui/Wizard'
 
-type Tab = 'overview' | 'schedule' | 'cpf' | 'edit' | 'compare' | 'advanced'
+type Tab = 'overview' | 'schedule' | 'cpf' | 'edit' | 'compare' | 'advanced' | 'guide'
 const TABS: { id: Tab; label: string }[] = [
   { id: 'overview', label: 'Overview' },
   { id: 'schedule', label: 'Payments' },
@@ -24,14 +25,23 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'edit', label: 'Edit plan' },
   { id: 'compare', label: 'Compare' },
   { id: 'advanced', label: 'Advanced settings' },
+  { id: 'guide', label: 'Guide' },
 ]
+/** The guide has its own address so it can be shared: /guide. */
+const GUIDE_PATH = '/guide'
 type EditSection = 'us' | 'flat' | 'financing' | 'costs'
 
 export default function App() {
   const [state, setState] = useState<AppState>(loadState)
-  const [tab, setTab] = useState<Tab>('overview')
+  const [tab, setTabState] = useState<Tab>(() => (location.pathname === GUIDE_PATH ? 'guide' : 'overview'))
+  const setTab = (t: Tab) => {
+    setTabState(t)
+    const path = t === 'guide' ? GUIDE_PATH : '/'
+    if (location.pathname !== path) history.replaceState(null, '', path + location.search + location.hash)
+  }
   const [editSection, setEditSection] = useState<EditSection>('us')
-  const [wizardOpen, setWizardOpen] = useState(!state.wizardDone)
+  // People arriving on the guide read it first; the setup wizard waits until they open a plan.
+  const [wizardOpen, setWizardOpen] = useState(!state.wizardDone && location.pathname !== GUIDE_PATH)
   const [renaming, setRenaming] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -248,7 +258,7 @@ export default function App() {
 
       <main className="mx-auto max-w-6xl space-y-4 px-4 py-4">
         <ErrorBoundary key={`${active.id}-${tab}`} onUndo={undoLastEdit}>
-        {!result && (
+        {!result && tab !== 'guide' && (
           <Card>
             <p className="text-sm text-critical">This plan can’t be simulated. {scenarioProblem(active) ?? 'Check the dates (key collection must be after today).'}</p>
             {tab !== 'edit' && <Button variant="secondary" className="mt-2 text-xs" onClick={() => setTab('edit')}>Edit plan</Button>}
@@ -306,6 +316,7 @@ export default function App() {
 
         {tab === 'compare' && <CompareView scenarios={state.scenarios} results={results} compareIds={state.compareIds} onToggle={toggleCompare} />}
         {tab === 'advanced' && <AdvancedSettings scenario={active} update={update} />}
+        {tab === 'guide' && <GuidePage policy={policy} scenario={active} result={result} onOpenPlan={() => { setTab('overview'); if (!state.wizardDone) setWizardOpen(true) }} />}
         </ErrorBoundary>
 
         <footer className="pt-4 pb-8"><Disclaimer compact /></footer>

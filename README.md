@@ -18,6 +18,8 @@ Everything runs in the browser. The layout works from 320px phones to desktop. I
 
 Charts load as a separate file (`ui/lazyCharts.tsx`): the charting library is about half the code, so the page shows first and the charts follow.
 
+**Guide** (`/guide`, `ui/GuidePage.tsx`): buying a new flat step by step, from the HFE letter to after keys, with what you pay at each step. Figures come from `policy.ts` (so they stay in sync with the calculator) and each step lists the open plan's payments. `vercel.json` rewrites `/guide` to the app; people arriving there skip the setup wizard.
+
 Shared links show a preview card (title, description and `public/og.png`) from the `og:` tags in `index.html`. Those URLs are absolute (`https://bto-chi.vercel.app/…`), so update them if the domain changes. The icons and preview image are rendered from SVG with `rsvg-convert`. On phones, the payment and comparison tables switch to card lists. Scenarios are saved in `localStorage`. To share with your partner:
 
 - **⋯ → Share link** (`state/share.ts`) puts the scenario in the link itself, deflated with the browser's `CompressionStream` and base64url-encoded after `#s=`. The part after `#` is never sent to the server. Opening the link adds the plan, or switches to it if the same plan is already there.
