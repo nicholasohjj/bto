@@ -215,7 +215,8 @@ export interface CostItem {
 }
 
 export interface Interim {
-  mode: 'parents' | 'rent'
+  /** 'pphs': an HDB Parenthood Provisional Housing Scheme flat, rented from booking until keys. */
+  mode: 'parents' | 'rent' | 'pphs'
   monthlyCost: number
 }
 

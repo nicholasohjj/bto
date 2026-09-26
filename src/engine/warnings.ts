@@ -121,7 +121,7 @@ function cashFixes(core: CoreResult, ep: Episode, original: Set<number>): string
   }
 
   // 3. Interim housing / mortgage source.
-  if (s.interim.mode === 'rent' && s.interim.monthlyCost > 0 && ymToIndex(ep.start) <= ymToIndex(s.flat.dates.keys)) {
+  if (s.interim.mode !== 'parents' && s.interim.monthlyCost > 0 && ymToIndex(ep.start) <= ymToIndex(s.flat.dates.keys)) {
     const trial = simulateCore({ ...s, interim: { ...s.interim, mode: 'parents' } }, core.policy)
     if (resolves(original, ep, trial)) fixes.push('Live with parents instead of renting until key collection.')
   }
@@ -569,6 +569,32 @@ export function buildWarnings(core: CoreResult, extras: WarningExtras = {}): War
       explanation: `From your income, you look eligible for about ${money(ehg)} of Enhanced CPF Housing Grant, but this plan doesn’t include it, so your CPF is shown lower than it will be.`,
       fixes: ['In the Flat section, tap “+ Enhanced CPF Housing Grant (auto)”.'],
     })
+  }
+
+  // --- Parenthood Provisional Housing Scheme (HDB rental while waiting) ---
+  if (s.interim.mode === 'pphs') {
+    const why: string[] = []
+    if (isCompleted(s)) why.push('it’s for flats still being built, and yours is completed')
+    if (isSinglesPurchase(s)) why.push('it’s for couples, or divorced or widowed parents with children')
+    else if ((s.flat.household ?? 'firstTimers') === 'secondTimers') why.push('at least one of you must be a first-timer')
+    const income = core.schedule.eligibility.purchaseAvgIncome
+    if (income > core.policy.pphs.incomeCeiling) why.push(`household income must be ${money(core.policy.pphs.incomeCeiling)} or less (yours is about ${money(income)})`)
+    if (why.length) {
+      warnings.push({
+        id: 'pphs-eligibility', severity: 'warning', ym: s.flat.dates.booking,
+        title: 'Probably not eligible for a PPHS flat',
+        explanation: `The Parenthood Provisional Housing Scheme lets you rent from HDB after booking, until keys, but ${why.join('; ')}.`,
+        fixes: ['Choose “Rent” with an open-market rent, or “Live with parents” (Costs section).'],
+      })
+    }
+    if (s.interim.monthlyCost <= 0) {
+      warnings.push({
+        id: 'pphs-rent', severity: 'info', ym: s.flat.dates.booking,
+        title: 'Enter your PPHS rent',
+        explanation: 'The plan has no rent for the PPHS flat yet. Rents depend on the flat; use the amount HDB quotes.',
+        fixes: [],
+      })
+    }
   }
 
   // --- Resale levy (second-timers) ---

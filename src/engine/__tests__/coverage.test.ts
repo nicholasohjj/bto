@@ -832,3 +832,29 @@ describe('flat types and classification', () => {
     expect(runScenario(base((s) => { s.flat.classification = 'Prime' })).warnings.find((w) => w.id === 'plus-prime')!.explanation).toMatch(/10-year minimum occupation period/)
   })
 })
+
+describe('Parenthood Provisional Housing Scheme (PPHS)', () => {
+  const pphs = (f: (s: Scenario) => void = () => {}) => base((s) => { s.interim = { mode: 'pphs', monthlyCost: 1200 }; f(s) })
+  it('rent from ~2 months after booking to ~4 months after completion', () => {
+    const obs = buildSchedule(pphs(), policy).obligations
+    const rent = obs.filter((o) => o.kind === 'rent')
+    expect(rent[0]).toMatchObject({ ym: '2026-08', amount: 1200, label: 'Rent (PPHS flat)' }) // booking Jun 2026
+    expect(rent.at(-1)!.ym).toBe('2030-03') // keys Dec 2029 + 3 months
+  })
+  it('deposit and stamp/application fees at the start, deposit back at the end', () => {
+    const obs = buildSchedule(pphs(), policy).obligations
+    expect(obs.find((o) => o.id === 'pphs-deposit')).toMatchObject({ ym: '2026-08', amount: 1200 })
+    expect(obs.find((o) => o.id === 'pphs-fees')).toMatchObject({ ym: '2026-08', amount: 182.8 }) // 1,200 × 36 × 0.4% + $10
+    expect(obs.find((o) => o.id === 'pphs-refund')).toMatchObject({ ym: '2030-04', amount: -1200 })
+  })
+  it('stamp fee matches HDB’s range: $900 3-room → $129.60', () => {
+    expect(P.pphs.rentRange['3R'][1] * P.pphs.termMonths * P.pphs.stampDutyPct).toBeCloseTo(129.6, 2)
+  })
+  it('flags households that don’t qualify', () => {
+    const ids = (f: (s: Scenario) => void) => runScenario(pphs(f)).warnings.map((w) => w.id)
+    expect(ids(() => {})).not.toContain('pphs-eligibility') // $8,000 household income
+    expect(ids((s) => { s.partners.forEach((p) => { p.grossMonthly = 4500 }) })).toContain('pphs-eligibility')
+    expect(ids((s) => { s.flat.household = 'secondTimers' })).toContain('pphs-eligibility')
+    expect(ids((s) => { s.flat.saleType = 'SBF'; s.flat.completed = true; s.flat.dates.afl = s.flat.dates.keys = '2026-12' })).toContain('pphs-eligibility')
+  })
+})

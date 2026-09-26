@@ -195,6 +195,7 @@ Users can override any figure for a single scenario under **Advanced settings**.
 | DIA from the July 2025 exercise: one of the couple a student/NSF or finished within 12 months; one ≤ 30 and one first-timer at the HFE letter; HDB tells you at booking | Verified (hdb.gov.sg DIA page, checked 2026-09-26) |
 | Optional Component Scheme cost is added to the flat price (tip on the price field) | Verified (hdb.gov.sg, checked 2026-09-26) |
 | Plus/Prime: 10-year MOP (Standard 5), subsidy recovery on resale, no whole-flat rental — shown as a note; Executive flats not sold as BTO (SBF or resale only) — warned | Verified (hdb.gov.sg flat types and classification, checked 2026-09-26) |
+| PPHS (HDB rental while waiting): couples (FT or FT+ST) or divorced/widowed parents who booked an uncompleted flat, income ≤ $8,000; rent from ~2 months after booking to ~4 months after completion; 1-month deposit (refunded), stamp fees (0.4% of 3 years' rent) and $10 at the start; rents $400–$1,500 by flat type — an option under “While waiting for the flat” (default $900) | Verified (hdb.gov.sg PPHS page, checked 2026-09-26) |
 | Cancelling: option fee forfeited after booking; 5% of the price after signing the AFL (stamp duty refundable, legal fees not); 1-year wait — mentioned in cash-shortfall warnings and tips | Verified (hdb.gov.sg Cancellation of flat application, checked 2026-09-26) |
 | Caveat fee $64.45; first conveyancing tier $0.90 per $1,000 | Verified (cpf.gov.sg) |
 | HDB loan rate = CPF OA rate + 0.1% (2.5% + 0.1% = 2.6%) | Verified peg (hdb.gov.sg, checked 2026-09-26); OA rate 2.5% secondary |
@@ -232,7 +233,8 @@ Users can override any figure for a single scenario under **Advanced settings**.
 | CPF Valuation Limit / 120% Withdrawal Limit with BRS (bank loans) | Verified (cpf.gov.sg) |
 | BRS $110,200 (2026) | Secondary |
 | Bank loan LTV 55% if tenure > 25 yrs or past age 65; 10% cash | Secondary (MAS explainer snippet) |
-| Bank loan: BSD reimbursed from CPF after 2 months | **Not verified** (estimate) |
+| Bank loan: stamp duty paid in cash first, reimbursed from CPF | Verified rule (cpf.gov.sg FAQ, checked 2026-09-26); the 2-month delay is an **estimate** and may be longer (up to legal completion for flats under construction) |
+| S&CC and property tax can't be paid from CPF; stamp duty, legal and lodgment fees can | Verified (cpf.gov.sg FAQ, checked 2026-09-26) |
 | Resale levy $15k / $30k / $40k / $45k / $50k / $55k (2-room … EC); cash only; half in some cases | Secondary (2026 guides agree; hdb.gov.sg not read). 3Gen assumed = 5-room: **not verified** |
 | S&CC per month (Singapore Citizen owner-occupier) | Verified for one town council (Bishan-Toa Payoh, 1 Jul 2024); varies by town |
 | Owner-occupier property tax bands (0% to $12k AV, then 4%…) | Secondary (IRAS page needs JavaScript; rates from guides) |

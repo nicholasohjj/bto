@@ -132,6 +132,20 @@ export interface Policy {
     /** Couples: 5-room or smaller. */
     flatTypes: FlatType[]
   }
+  /** Parenthood Provisional Housing Scheme: HDB rental while waiting for a flat you've booked. */
+  pphs: {
+    incomeCeiling: number
+    /** Rent starts this many months after booking (applications in even months, selection the month after). */
+    startMonthsAfterBooking: number
+    /** Tenancy ends about 4 months after completion: rent is paid through keys + this many months. */
+    endMonthsAfterKeys: number
+    /** Stamp duty on the tenancy: this share of the rent for the (up to 3-year) term. */
+    stampDutyPct: number
+    termMonths: number
+    applicationFee: number
+    /** Typical monthly rent ranges by flat type [min, max]. */
+    rentRange: { '2R': [number, number]; '3R': [number, number]; '4R': [number, number] }
+  }
   hfe: {
     /** Default: the HFE letter is applied for this many months before the flat application. */
     monthsBeforeApplication: number
@@ -319,8 +333,11 @@ export const DEFAULT_POLICY: Policy = {
     reducedMinCashPct: 0.1,
     ltvTenureYears: 25,
     ltvMaxAge: 65,
-    // With a bank loan, BSD is usually paid by the lawyer from your cash first, then
-    // reimbursed from CPF OA. Delay is an estimate. UNVERIFIED.
+    // With a bank loan, stamp duty is generally paid in cash first (within 14 days of signing) and
+    // reimbursed from CPF OA once the CPF charge can be lodged. The rule is VERIFIED (cpf.gov.sg FAQ
+    // "Which property-related fees can I use my CPF savings for?", 2026-09-26); for flats under
+    // construction the refund can be applied for up to legal completion, so 2 months is an optimistic
+    // ESTIMATE. S&CC and property tax can't be paid from CPF (same FAQ).
     bsdReimburseMonths: 2,
   },
   // Mortgage Servicing Ratio cap: 30% of monthly income, for HDB and bank loans on HDB flats.
@@ -418,6 +435,24 @@ export const DEFAULT_POLICY: Policy = {
   // to a month after documents are in (longer around a sales exercise); valid 9 months from issue.
   // So the default HFE month is 1 month before the flat application (you can change it).
   // Source: hdb.gov.sg HFE letter pages (text supplied by the user). VERIFIED 2026-09-26.
+  // PPHS: rent an HDB flat after booking an uncompleted flat, until keys. Married/engaged couples (first-timers
+  // or FT + ST) or divorced/widowed parents with children; SC + SC/SPR; no one owns an HDB flat; household
+  // income ≤ $8,000 (from the flat application). Rents aren't published on this page, so you enter yours.
+  // Source: hdb.gov.sg "Parenthood Provisional Housing Scheme" (text supplied by the user). VERIFIED 2026-09-26.
+  // Applications open in even months (1st–14th), selection the month after: rent from about 2 months after
+  // booking. Tenancy up to 3 years, ending about 4 months after the new flat's completion. At signing: first
+  // month's rent, a 1-month deposit (refunded at the end), stamp fees (0.4% of the rent for the term, e.g.
+  // $900 × 36 × 0.4% = $129.60, matching HDB's $87–$130 for 3-room) and a $10 application fee.
+  // Rents: 2-room $400–$550, 3-room $600–$900, 4-room $800–$1,500. Source: hdb.gov.sg PPHS pages. VERIFIED 2026-09-26.
+  pphs: {
+    incomeCeiling: 8000,
+    startMonthsAfterBooking: 2,
+    endMonthsAfterKeys: 3,
+    stampDutyPct: 0.004,
+    termMonths: 36,
+    applicationFee: 10,
+    rentRange: { '2R': [400, 550], '3R': [600, 900], '4R': [800, 1500] },
+  },
   hfe: {
     monthsBeforeApplication: 1,
     validityMonths: 9,

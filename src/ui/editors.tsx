@@ -730,11 +730,14 @@ export function CostsEditor({ scenario, update, policy }: { scenario: Scenario; 
       <Card>
         <div className="mb-2 flex items-center text-sm font-semibold">While waiting for the flat <InfoTip term="interim" /></div>
         <Segmented value={scenario.interim.mode} ariaLabel="Interim housing"
-          onChange={(v) => update((d) => { d.interim.mode = v; if (v === 'rent' && !d.interim.monthlyCost) d.interim.monthlyCost = 2500 })}
-          options={[{ value: 'parents', label: 'Live with parents' }, { value: 'rent', label: 'Rent' }]} />
-        {scenario.interim.mode === 'rent' && (
+          onChange={(v) => update((d) => { d.interim.mode = v; if (v === 'rent' && !d.interim.monthlyCost) d.interim.monthlyCost = 2500; if (v === 'pphs') d.interim.monthlyCost = policy.pphs.rentRange['3R'][1] })}
+          options={[{ value: 'parents', label: 'Live with parents' }, { value: 'rent', label: 'Rent' }, { value: 'pphs', label: 'HDB rental (PPHS)' }]} />
+        {scenario.interim.mode !== 'parents' && (
           <div className="mt-3 max-w-xs">
-            <Field label="Monthly rent (paid in cash until keys)">
+            <Field label={scenario.interim.mode === 'pphs' ? 'Monthly PPHS rent (cash)' : 'Monthly rent (paid in cash until keys)'}
+              hint={scenario.interim.mode === 'pphs'
+                ? `Typical: 2-room ${policy.pphs.rentRange['2R'].map((x) => money(x)).join('–')}, 3-room ${policy.pphs.rentRange['3R'].map((x) => money(x)).join('–')}, 4-room ${policy.pphs.rentRange['4R'].map((x) => money(x)).join('–')}. From about ${policy.pphs.startMonthsAfterBooking} months after booking to ${policy.pphs.endMonthsAfterKeys + 1} months after keys, plus a refundable 1-month deposit and stamp fees.`
+                : undefined}>
               <MoneyInput value={scenario.interim.monthlyCost} onChange={(v) => update((d) => { d.interim.monthlyCost = v })} ariaLabel="Rent" />
             </Field>
           </div>

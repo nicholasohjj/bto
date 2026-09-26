@@ -1,5 +1,5 @@
 import type { Policy, Tranche } from '../config/policy'
-import { addMonths, ymToIndex } from './dates'
+import { addMonths, indexToYm, ymToIndex } from './dates'
 import { monthlyInstalment } from './loan'
 import { buyersStampDuty, legalFees, optionFee, round2 } from './stampDuty'
 import { tieredAmount } from './tiers'
@@ -457,16 +457,29 @@ export function buildSchedule(raw: Scenario, policy: Policy): Schedule {
     }
   })
 
-  // --- Interim housing: rent until the month before keys ---
-  if (scenario.interim.mode === 'rent' && scenario.interim.monthlyCost > 0) {
-    const from = ymToIndex(scenario.startMonth)
-    const to = ymToIndex(dates.keys)
+  // --- Interim housing: rent until the month before keys. A PPHS flat runs from ~2 months after booking to
+  // ~4 months after completion, with a refundable deposit and stamp/application fees at the start. ---
+  if (scenario.interim.mode !== 'parents' && scenario.interim.monthlyCost > 0) {
+    const pphs = scenario.interim.mode === 'pphs'
+    const pp = policy.pphs
+    const from = Math.max(ymToIndex(scenario.startMonth), pphs ? ymToIndex(dates.booking) + pp.startMonthsAfterBooking : -Infinity)
+    const to = ymToIndex(dates.keys) + (pphs ? pp.endMonthsAfterKeys + 1 : 0)
+    if (pphs && from < to) {
+      const rent = scenario.interim.monthlyCost
+      const once = (id: string, label: string, ym: YearMonth, amount: number, kind: CostKind) => obligations.push({
+        id, sourceId: 'rent', label, kind, ym, amount: round2(amount), funding: 'cashOnly', minCash: 0, grantFunded: 0,
+        payer: 'joint', housing: false, downpayment: false, delayable: false,
+      })
+      once('pphs-deposit', 'PPHS deposit (1 month’s rent, refunded when you move out)', indexToYm(from), rent, 'custom')
+      once('pphs-fees', 'PPHS stamp and application fees', indexToYm(from), rent * pp.termMonths * pp.stampDutyPct + pp.applicationFee, 'custom')
+      once('pphs-refund', 'PPHS deposit refunded', indexToYm(to), -rent, 'inflow')
+    }
     for (let i = from; i < to; i++) {
-      const ym = addMonths(scenario.startMonth, i - from)
+      const ym = indexToYm(i)
       obligations.push({
         id: `rent-${ym}`,
         sourceId: 'rent',
-        label: 'Rent (interim housing)',
+        label: pphs ? 'Rent (PPHS flat)' : 'Rent (interim housing)',
         kind: 'rent',
         ym,
         amount: round2(inflate(scenario.interim.monthlyCost, ym, scenario)),
