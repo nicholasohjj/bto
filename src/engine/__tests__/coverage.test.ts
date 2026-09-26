@@ -763,3 +763,16 @@ describe('buyers aged 55+', () => {
     expect(ids(() => {})).not.toContain('seniors-short-lease')
   })
 })
+
+describe('cost of pulling out, in cash shortfall warnings', () => {
+  const cashWarning = (f: (s: Scenario) => void) => runScenario(base(f)).warnings.find((w) => w.id.startsWith('cash-'))
+  it('after AFL: 5% of the price', () => {
+    // A big cash-only cost a year after AFL (Dec 2026), before keys (Dec 2029).
+    const w = cashWarning((s) => { s.costs.push({ id: 'x', label: 'Big bill', kind: 'custom', amount: 500000, auto: false, when: { date: '2027-12' }, funding: 'cashOnly', payer: 'joint' }) })
+    expect(w?.explanation).toMatch(/5% of the price \(\$24,000\)/) // price $480,000
+  })
+  it('between booking and AFL: the option fee', () => {
+    const w = cashWarning((s) => { s.costs.push({ id: 'x', label: 'Big bill', kind: 'custom', amount: 500000, auto: false, when: { date: '2026-08' }, funding: 'cashOnly', payer: 'joint' }) })
+    expect(w?.explanation).toMatch(/costs the option fee/)
+  })
+})

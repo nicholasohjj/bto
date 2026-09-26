@@ -190,6 +190,7 @@ Users can override any figure for a single scenario under **Advanced settings**.
 | Deferred Income Assessment: eligibility, 2.5% at AFL, income assessed ~3 months before completion, grant paid at keys | Verified (HDB "Annex A: Details on Deferred Income Assessment", 2024) |
 | DIA with a bank loan: 2.5% cash at AFL; keys 22.5% (≥ 2.5% cash), or 42.5% (≥ 7.5% cash) at 55% LTV | Verified (hdb.gov.sg Staggered Downpayment Scheme page, checked 2026-09-26) |
 | HDB application fee $10 (non-refundable, cash, at application) | Verified (hdb.gov.sg Plan your finances, checked 2026-09-26) |
+| Cancelling: option fee forfeited after booking; 5% of the price after signing the AFL (stamp duty refundable, legal fees not); 1-year wait — mentioned in cash-shortfall warnings and tips | Verified (hdb.gov.sg Cancellation of flat application, checked 2026-09-26) |
 | Caveat fee $64.45; first conveyancing tier $0.90 per $1,000 | Verified (cpf.gov.sg) |
 | HDB loan rate = CPF OA rate + 0.1% (2.5% + 0.1% = 2.6%) | Verified peg (hdb.gov.sg, checked 2026-09-26); OA rate 2.5% secondary |
 | Accrued interest = OA rate, monthly/compounded yearly | Secondary (CPF page for the method returned 404) |

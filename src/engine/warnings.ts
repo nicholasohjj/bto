@@ -205,7 +205,13 @@ export function buildWarnings(core: CoreResult, extras: WarningExtras = {}): War
         (causes.length ? ` Payments that month: ${causes.join(', ')}.` : '') +
         (allCashOnly
           ? ' These can only be paid in cash, so CPF can’t help here.'
-          : ' Part of this could be paid from CPF instead of cash.'),
+          : ' Part of this could be paid from CPF instead of cash.') +
+        // Pulling out isn't free once you've booked: worth knowing before you sign.
+        (ep.start > s.flat.dates.afl && ep.start <= s.flat.dates.keys
+          ? ` Pulling out after signing the AFL costs 5% of the price (${money(core.policy.fees.cancelAfterAflPct * core.schedule.loan.effectivePrice)}) and a 1-year wait, so sort this out before you sign.`
+          : ep.start >= s.flat.dates.booking && ep.start <= s.flat.dates.afl && s.flat.dates.booking < s.flat.dates.afl
+            ? ' Cancelling after booking costs the option fee and a 1-year wait before you can apply again.'
+            : ''),
       fixes: i < 3 ? cashFixes(core, ep, original) : [],
     })
   }
