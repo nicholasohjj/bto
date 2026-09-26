@@ -297,6 +297,8 @@ export interface LoanInfo {
   msrLimit: number
   tdsrLimit: number
   stressInstalment: number
+  /** Rate the MSR/TDSR test uses: the loan rate or the stress floor, whichever is higher. */
+  stressRate: number
   grossIncomeAtAssessment: number
   /** Month whose income the loan (MSR/TDSR) is assessed on. */
   assessedAt: YearMonth

@@ -312,11 +312,11 @@ export const DEFAULT_POLICY: Policy = {
     // reimbursed from CPF OA. Delay is an estimate. UNVERIFIED.
     bsdReimburseMonths: 2,
   },
-  // Mortgage Servicing Ratio cap (HDB flats & ECs): 30% of gross monthly income.
-  // Source: MAS "Macroprudential policies in Singapore" (search snippet). SECONDARY 2026-09-23.
+  // Mortgage Servicing Ratio cap: 30% of monthly income, for HDB and bank loans on HDB flats.
+  // Source: hdb.gov.sg "Choose your housing loan" (text supplied by the user). VERIFIED 2026-09-26.
   msr: 0.3,
-  // Total Debt Servicing Ratio cap: 55% of gross monthly income (bank loans).
-  // Source: MAS "Calculating TDSR" (search snippet). SECONDARY 2026-09-23.
+  // Total Debt Servicing Ratio cap: 55% of monthly income, bank loans only; credit card bills, car
+  // loans and housing loans count. Source: hdb.gov.sg "Choose your housing loan". VERIFIED 2026-09-26.
   tdsr: 0.55,
   // Buyer's Stamp Duty, residential, for acquisitions on/after 15 Feb 2023.
   // Rounded down to the nearest dollar. Payable within 14 days of signing (the AFL).
@@ -553,8 +553,8 @@ export const POLICY_META: Record<string, PolicyMeta> = {
   'bankLoan.minCashPct': { label: 'Bank loan min cash downpayment', unit: 'pct', status: 'verified', source: 'hdb.gov.sg Housing loan from FIs (Sep 2026)' },
   'bankLoan.stressRate': { label: 'Bank loan MSR/TDSR rate floor', unit: 'pct', status: 'secondary', source: 'MAS release, Sep 2022' },
   'bankLoan.maxTenureYears': { label: 'Bank loan max tenure (HDB flat)', unit: 'years', status: 'verified', source: 'hdb.gov.sg Housing loan from FIs (Sep 2026)' },
-  msr: { label: 'Mortgage Servicing Ratio cap', unit: 'pct', status: 'secondary', source: 'MAS' },
-  tdsr: { label: 'Total Debt Servicing Ratio cap', unit: 'pct', status: 'secondary', source: 'MAS' },
+  msr: { label: 'Mortgage Servicing Ratio cap', unit: 'pct', status: 'verified', source: 'hdb.gov.sg Choose your housing loan (Sep 2026)' },
+  tdsr: { label: 'Total Debt Servicing Ratio cap (bank loans)', unit: 'pct', status: 'verified', source: 'hdb.gov.sg Choose your housing loan (Sep 2026)' },
   bsdTiers: { label: "Buyer's Stamp Duty tiers", unit: 'pct', status: 'verified', source: 'iras.gov.sg BSD page' },
   optionFee: { label: 'Option fee by flat type', unit: 'sgd', status: 'verified', source: 'HDB BTO Annex C, Oct 2024' },
   'downpayment.hdb.standard': { label: 'HDB loan downpayment (standard)', unit: 'pct', status: 'verified', source: 'HDB BTO Annex C, Oct 2024' },

@@ -508,6 +508,7 @@ export function buildSchedule(raw: Scenario, policy: Policy): Schedule {
     msrLimit: policy.msr,
     tdsrLimit: policy.tdsr,
     stressInstalment: round2(stressInstalment),
+    stressRate,
     grossIncomeAtAssessment: round2(income),
     assessedAt,
     maxLoanUnderMsr: Math.floor(maxLoanUnderMsr),

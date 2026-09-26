@@ -4,6 +4,7 @@ import { addMonths, formatYm } from '../engine/dates'
 import { jobLossImpact, withJobLoss } from '../engine/whatIf'
 import { affordablePrice, type AffordLimit } from '../engine/afford'
 import { money } from '../engine/format'
+import { monthlyInstalment } from '../engine/loan'
 import type { Scenario, SimResult, Warning } from '../engine/types'
 import { CompareChart } from './lazyCharts'
 import { Button, Card, InfoTip, Select, T, Toggle } from './controls'
@@ -32,6 +33,30 @@ export function SummaryCards({ result }: { result: SimResult }) {
       <Stat label="Monthly mortgage" value={money(s.monthlyMortgage)} sub={`${money(result.loan.loanAmount)} over ${result.loan.tenureYears} yrs`} />
       <Stat label="Leanest cash month" value={money(s.leanestCash.amount)} sub={formatYm(s.leanestCash.ym)} tip="leanest" tone={s.leanestCash.amount < 0 ? 'bad' : undefined} />
       <Stat label="Buffer at keys" value={money(s.bufferAtKeys.cash)} sub={`cash · + ${money(s.bufferAtKeys.oa)} CPF OA`} tip="buffer" tone={s.bufferAtKeys.cash < 0 ? 'bad' : undefined} />
+    </div>
+  )
+}
+
+// ---------------- Loan interest ----------------
+
+/**
+ * Total interest at today's rate, and what a loan 5 years shorter would do: HDB advises borrowing
+ * less and for shorter to save interest. Ignores later rate changes and prepayments.
+ */
+function InterestLine({ loan: l }: { loan: SimResult['loan'] }) {
+  if (l.loanAmount <= 0 || l.tenureYears <= 0) return null
+  const interest = (years: number, inst: number) => inst * Math.round(years * 12) - l.loanAmount
+  const total = interest(l.tenureYears, l.monthlyInstalment)
+  const shorter = Math.max(10, l.tenureYears - 5)
+  const inst2 = monthlyInstalment(l.loanAmount, l.rate, shorter)
+  const tooMuch = l.grossIncomeAtAssessment > 0 && monthlyInstalment(l.loanAmount, l.stressRate, shorter) / l.grossIncomeAtAssessment > l.msrLimit + 1e-9
+  return (
+    <div className="mt-1 text-xs text-ink-2">
+      Total interest about <span className="tnum text-ink">{money(total)}</span> at today’s rate.
+      {shorter < l.tenureYears && (
+        <> Over {shorter} years: <span className="tnum">{money(inst2 - l.monthlyInstalment)}</span>/mo more, <span className="tnum text-good-ink">{money(total - interest(shorter, inst2))}</span> less interest
+          {tooMuch ? <span className="text-serious"> (above the {Math.round(l.msrLimit * 100)}% income limit)</span> : ''}.</>
+      )}
     </div>
   )
 }
@@ -217,6 +242,7 @@ export function LoanPanel({ result, scenario }: { result: SimResult; scenario: S
           )}
           {l.effectivePrice !== l.price && <div className="mt-0.5 text-xs text-ink-2">Price incl. citizen + PR premium: {money(l.effectivePrice)}</div>}
           <div className="mt-1 text-xs text-ink-2">Downpayment {money(l.downpaymentTotal)} ({Math.round((1 - l.ltvUsed) * 100)}%){l.grantsTotal > 0 && <> · grants {money(l.grantsTotal)}</>}</div>
+          <InterestLine loan={l} />
         </div>
         <div>
           <div className="flex items-center justify-between text-xs text-ink-2">

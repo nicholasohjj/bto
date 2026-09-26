@@ -158,6 +158,7 @@ src/
 - **Mortgage.** An HDB loan's first instalment is on the 1st of the 2nd month after keys (keys in March → 1 May); a bank loan's the month after keys. It is paid from OA first, then cash (you can change this). HDB partial repayments must be at least $5,000 in $1,000 steps (paying the loan off can be any amount); other amounts are flagged.
 - **Joint payments** are split by the joint-split slider. With "Pool our cash" on, one partner's cash covers the other's shortfall.
 - **HDB's check before keys.** For HDB loans on uncompleted flats (without DIA), HDB re-checks your finances nearer completion and may reduce the loan. The app checks the instalment at HDB's 3% floor against income about 3 months before keys and warns if it's over 30% (e.g. after a job loss or study).
+- **Interest.** The loan panel shows total interest at today's rate and what a loan 5 years shorter would cost per month and save in interest (flagged if it breaks the 30% limit), following HDB's advice to borrow less and for shorter.
 - **MSR/TDSR.**
   - These are tested at the higher of your loan rate and the stress-test rate (3% for HDB loans, 4% for bank loans).
   - Income is taken at AFL (or about 3 months before keys with DIA). TDSR is only checked for bank loans.
@@ -193,7 +194,8 @@ Users can override any figure for a single scenario under **Advanced settings**.
 | Accrued interest = OA rate, monthly/compounded yearly | Secondary (CPF page for the method returned 404) |
 | Staggered downpayment: HDB loan 5% at AFL / 20% at keys; bank loan 10% at AFL (≥ 5% cash) / 15%, or 10% cash / 35% at 55% LTV; eligibility (HFE by younger's 30th birthday, ≤ 5-room, right-sizers ≤ 3-room) | Verified (hdb.gov.sg Staggered Downpayment Scheme page, checked 2026-09-26) |
 | MSR 30% and 3% floor for HDB loans | Verified (hdb.gov.sg HDB housing loan page, checked 2026-09-26) |
-| TDSR 55%, 4% stress rate for bank loans | Secondary (MAS site was down) |
+| MSR 30% (HDB and bank loans); TDSR 55% for bank loans (all debts count) | Verified (hdb.gov.sg Choose your housing loan, checked 2026-09-26) |
+| 4% stress rate for bank loans | Secondary (MAS site was down) |
 | Fire insurance premiums | Secondary |
 | HDB loan tenure: shortest of 25 yrs, 65 − average age, lease − 20 | Verified (hdb.gov.sg HDB housing loan page, checked 2026-09-26) |
 | Bank loan: up to 30 years; 75% LTV; at least 5% cash; Letter of Offer before AFL; private lawyer; no refinancing to HDB | Verified (hdb.gov.sg Housing loan from FIs, checked 2026-09-26) |
