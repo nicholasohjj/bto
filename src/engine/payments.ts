@@ -2,6 +2,7 @@ import type { Policy, Tranche } from '../config/policy'
 import { addMonths, ymToIndex } from './dates'
 import { monthlyInstalment } from './loan'
 import { buyersStampDuty, legalFees, optionFee, round2 } from './stampDuty'
+import { tieredAmount } from './tiers'
 import type { CostItem, CostKind, FundingRule, LoanInfo, Milestone, Payer, PartnerId, Scenario, When, YearMonth } from './types'
 import { ageInMonths, salaryAt } from './cpf'
 import { assessEligibility, type Eligibility } from './eligibility'
@@ -201,9 +202,23 @@ export function autoAmount(item: CostItem, scenario: Scenario, policy: Policy, l
       return policy.fees.caveatFee
     case 'fire':
       return policy.fees.fireInsurance5yr[type]
+    case 'resaleLevy':
+      return resaleLevy(scenario, policy)
+    case 'scc':
+      return policy.runningCosts.sccMonthly[type]
+    case 'propertyTax':
+      return Math.round(tieredAmount(policy.runningCosts.annualValue[type], policy.runningCosts.propertyTaxTiers) * 100) / 100
     default:
       return item.amount
   }
+}
+
+/** Resale levy due on this purchase: second-timers only, by their first subsidised flat. */
+export function resaleLevy(scenario: Scenario, policy: Policy): number {
+  const f = scenario.flat
+  if ((f.household ?? 'firstTimers') === 'firstTimers') return 0
+  if (!f.firstSubsidisedFlat || f.firstSubsidisedFlat === 'none') return 0
+  return policy.resaleLevy[f.firstSubsidisedFlat] * (f.halfResaleLevy ? 0.5 : 1)
 }
 
 /** Which downpayment table applies. DIA takes precedence over the staggered toggle. */
@@ -354,7 +369,7 @@ export function buildSchedule(raw: Scenario, policy: Policy): Schedule {
       obligations.push({
         id: times > 1 ? `${item.id}#${i + 1}` : item.id,
         sourceId: item.id,
-        label: times > 1 ? `${item.label} (${i + 1}/${times})` : bsdCashFirst ? `${item.label} (paid in cash, CPF reimburses later)` : item.label,
+        label: times > 1 && every > 1 ? `${item.label} (${i + 1}/${times})` : bsdCashFirst ? `${item.label} (paid in cash, CPF reimburses later)` : item.label,
         kind: item.kind,
         ym,
         amount: round2(amt),

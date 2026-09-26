@@ -1,5 +1,5 @@
 import type { Scenario } from '../engine/types'
-import { newId, seedDiaScenario, seedOpenBookingScenario, seedScenario, seedSingleScenario } from './defaults'
+import { newId, seedDiaScenario, seedOpenBookingScenario, seedScenario, seedSingleScenario, upgradeCosts } from './defaults'
 
 const KEY = 'bto-money-timeline:v1'
 
@@ -40,7 +40,7 @@ export function loadState(): AppState {
     if (!raw) return initialState()
     const parsed = JSON.parse(raw) as AppState
     if (!Array.isArray(parsed.scenarios) || parsed.scenarios.length === 0) return initialState()
-    const valid = parsed.scenarios.filter(isScenario)
+    const valid = parsed.scenarios.filter(isScenario).map(upgradeCosts)
     if (!valid.length) return initialState()
     const activeId = valid.some((s) => s.id === parsed.activeId) ? parsed.activeId : valid[0].id
     return { ...initialState(), ...parsed, scenarios: valid, activeId, compareIds: (parsed.compareIds ?? []).filter((id) => valid.some((s) => s.id === id)) }
@@ -79,7 +79,7 @@ export function importJson(text: string, existing: Scenario[]): Scenario[] {
   if (!scenarios.length) throw new Error('No scenarios found in this file.')
   const taken = new Set(existing.map((s) => s.id))
   return scenarios.map((s) => {
-    const copy = structuredClone(s)
+    const copy = upgradeCosts(structuredClone(s))
     if (taken.has(copy.id)) copy.id = newId('sc')
     taken.add(copy.id)
     copy.policyOverrides ??= {}

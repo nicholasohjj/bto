@@ -20,7 +20,28 @@ export function defaultCosts(): CostItem[] {
     { id: 'reno', label: 'Renovation', kind: 'reno', amount: 40000, auto: false, when: { milestone: 'keys', offsetMonths: 1 }, funding: 'cashOnly', payer: 'joint', delayable: true },
     { id: 'furniture', label: 'Furniture & appliances', kind: 'furniture', amount: 15000, auto: false, when: { milestone: 'keys', offsetMonths: 2 }, funding: 'cashOnly', payer: 'joint', delayable: true },
     { id: 'moving', label: 'Moving costs', kind: 'moving', amount: 1000, auto: false, when: { milestone: 'keys', offsetMonths: 3 }, funding: 'cashOnly', payer: 'joint', delayable: true },
+    ...runningCostDefaults(),
   ]
+}
+
+/** Default costs added in version 2 of the default cost list. */
+export const COST_DEFAULTS_VERSION = 2
+export function runningCostDefaults(): CostItem[] {
+  return [
+    // $0 unless you're second-timers and have picked your first subsidised flat (Flat section).
+    { id: 'resale-levy', label: 'Resale levy (second-timers)', kind: 'resaleLevy', amount: 0, auto: true, when: { milestone: 'keys' }, funding: 'cashOnly', payer: 'joint' },
+    // Monthly from key collection, for 30 years like the Home Protection Scheme.
+    { id: 'scc', label: 'Service & conservancy charges (monthly)', kind: 'scc', amount: 0, auto: true, when: { milestone: 'keys' }, funding: 'cashOnly', payer: 'joint', recurrence: { everyMonths: 1, times: 360 } },
+    // Billed yearly; the first full bill is assumed a year after keys.
+    { id: 'property-tax', label: 'Property tax (yearly)', kind: 'propertyTax', amount: 0, auto: true, when: { milestone: 'keys', offsetMonths: 12 }, funding: 'cashOnly', payer: 'joint', recurrence: { everyMonths: 12, times: 30 } },
+  ]
+}
+
+/** Bring a saved plan's cost list up to date: add default items it predates (once). */
+export function upgradeCosts(s: Scenario): Scenario {
+  if ((s.costDefaultsVersion ?? 1) >= COST_DEFAULTS_VERSION) return s
+  const have = new Set(s.costs.map((c) => c.kind))
+  return { ...s, costDefaultsVersion: COST_DEFAULTS_VERSION, costs: [...s.costs, ...runningCostDefaults().filter((c) => !have.has(c.kind))] }
 }
 
 export function blankPartner(id: 'A' | 'B', start: YearMonth): Partner {
@@ -44,6 +65,7 @@ export function newScenario(name = 'Our BTO plan', start: YearMonth = currentYm(
   const application = addMonths(start, 1)
   return {
     schemaVersion: 1,
+    costDefaultsVersion: COST_DEFAULTS_VERSION,
     id: newId('sc'),
     name,
     startMonth: start,

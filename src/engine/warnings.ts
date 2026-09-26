@@ -489,6 +489,17 @@ export function buildWarnings(core: CoreResult, extras: WarningExtras = {}): War
     })
   }
 
+  // --- Resale levy (second-timers) ---
+  const levyItem = s.costs.find((c) => c.kind === 'resaleLevy')
+  if ((s.flat.household ?? 'firstTimers') !== 'firstTimers' && levyItem && levyItem.auto !== false && !s.flat.firstSubsidisedFlat) {
+    warnings.push({
+      id: 'resale-levy-unset', severity: 'warning', ym: s.flat.dates.keys,
+      title: 'Resale levy not included yet',
+      explanation: `Second-timers buying another subsidised flat usually pay a resale levy in cash (${money(Math.min(...Object.values(core.policy.resaleLevy)))} to ${money(Math.max(...Object.values(core.policy.resaleLevy)))}), set by the type of their first subsidised flat.`,
+      fixes: ['Pick your first subsidised flat in the Flat section (or “No subsidy before” if you never had one).'],
+    })
+  }
+
   // --- Staggered Downpayment Scheme eligibility (HDB tells you at booking; DIA takes precedence) ---
   if (s.financing.staggered && !s.financing.deferredIncomeAssessment && !isCompleted(s)) {
     const sp = core.policy.staggered

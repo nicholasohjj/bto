@@ -1,4 +1,4 @@
-import type { Policy } from '../config/policy'
+import type { FlatType, Policy } from '../config/policy'
 import { ageInMonths, estimatedLivingCosts, prYear, ratesFor } from '../engine/cpf'
 import { assessmentMonth, autoAmount, downpaymentSchedule, effectiveLtv, grantAmount, loanChangesOf, maxLtvFor, voluntaryList } from '../engine/payments'
 import { assessEligibility } from '../engine/eligibility'
@@ -329,6 +329,24 @@ export function FlatEditor({ scenario, update, policy }: { scenario: Scenario; u
               <Toggle label="We now live in public rental or own a 2-room flat" tip="stepUp" checked={!!f.fromRentalOr2Room}
                 onChange={(v) => update((d) => { d.flat.fromRentalOr2Room = v })} />
             </div>
+          )}
+          {(f.household ?? 'firstTimers') !== 'firstTimers' && (
+            <>
+              <div className="col-span-2 md:col-span-1"><Field label="First subsidised flat (sets the resale levy)" tip="resaleLevy">
+                <Select value={f.firstSubsidisedFlat ?? 'unset'} ariaLabel="First subsidised flat"
+                  onChange={(v) => update((d) => { d.flat.firstSubsidisedFlat = v === 'unset' ? undefined : v })}
+                  options={[
+                    { value: 'unset', label: 'Choose…' },
+                    ...FLAT_TYPES.map((t) => ({ value: t.value, label: `${t.label} (${money(policy.resaleLevy[t.value])})` })),
+                    { value: 'EC', label: `Executive condo (${money(policy.resaleLevy.EC)})` },
+                    { value: 'none', label: 'No subsidy before (no levy)' },
+                  ] as { value: FlatType | 'EC' | 'none' | 'unset'; label: string }[]} />
+              </Field></div>
+              <div className="col-span-2 flex items-end">
+                <Toggle label="Only half the levy (e.g. divorced, now buying with a first-timer)" checked={!!f.halfResaleLevy}
+                  onChange={(v) => update((d) => { d.flat.halfResaleLevy = v })} />
+              </div>
+            </>
           )}
         </div>
         <EligibilitySummary el={el} />
@@ -740,13 +758,15 @@ export function CostsEditor({ scenario, update, policy }: { scenario: Scenario; 
 }
 
 const KIND_TIP: Partial<Record<CostItem['kind'], Parameters<typeof InfoTip>[0]['term']>> = {
-  optionFee: 'optionFee', bsd: 'BSD', legal: 'legal', hps: 'HPS', fire: 'fire',
+  optionFee: 'optionFee', bsd: 'BSD', legal: 'legal', hps: 'HPS', fire: 'fire', resaleLevy: 'resaleLevy', scc: 'scc', propertyTax: 'propertyTax',
 }
+/** Cost kinds whose amount the app can work out from the plan and policy. */
+const AUTO_KINDS: CostItem['kind'][] = ['optionFee', 'bsd', 'legal', 'survey', 'caveat', 'fire', 'resaleLevy', 'scc', 'propertyTax']
 
 function CostRow({ item, computed, onChange, onRemove, partnerNames, inflow = false }: {
   item: CostItem; computed: number; onChange: (fn: (c: CostItem) => void) => void; onRemove?: () => void; partnerNames: [string, string]; inflow?: boolean
 }) {
-  const isAuto = item.auto !== false && ['optionFee', 'bsd', 'legal', 'survey', 'caveat', 'fire'].includes(item.kind)
+  const isAuto = item.auto !== false && AUTO_KINDS.includes(item.kind)
   const whenMode = 'date' in item.when ? 'date' : 'milestone'
   return (
     <Card className="!p-3">
@@ -768,7 +788,7 @@ function CostRow({ item, computed, onChange, onRemove, partnerNames, inflow = fa
           ) : (
             <div className="flex items-center gap-2">
               <div className="flex-1"><NumberInput prefix={inflow ? '+$' : '$'} min={inflow ? 0 : undefined} value={item.amount} onChange={(v) => onChange((d) => { d.amount = v })} ariaLabel={`${item.label} amount`} /></div>
-              {['optionFee', 'bsd', 'legal', 'survey', 'caveat', 'fire'].includes(item.kind) && (
+              {AUTO_KINDS.includes(item.kind) && (
                 <Button variant="ghost" className="!px-2 text-xs" onClick={() => onChange((d) => { d.auto = true })}>Auto</Button>
               )}
             </div>

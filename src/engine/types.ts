@@ -109,6 +109,13 @@ export interface Flat {
   completed?: boolean
   /** Remaining lease in years when you buy (default 99). Affects CPF use and HDB loan limit. */
   remainingLeaseYears?: number
+  /**
+   * Second-timers: the type of the first subsidised flat (sets the resale levy).
+   * 'none' = never had a housing subsidy, so no levy. Unset = not chosen yet.
+   */
+  firstSubsidisedFlat?: FlatType | 'EC' | 'none'
+  /** Only half the resale levy is due (e.g. divorced second-timer buying with a first-timer). */
+  halfResaleLevy?: boolean
 }
 
 export interface Financing {
@@ -179,6 +186,9 @@ export type CostKind =
   | 'reno'
   | 'furniture'
   | 'moving'
+  | 'resaleLevy'
+  | 'scc'
+  | 'propertyTax'
   | 'custom'
   /** Money coming in (gift, car sale…): amount entered as positive. */
   | 'inflow'
@@ -208,6 +218,8 @@ export type PolicyOverrides = Record<string, number>
 
 export interface Scenario {
   schemaVersion: 1
+  /** Version of the default cost list this plan has (2 added resale levy, S&CC, property tax). */
+  costDefaultsVersion?: number
   id: string
   name: string
   /** Who's buying: a couple (default), one single, or two singles (Joint Singles Scheme). */

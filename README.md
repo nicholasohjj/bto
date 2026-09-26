@@ -121,6 +121,8 @@ src/
   - A bank loan needs the bank's Letter of Offer before AFL (shown under Loan type).
 - **CPF limit for the flat.** With a bank loan, CPF used for the flat is capped at the price. It goes up to 120% if you tick that you've set aside the Basic Retirement Sum. After that, the mortgage is paid in cash. HDB loans have no cap.
 - **Stamp duty with a bank loan.** It's paid in cash at AFL and reimbursed from CPF 2 months later (the CPF share follows the slider).
+- **Resale levy** (Flat section, second-timers): pick your first subsidised flat and the levy is added at key collection, in cash (it can't be paid with CPF or a loan). $15,000 (2-room) to $55,000 (EC); a "half levy" toggle covers e.g. a divorced second-timer buying with a first-timer. If you'll sell your current flat after keys, it comes out of the sale proceeds instead: edit or remove the item. Second-timers who haven't picked are warned.
+- **Running costs after keys** (Costs section): service & conservancy charges every month (one town council's Singapore Citizen owner-occupier rate by flat type; rebates not included) and property tax every year from 12 months after keys (owner-occupier bands on an estimated annual value, editable under Advanced settings; $0 for most flats). Both are cash. Plans saved before these items existed get them added once, on load or import (`upgradeCosts`).
 - **Money coming in** (Costs section): gifts, hongbao, car sale and similar. Entered as positive amounts and added to the chosen partner's (or both partners') cash in that month. Not counted as payments.
 - **Assumptions** (Costs section).
   - Interest on cash, compounded monthly.
@@ -206,6 +208,10 @@ Users can override any figure for a single scenario under **Advanced settings**.
 | Bank loan LTV 55% if tenure > 25 yrs or past age 65; 10% cash | Secondary (MAS explainer snippet) |
 | HDB loan must end by age 65 | **Not verified** |
 | Bank loan: BSD reimbursed from CPF after 2 months | **Not verified** (estimate) |
+| Resale levy $15k / $30k / $40k / $45k / $50k / $55k (2-room … EC); cash only; half in some cases | Secondary (2026 guides agree; hdb.gov.sg not read). 3Gen assumed = 5-room: **not verified** |
+| S&CC per month (Singapore Citizen owner-occupier) | Verified for one town council (Bishan-Toa Payoh, 1 Jul 2024); varies by town |
+| Owner-occupier property tax bands (0% to $12k AV, then 4%…) | Secondary (IRAS page needs JavaScript; rates from guides) |
+| Annual values of HDB flats by type | **Not verified** (guides disagree; may be low for 2026) |
 | Completed SBF / open-booking flats: AFL + keys within 9 months of booking | Secondary (hdb.gov.sg key collection page, snippet) |
 | Open booking: first-come-first-served, book from next working day | Secondary (hdb.gov.sg snippet) |
 | Age-95 lease rule: pro-rated CPF use / HDB LTV; no CPF ≤ 20 yrs; HDB tenure ≤ lease − 20 | Secondary (MND 2019 rules, snippets) |

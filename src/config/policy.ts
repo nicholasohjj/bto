@@ -143,6 +143,17 @@ export interface Policy {
     incomeCeilingJointSingles: number
     singlesMinAge: number
   }
+  /** Second-timers buying another subsidised flat: fixed levy by the type of their first subsidised flat. */
+  resaleLevy: Record<FlatType | 'EC', number>
+  /** Running costs after key collection. */
+  runningCosts: {
+    /** Monthly service & conservancy charges (Singapore Citizen owner-occupier rate). */
+    sccMonthly: Record<FlatType, number>
+    /** Owner-occupier property tax bands on the flat's annual value. */
+    propertyTaxTiers: Tier[]
+    /** Estimated annual value by flat type (IRAS sets the real one after completion). */
+    annualValue: Record<FlatType, number>
+  }
   fees: {
     conveyancingTiers: Tier[]
     conveyancingRoundTo: number
@@ -403,6 +414,36 @@ export const DEFAULT_POLICY: Policy = {
     // Flexi only (any location). Source: HDB via guides (search snippets). SECONDARY 2026-09-25.
     singlesMinAge: 35,
   },
+  // Resale levy (first subsidised flat sold on/after 3 Mar 2006): fixed by its flat type.
+  // Cash only (or deducted from the sale proceeds); no CPF or housing loan. Half in some cases
+  // (e.g. divorced second-timer buying with a first-timer; singles).
+  // Source: HDB figures via nexdoor.sg and several 2026 guides (all agree). SECONDARY 2026-09-26.
+  // 3Gen isn't listed anywhere; assumed same as 5-room. UNVERIFIED.
+  resaleLevy: { '2R': 15000, '3R': 30000, '4R': 40000, '5R': 45000, '3Gen': 45000, Exec: 50000, EC: 55000 },
+  runningCosts: {
+    // Reduced S&CC for Singapore Citizen owner-occupiers, per month incl. GST. Varies by town
+    // council; these are Bishan-Toa Payoh TC's rates from 1 Jul 2024 (3Gen = Multi-Gen Type B/C).
+    // S&CC rebates (1.5–3.5 months a year for eligible households) are not modelled.
+    // Source: btptc.org.sg "Service & Conservancy Charges". VERIFIED (one town council) 2026-09-26.
+    sccMonthly: { '2R': 36.9, '3R': 53.8, '4R': 71.6, '5R': 90, '3Gen': 124.9, Exec: 124.9 },
+    // Owner-occupier residential property tax from 1 Jan 2025: 0% on the first $12,000 of annual
+    // value, 4% to $40,000, 6% to $50,000, 10% to $75,000, 14% to $85,000, 20% to $100,000,
+    // 26% to $140,000, 32% above. Source: IRAS rates via lovelyhomes.com.sg (IRAS page needs JS). SECONDARY 2026-09-26.
+    propertyTaxTiers: [
+      { width: 12000, rate: 0 },
+      { width: 28000, rate: 0.04 },
+      { width: 10000, rate: 0.06 },
+      { width: 25000, rate: 0.1 },
+      { width: 10000, rate: 0.14 },
+      { width: 15000, rate: 0.2 },
+      { width: 40000, rate: 0.26 },
+      { width: Infinity, rate: 0.32 },
+    ],
+    // Typical annual values of HDB flats (upper end of published 2026 ranges). Guides disagree and
+    // IRAS says 3-room+ owners pay a little tax in 2026, so these may be low. Executive is a guess.
+    // Source: lovelyhomes.com.sg / propkaki.com. UNVERIFIED 2026-09-26.
+    annualValue: { '2R': 6600, '3R': 9600, '4R': 11400, '5R': 14400, '3Gen': 14400, Exec: 15600 },
+  },
   fees: {
     // HDB conveyancing fee (when HDB acts for you): per $1,000 of price, tiered, rounded
     // up to the next $1,000, plus GST. First tier ($0.90 per $1,000 on first $30,000)
@@ -471,6 +512,10 @@ export const POLICY_META: Record<string, PolicyMeta> = {
   'lease.coverToAge': { label: 'Lease must cover youngest buyer to age', unit: 'years', status: 'secondary', source: 'MND 2019 CPF/HDB loan rules (snippet)' },
   'lease.minYearsForCpf': { label: 'No CPF / HDB loan if remaining lease ≤', unit: 'years', status: 'secondary', source: 'MND 2019 CPF/HDB loan rules (snippet)' },
   'lease.completedKeysWithinMonths': { label: 'Completed flats: keys within (months of booking)', unit: 'months', status: 'secondary', source: 'hdb.gov.sg Key Collection (snippet)' },
+  'resaleLevy': { label: 'Resale levy by first subsidised flat', unit: 'sgd', status: 'secondary', source: 'HDB figures via 2026 guides' },
+  'runningCosts.sccMonthly': { label: 'Service & conservancy charges per month', unit: 'sgd', status: 'verified', source: 'Bishan-Toa Payoh TC (varies by town council)' },
+  'runningCosts.annualValue': { label: 'Annual value estimate (for property tax)', unit: 'sgd', status: 'unverified', source: '2026 guides; IRAS sets yours after completion' },
+  'runningCosts.propertyTaxTiers': { label: 'Owner-occupier property tax bands', unit: 'sgd', status: 'secondary', source: 'IRAS rates from 1 Jan 2025, via guides' },
   'staggered.maxYoungerAgeYears': { label: 'Staggered downpayment: younger applicant aged ≤ at HFE', unit: 'years', status: 'verified', source: 'hdb.gov.sg Staggered Downpayment Scheme page (Sep 2026)' },
   'dia.maxAgeYears': { label: 'DIA: at least one applicant aged ≤', unit: 'years', status: 'verified', source: 'HDB DIA Annex A' },
   'dia.assessmentMonthsBeforeKeys': { label: 'DIA: income assessed months before keys', unit: 'months', status: 'verified', source: 'HDB DIA Annex A' },
