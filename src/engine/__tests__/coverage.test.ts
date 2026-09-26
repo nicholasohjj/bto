@@ -608,6 +608,7 @@ describe('turning 55 while CPF pays the loan', () => {
     const [w] = ids((s) => { s.partners[1].birthYearMonth = '1975-06' }) // 55 in Jun 2030, keys Dec 2029
     expect(w.severity).toBe('warning')
     expect(w.title).toMatch(/turns 55 in Jun 2030/)
+    expect(w.fixes[0]).toMatch(/reserve your OA savings.*from Dec 2029/)
   })
   it('a note if it happens later but before the loan ends', () => {
     const [w] = ids((s) => { s.partners.forEach((p) => { p.birthYearMonth = '1985-01' }) })

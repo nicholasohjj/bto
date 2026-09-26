@@ -537,7 +537,10 @@ export function buildWarnings(core: CoreResult, extras: WarningExtras = {}): War
         explanation:
           `At 55, CPF opens a Retirement Account and moves your Special Account, then Ordinary Account savings into it, up to the Full Retirement Sum (${money(core.policy.cpf.fullRetirementSum)}). ` +
           `This app doesn’t model that move${inPlan ? ', so the CPF OA shown from that month may be too high' : ''}. Your OA contributions after 55 can still pay the loan.`,
-        fixes: ['Plan to pay more of the instalment in cash after 55, or prepay part of the loan with OA before then.'],
+        fixes: [
+          `Apply to CPF to reserve your OA savings for housing payments, within the 6 months before turning 55 (from ${formatYm(addMonths(turning.at, -6))}). They then stay in OA instead of moving to the Retirement Account. Not needed if your Special Account already meets the Full Retirement Sum.`,
+          'Or plan to pay more of the instalment in cash after 55, or prepay part of the loan with OA before then.',
+        ],
       })
     }
   }

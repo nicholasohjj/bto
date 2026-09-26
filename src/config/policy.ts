@@ -254,6 +254,9 @@ export const DEFAULT_POLICY: Policy = {
     // savings into it to meet the Full Retirement Sum. After 55, new OA contributions can still pay
     // the housing loan. Source: hdb.gov.sg "CPF rules after 55" (text supplied by the user, VERIFIED
     // 2026-09-26); FRS = 2 × BRS for the 2026 cohort (SECONDARY). Not simulated: the app doesn't track SA.
+    // You can apply to reserve OA savings for housing payments within 6 months before turning 55, so they
+    // aren't moved to the RA (not needed if SA meets the FRS or the loan is repaid).
+    // Source: cpf.gov.sg "Reserve Ordinary Account savings for housing payments". VERIFIED 2026-09-26.
     fullRetirementSum: 220400,
     // CPF Annual Limit: mandatory + voluntary contributions per calendar year ≤ $37,740.
     // Voluntary top-ups are allocated to OA/SA/MA using the normal allocation rates.
