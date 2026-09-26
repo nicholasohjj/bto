@@ -126,7 +126,7 @@ src/
 - **CPF limit for the flat.** With a bank loan, CPF used for the flat is capped at the price. It goes up to 120% if you tick that you've set aside the Basic Retirement Sum. After that, the mortgage is paid in cash. HDB loans have no cap.
 - **Stamp duty with a bank loan.** It's paid in cash at AFL and reimbursed from CPF 2 months later (the CPF share follows the slider).
 - **Resale levy** (Flat section, second-timers): pick your first subsidised flat and the levy is added at key collection, in cash (it can't be paid with CPF or a loan). $15,000 (2-room) to $55,000 (EC); a "half levy" toggle covers e.g. a divorced second-timer buying with a first-timer. If you'll sell your current flat after keys, it comes out of the sale proceeds instead: edit or remove the item. Second-timers who haven't picked are warned.
-- **Running costs after keys** (Costs section): service & conservancy charges every month (one town council's Singapore Citizen owner-occupier rate by flat type; rebates not included) and property tax every year from 12 months after keys (owner-occupier bands on an estimated annual value, editable under Advanced settings; $0 for most flats). Both are cash. Plans saved before these items existed get them added once, on load or import (`upgradeCosts`).
+- **Running costs after keys** (Costs section): service & conservancy charges every month (one town council's Singapore Citizen owner-occupier rate by flat type; rebates not included) and property tax every year from 12 months after keys (owner-occupier bands on an estimated annual value, editable under Advanced settings; $0 for most flats). Both are cash. Plans saved before these items existed get them added once, on load or import (`upgradeCosts`); each version's additions (v2: levy, S&CC, property tax; v3: the $10 application fee) are added only once, so items you remove don't come back.
 - **Money coming in** (Costs section): gifts, hongbao, car sale and similar. Entered as positive amounts and added to the chosen partner's (or both partners') cash in that month. Not counted as payments.
 - **Assumptions** (Costs section).
   - Interest on cash, compounded monthly.
@@ -189,6 +189,7 @@ Users can override any figure for a single scenario under **Advanced settings**.
 | HDB loan LTV 75%; downpayment 10% (HDB) / 20% (bank) at AFL | Verified (HDB BTO Annex C) |
 | Deferred Income Assessment: eligibility, 2.5% at AFL, income assessed ~3 months before completion, grant paid at keys | Verified (HDB "Annex A: Details on Deferred Income Assessment", 2024) |
 | DIA with a bank loan: 2.5% cash at AFL; keys 22.5% (≥ 2.5% cash), or 42.5% (≥ 7.5% cash) at 55% LTV | Verified (hdb.gov.sg Staggered Downpayment Scheme page, checked 2026-09-26) |
+| HDB application fee $10 (non-refundable, cash, at application) | Verified (hdb.gov.sg Plan your finances, checked 2026-09-26) |
 | Caveat fee $64.45; first conveyancing tier $0.90 per $1,000 | Verified (cpf.gov.sg) |
 | HDB loan rate = CPF OA rate + 0.1% (2.5% + 0.1% = 2.6%) | Verified peg (hdb.gov.sg, checked 2026-09-26); OA rate 2.5% secondary |
 | Accrued interest = OA rate, monthly/compounded yearly | Secondary (CPF page for the method returned 404) |

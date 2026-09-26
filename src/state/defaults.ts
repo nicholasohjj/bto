@@ -10,6 +10,7 @@ export function newId(prefix = 'id'): string {
 /** Standard cost items every BTO purchase has (amounts auto-computed where possible). */
 export function defaultCosts(): CostItem[] {
   return [
+    applicationFeeDefault(),
     { id: 'option-fee', label: 'Option fee', kind: 'optionFee', amount: 0, auto: true, when: { milestone: 'booking' }, funding: 'cashOnly', payer: 'joint' },
     { id: 'bsd', label: "Buyer's Stamp Duty", kind: 'bsd', amount: 0, auto: true, when: { milestone: 'afl' }, funding: 'cpfAllowed', payer: 'joint' },
     { id: 'legal', label: 'Legal / conveyancing fees', kind: 'legal', amount: 0, auto: true, when: { milestone: 'keys' }, funding: 'cpfAllowed', payer: 'joint' },
@@ -25,7 +26,11 @@ export function defaultCosts(): CostItem[] {
 }
 
 /** Default costs added in version 2 of the default cost list. */
-export const COST_DEFAULTS_VERSION = 2
+export const COST_DEFAULTS_VERSION = 3
+/** Added in version 3: HDB's $10 application fee. */
+export function applicationFeeDefault(): CostItem {
+  return { id: 'application-fee', label: 'Application fee', kind: 'applicationFee', amount: 0, auto: true, when: { milestone: 'application' }, funding: 'cashOnly', payer: 'joint' }
+}
 export function runningCostDefaults(): CostItem[] {
   return [
     // $0 unless you're second-timers and have picked your first subsidised flat (Flat section).
@@ -39,9 +44,15 @@ export function runningCostDefaults(): CostItem[] {
 
 /** Bring a saved plan's cost list up to date: add default items it predates (once). */
 export function upgradeCosts(s: Scenario): Scenario {
-  if ((s.costDefaultsVersion ?? 1) >= COST_DEFAULTS_VERSION) return s
+  const from = s.costDefaultsVersion ?? 1
+  if (from >= COST_DEFAULTS_VERSION) return s
+  // Each version's items are added once, so something you removed later doesn't come back.
+  const added: CostItem[] = [
+    ...(from < 2 ? runningCostDefaults() : []),
+    ...(from < 3 ? [applicationFeeDefault()] : []),
+  ]
   const have = new Set(s.costs.map((c) => c.kind))
-  return { ...s, costDefaultsVersion: COST_DEFAULTS_VERSION, costs: [...s.costs, ...runningCostDefaults().filter((c) => !have.has(c.kind))] }
+  return { ...s, costDefaultsVersion: COST_DEFAULTS_VERSION, costs: [...s.costs, ...added.filter((c) => !have.has(c.kind))] }
 }
 
 export function blankPartner(id: 'A' | 'B', start: YearMonth): Partner {

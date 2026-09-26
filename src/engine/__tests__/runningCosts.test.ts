@@ -83,3 +83,18 @@ describe('saved plans get the new cost items once', () => {
     expect(loadState().scenarios[0].costs.some((c) => c.kind === 'propertyTax')).toBe(true)
   })
 })
+
+describe('HDB application fee', () => {
+  it('is $10 in cash at application', () => {
+    const ob = buildSchedule(plan(), P).obligations.find((o) => o.kind === 'applicationFee')!
+    expect(ob).toMatchObject({ ym: '2026-02', amount: 10, funding: 'cashOnly' })
+  })
+  it('is added to a plan saved at version 2, without bringing back items removed since', () => {
+    const s = seedScenario()
+    s.costs = s.costs.filter((c) => c.kind !== 'applicationFee' && c.kind !== 'scc')
+    s.costDefaultsVersion = 2
+    const up = upgradeCosts(s)
+    expect(up.costs.some((c) => c.kind === 'applicationFee')).toBe(true)
+    expect(up.costs.some((c) => c.kind === 'scc')).toBe(false)
+  })
+})

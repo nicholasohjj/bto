@@ -177,6 +177,8 @@ export interface Policy {
     conveyancingMin: number
     gst: number
     caveatFee: number
+    /** Non-refundable fee to apply for a flat on the HDB Flat Portal (cash). */
+    applicationFee: number
     surveyFee: Record<FlatType, number>
     bankLegalFee: number
     fireInsurance5yr: Record<FlatType, number>
@@ -516,6 +518,9 @@ export const DEFAULT_POLICY: Policy = {
     // Caveat registration $64.45 incl. GST, CPF allowed.
     // Source: cpf.gov.sg "HDB option fee and housing expenses". VERIFIED 2026-09-23.
     caveatFee: 64.45,
+    // $10 non-refundable administrative fee when you apply for a flat online, paid in cash.
+    // Source: hdb.gov.sg "Plan your finances" (text supplied by the user). VERIFIED 2026-09-26.
+    applicationFee: 10,
     // Survey fee range $163.50–$408.75 by flat type (cpf.gov.sg, VERIFIED range);
     // the per-type split below is interpolated. UNVERIFIED per type.
     surveyFee: { '2R': 163.5, '3R': 218, '4R': 299.75, '5R': 354.25, '3Gen': 408.75, Exec: 408.75 },

@@ -180,6 +180,7 @@ export interface Assumptions {
 }
 
 export type CostKind =
+  | 'applicationFee'
   | 'optionFee'
   | 'bsd'
   | 'legal'

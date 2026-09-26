@@ -220,6 +220,8 @@ export function autoAmount(item: CostItem, scenario: Scenario, policy: Policy, l
   const { type } = scenario.flat
   price ??= effectivePrice(scenario, policy)
   switch (item.kind) {
+    case 'applicationFee':
+      return policy.fees.applicationFee
     case 'optionFee':
       return optionFee(type, policy)
     case 'bsd':

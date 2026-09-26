@@ -784,7 +784,7 @@ const KIND_TIP: Partial<Record<CostItem['kind'], Parameters<typeof InfoTip>[0]['
   optionFee: 'optionFee', bsd: 'BSD', legal: 'legal', hps: 'HPS', fire: 'fire', resaleLevy: 'resaleLevy', scc: 'scc', propertyTax: 'propertyTax',
 }
 /** Cost kinds whose amount the app can work out from the plan and policy. */
-const AUTO_KINDS: CostItem['kind'][] = ['optionFee', 'bsd', 'legal', 'survey', 'caveat', 'fire', 'resaleLevy', 'scc', 'propertyTax']
+const AUTO_KINDS: CostItem['kind'][] = ['applicationFee', 'optionFee', 'bsd', 'legal', 'survey', 'caveat', 'fire', 'resaleLevy', 'scc', 'propertyTax']
 
 function CostRow({ item, computed, onChange, onRemove, partnerNames, inflow = false }: {
   item: CostItem; computed: number; onChange: (fn: (c: CostItem) => void) => void; onRemove?: () => void; partnerNames: [string, string]; inflow?: boolean
