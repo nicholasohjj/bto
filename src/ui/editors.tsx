@@ -1,3 +1,4 @@
+import { useState, type ReactNode } from 'react'
 import type { FlatType, Policy } from '../config/policy'
 import { ageInMonths, estimatedLivingCosts, prYear, ratesFor } from '../engine/cpf'
 import { assessmentMonth, autoAmount, downpaymentSchedule, effectiveLtv, grantAmount, grantSplitA, hdbMaxTenure, loanChangesOf, maxLtvFor, voluntaryList } from '../engine/payments'
@@ -712,6 +713,18 @@ function DownpaymentPreview({ scenario: raw, policy }: { scenario: Scenario; pol
 
 export function CostsEditor({ scenario, update, policy }: { scenario: Scenario; update: Update; policy: Policy }) {
   const loanGuess = scenario.flat.price * scenario.financing.ltv
+  // Rows open for editing; items you just added open straight away.
+  const [open, setOpen] = useState<Set<string>>(() => new Set())
+  const toggle = (id: string) => setOpen((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n })
+  const add = (item: CostItem) => { update((d) => { d.costs.push(item) }); setOpen((s) => new Set(s).add(item.id)) }
+  const groupProps = {
+    amountOf: (c: CostItem) => (c.kind === 'inflow' ? c.amount : autoAmount(c, scenario, policy, loanGuess)),
+    ymOf: (c: CostItem) => ('date' in c.when ? c.when.date : addMonths(scenario.flat.dates[c.when.milestone], c.when.offsetMonths ?? 0)),
+    open, toggle,
+    onChange: (id: string, fn: (c: CostItem) => void) => update((d) => fn(d.costs.find((x) => x.id === id)!)),
+    onRemove: (c: CostItem) => (c.kind === 'optionFee' ? undefined : () => update((d) => { d.costs = d.costs.filter((x) => x.id !== c.id) })),
+    partnerNames: [scenario.partners[0].name, scenario.partners[1].name] as [string, string],
+  }
   return (
     <div className="space-y-4">
       <Card>
@@ -740,48 +753,109 @@ export function CostsEditor({ scenario, update, policy }: { scenario: Scenario; 
           </Field>
         </div>
       </Card>
-      <div className="space-y-3">
-        {scenario.costs.filter((c) => c.kind !== 'inflow').map((c) => (
-          <CostRow key={c.id} item={c} computed={autoAmount(c, scenario, policy, loanGuess)}
-            onChange={(fn) => update((d) => fn(d.costs.find((x) => x.id === c.id)!))}
-            onRemove={c.kind === 'optionFee' ? undefined : () => update((d) => { d.costs = d.costs.filter((x) => x.id !== c.id) })}
-            partnerNames={[scenario.partners[0].name, scenario.partners[1].name]} />
-        ))}
-      </div>
-      <div className="flex flex-wrap gap-2">
-        {[
-          ['Wedding', 30000], ['Car', 20000], ['Travel', 5000], ['Other', 1000],
-        ].map(([label, amt]) => (
-          <Button key={label} variant="secondary" onClick={() => update((d) => {
-            d.costs.push({ id: newId('c'), label: String(label), kind: 'custom', amount: Number(amt), auto: false, when: { date: d.startMonth }, funding: 'cashOnly', payer: 'joint', delayable: true })
-          })}>+ {label}</Button>
-        ))}
-        {!scenario.costs.some((c) => c.kind === 'hps') && (
-          <Button variant="secondary" onClick={() => update((d) => { d.costs.push({ ...defaultCosts().find((c) => c.kind === 'hps')!, id: newId('hps') }) })}>+ Home Protection Scheme</Button>
-        )}
-      </div>
-      <Card>
-        <div className="mb-1 flex items-center text-sm font-semibold">Money coming in<InfoTip term="inflow" /></div>
-        <p className="mb-3 text-xs text-ink-2">One-off cash you expect: gifts from family, hongbao, selling a car, an insurance payout…</p>
-        <div className="space-y-3">
-          {scenario.costs.filter((c) => c.kind === 'inflow').map((c) => (
-            <CostRow key={c.id} item={c} computed={c.amount} inflow
-              onChange={(fn) => update((d) => fn(d.costs.find((x) => x.id === c.id)!))}
-              onRemove={() => update((d) => { d.costs = d.costs.filter((x) => x.id !== c.id) })}
-              partnerNames={[scenario.partners[0].name, scenario.partners[1].name]} />
-          ))}
-        </div>
-        <div className="mt-3 flex flex-wrap gap-2">
-          {[['Gift from family', 10000], ['Hongbao', 20000], ['Sale of car / items', 15000], ['Other', 5000]].map(([label, amt]) => (
-            <Button key={label} variant="secondary" onClick={() => update((d) => {
-              d.costs.push({ id: newId('in'), label: String(label), kind: 'inflow', amount: Number(amt), auto: false, when: { date: d.startMonth }, funding: 'cashOnly', payer: 'joint' })
-            })}>+ {label}</Button>
-          ))}
-        </div>
-      </Card>
+      <CostGroup title="Buying fees" hint="Worked out from HDB’s rates. Tap one to see or change it."
+        items={scenario.costs.filter((c) => BUYING_KINDS.includes(c.kind))} {...groupProps} />
+      <CostGroup title="Running costs after keys" hint="Monthly and yearly bills once the flat is yours."
+        items={scenario.costs.filter((c) => RUNNING_KINDS.includes(c.kind))} {...groupProps}
+        footer={!scenario.costs.some((c) => c.kind === 'hps') && (
+          <Button variant="secondary" onClick={() => add({ ...defaultCosts().find((c) => c.kind === 'hps')!, id: newId('hps') })}>+ Home Protection Scheme</Button>
+        )} />
+      <CostGroup title="Your costs" hint="Renovation, furniture and anything else. Your own costs rise with the inflation setting."
+        items={scenario.costs.filter((c) => !BUYING_KINDS.includes(c.kind) && !RUNNING_KINDS.includes(c.kind) && c.kind !== 'inflow')} {...groupProps}
+        footer={[['Wedding', 30000], ['Car', 20000], ['Travel', 5000], ['Other', 1000]].map(([label, amt]) => (
+          <Button key={label} variant="secondary" onClick={() => add({ id: newId('c'), label: String(label), kind: 'custom', amount: Number(amt), auto: false, when: { date: scenario.startMonth }, funding: 'cashOnly', payer: 'joint', delayable: true })}>+ {label}</Button>
+        ))} />
+      <CostGroup title="Money coming in" tip="inflow" hint="One-off cash you expect: gifts from family, hongbao, selling a car, an insurance payout…"
+        items={scenario.costs.filter((c) => c.kind === 'inflow')} {...groupProps} inflow
+        footer={[['Gift from family', 10000], ['Hongbao', 20000], ['Sale of car / items', 15000], ['Other', 5000]].map(([label, amt]) => (
+          <Button key={label} variant="secondary" onClick={() => add({ id: newId('in'), label: String(label), kind: 'inflow', amount: Number(amt), auto: false, when: { date: scenario.startMonth }, funding: 'cashOnly', payer: 'joint' })}>+ {label}</Button>
+        ))} />
     </div>
   )
 }
+
+const BUYING_KINDS: CostItem['kind'][] = ['applicationFee', 'optionFee', 'bsd', 'legal', 'survey', 'caveat', 'keyFees', 'resaleLevy']
+const RUNNING_KINDS: CostItem['kind'][] = ['scc', 'propertyTax', 'fire', 'hps']
+
+/** "At AFL signing", "3 months after key collection", "Mar 2027". */
+function whenText(w: When): string {
+  if ('date' in w) return formatYm(w.date)
+  const label = { application: 'application', booking: 'booking', afl: 'AFL signing', keys: 'key collection' }[w.milestone]
+  const off = w.offsetMonths ?? 0
+  if (!off) return `At ${label}`
+  return `${Math.abs(off)} month${Math.abs(off) > 1 ? 's' : ''} ${off > 0 ? 'after' : 'before'} ${label}`
+}
+
+function repeatText(r: CostItem['recurrence']): { per: string; how: string } {
+  if (!r || r.times <= 1) return { per: '', how: '' }
+  if (r.everyMonths === 1) return { per: '/mo', how: ', then monthly' }
+  if (r.everyMonths === 12) return { per: '/yr', how: ', then yearly' }
+  return { per: '', how: `, then every ${r.everyMonths % 12 === 0 ? `${r.everyMonths / 12} years` : `${r.everyMonths} months`}` }
+}
+
+/**
+ * A group of costs as one compact row each (name, when, amount, cash/CPF); tap a row to edit it.
+ * Worked-out items that come to $0 for this plan are listed together instead of taking a row each.
+ */
+function CostGroup({ title, hint, tip, items, amountOf, ymOf, open, toggle, onChange, onRemove, partnerNames, footer, inflow = false }: {
+  title: string; hint: string; tip?: Parameters<typeof InfoTip>[0]['term']; items: CostItem[]
+  amountOf: (c: CostItem) => number; ymOf: (c: CostItem) => string; open: Set<string>; toggle: (id: string) => void
+  onChange: (id: string, fn: (c: CostItem) => void) => void; onRemove: (c: CostItem) => (() => void) | undefined
+  partnerNames: [string, string]; footer?: ReactNode; inflow?: boolean
+}) {
+  const zero = items.filter((c) => c.auto !== false && AUTO_KINDS.includes(c.kind) && amountOf(c) === 0 && !open.has(c.id))
+  // In date order (items added to saved plans later would otherwise sit at the end).
+  const shown = items.filter((c) => !zero.includes(c)).sort((a, b) => (ymOf(a) < ymOf(b) ? -1 : ymOf(a) > ymOf(b) ? 1 : 0))
+  return (
+    <Card className="!p-0">
+      <div className="px-3 pt-3">
+        <div className="flex items-center text-sm font-semibold">{title}{tip && <InfoTip term={tip} />}</div>
+        <p className="mt-0.5 text-xs text-ink-2">{hint}</p>
+      </div>
+      {shown.length > 0 && (
+        <ul className="mt-2 divide-y divide-line border-t border-line">
+          {shown.map((c) => {
+            const isOpen = open.has(c.id)
+            const r = repeatText(c.recurrence)
+            const payer = c.payer === 'joint' ? '' : ` · ${partnerNames[c.payer === 'A' ? 0 : 1]}`
+            return (
+              <li key={c.id}>
+                <button type="button" aria-expanded={isOpen} onClick={() => toggle(c.id)}
+                  className="flex w-full items-center gap-3 px-3 py-2.5 text-left hover:bg-surface-2">
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm">{c.label}</span>
+                    <span className="block text-xs text-muted">{whenText(c.when)}{r.how}</span>
+                  </span>
+                  <span className="shrink-0 text-right">
+                    <span className={`block text-sm font-medium tnum ${inflow ? 'text-good-ink' : ''}`}>{inflow ? '+' : ''}{money(amountOf(c))}{r.per}</span>
+                    {!inflow && <span className="block text-[11px] text-muted">{c.funding === 'cashOnly' ? 'Cash' : 'Cash or CPF'}{payer}</span>}
+                  </span>
+                  <span aria-hidden className={`shrink-0 text-xs text-muted transition-transform ${isOpen ? 'rotate-90' : ''}`}>›</span>
+                </button>
+                {isOpen && (
+                  <div className="px-3 pb-3">
+                    <CostRow item={c} computed={amountOf(c)} inflow={inflow} partnerNames={partnerNames}
+                      onChange={(fn) => onChange(c.id, fn)} onRemove={onRemove(c)} />
+                  </div>
+                )}
+              </li>
+            )
+          })}
+        </ul>
+      )}
+      {zero.length > 0 && (
+        <p className="border-t border-line px-3 py-2 text-xs text-muted">
+          $0 for this plan:{' '}
+          {zero.map((c, i) => (
+            <span key={c.id}>{i > 0 && ', '}<button type="button" className="underline decoration-dotted hover:text-ink" onClick={() => toggle(c.id)}>{c.label}</button></span>
+          ))}
+        </p>
+      )}
+      {footer && <div className="flex flex-wrap gap-2 border-t border-line p-3">{footer}</div>}
+    </Card>
+  )
+}
+
 
 const KIND_TIP: Partial<Record<CostItem['kind'], Parameters<typeof InfoTip>[0]['term']>> = {
   optionFee: 'optionFee', bsd: 'BSD', legal: 'legal', hps: 'HPS', fire: 'fire', resaleLevy: 'resaleLevy', scc: 'scc', propertyTax: 'propertyTax',
