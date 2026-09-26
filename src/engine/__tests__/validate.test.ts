@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { runScenario, simulateCore } from '../index'
 import { affordablePrice } from '../afford'
 import { scenarioProblem } from '../validate'
-import { seedScenario } from '../../state/defaults'
+import { newPlan, seedScenario } from '../../state/defaults'
 
 describe('dates that are typos', () => {
   it('refuses a five-digit key-collection year quickly instead of simulating 10,000 years', () => {
@@ -94,5 +94,28 @@ describe('staggered downpayment eligibility', () => {
     const ids = staggered((s) => { s.flat.household = 'secondTimers'; s.flat.type = '3R'; s.partners[0].birthYearMonth = '1980-01'; s.partners[1].birthYearMonth = '1980-01' })
     expect(ids).not.toContain('staggered-eligibility')
     expect(ids).toContain('staggered-rightsizer')
+  })
+})
+
+describe('Enhanced CPF Housing Grant in new plans', () => {
+  it('new plans from the wizard include the auto grant', () => {
+    const s = newPlan()
+    expect(s.flat.grants).toEqual([expect.objectContaining({ auto: 'EHG' })])
+    expect(runScenario(s).loan.grantsTotal).toBeGreaterThan(0)
+    expect(runScenario(s).warnings.map((w) => w.id)).not.toContain('ehg-missing')
+  })
+
+  it('warns when an eligible plan has no grant', () => {
+    const s = newPlan()
+    s.flat.grants = []
+    const w = runScenario(s).warnings.find((x) => x.id === 'ehg-missing')
+    expect(w?.title).toMatch(/missing a \$[\d,]+ grant/)
+  })
+
+  it('doesn’t warn when you’re not eligible', () => {
+    const s = newPlan()
+    s.flat.grants = []
+    s.partners.forEach((p) => { p.grossMonthly = 20000 })
+    expect(runScenario(s).warnings.map((w) => w.id)).not.toContain('ehg-missing')
   })
 })

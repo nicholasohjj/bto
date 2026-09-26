@@ -489,6 +489,18 @@ export function buildWarnings(core: CoreResult, extras: WarningExtras = {}): War
     })
   }
 
+  // --- A grant you'd likely get but haven't added (plans made before the wizard included it) ---
+  const ehg = core.schedule.eligibility.ehg
+  const hasEhg = s.flat.grants.some((g) => g.auto === 'EHG' || /enhanced/i.test(g.name))
+  if (ehg > 0 && !hasEhg) {
+    warnings.push({
+      id: 'ehg-missing', severity: 'warning', ym: s.flat.dates.keys,
+      title: `You may be missing a ${money(ehg)} grant`,
+      explanation: `From your income, you look eligible for about ${money(ehg)} of Enhanced CPF Housing Grant, but this plan doesn’t include it, so your CPF is shown lower than it will be.`,
+      fixes: ['In the Flat section, tap “+ Enhanced CPF Housing Grant (auto)”.'],
+    })
+  }
+
   // --- Resale levy (second-timers) ---
   const levyItem = s.costs.find((c) => c.kind === 'resaleLevy')
   if ((s.flat.household ?? 'firstTimers') !== 'firstTimers' && levyItem && levyItem.auto !== false && !s.flat.firstSubsidisedFlat) {

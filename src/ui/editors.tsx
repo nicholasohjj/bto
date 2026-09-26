@@ -70,9 +70,12 @@ function PartnerCard({ partner: p, startMonth, policy, years, onChange }: {
         <TextInput value={p.name} onChange={(v) => onChange((d) => { d.name = v })} ariaLabel="Name" />
       </div>
       <div className="grid grid-cols-1 gap-3 min-[360px]:grid-cols-2">
-        <Field label="Birth month" hint={`Age ${age} now`}>
-          <MonthInput value={p.birthYearMonth} onChange={(v) => onChange((d) => { d.birthYearMonth = v })} ariaLabel={`${p.name} birth month`} />
-        </Field>
+        {/* Full row: a month input needs ~170px, more than half a partner card on desktop. */}
+        <div className="min-[360px]:col-span-2">
+          <Field label="Birth month" hint={`Age ${age} now`}>
+            <MonthInput value={p.birthYearMonth} onChange={(v) => onChange((d) => { d.birthYearMonth = v })} ariaLabel={`${p.name} birth month`} />
+          </Field>
+        </div>
         <Field label="Gross monthly salary">
           <MoneyInput value={p.grossMonthly} onChange={(v) => onChange((d) => { d.grossMonthly = v })} ariaLabel={`${p.name} salary`} />
         </Field>

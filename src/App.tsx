@@ -12,7 +12,7 @@ import { TimelineChart } from './ui/lazyCharts'
 import { Button, Card, Segmented, Toggle } from './ui/controls'
 import { Disclaimer } from './ui/Disclaimer'
 import { CostsEditor, FinancingEditor, FlatEditor, PartnersEditor, type Update } from './ui/editors'
-import { AccruedView, AffordCard, CompareView, JobLossCard, LoanPanel, ScheduleTable, SummaryCards, WarningsList } from './ui/views'
+import { AccruedView, AffordCard, CompareView, Verdict, JobLossCard, LoanPanel, ScheduleTable, SummaryCards, WarningsList } from './ui/views'
 import { PrintSummary } from './ui/PrintSummary'
 import { Wizard } from './ui/Wizard'
 
@@ -257,6 +257,7 @@ export default function App() {
 
         {result && tab === 'overview' && (
           <>
+            <Verdict result={result} onDetails={() => document.getElementById('what-to-watch')?.scrollIntoView({ behavior: 'smooth', block: 'start' })} />
             <SummaryCards result={result} />
             <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
               <Card>
@@ -269,7 +270,7 @@ export default function App() {
                 <TimelineChart result={result} perPartner={state.showPerPartner && active.buyers !== 'single'} names={names} />
                 <p className="mt-1 text-[11px] text-muted">Solid vertical lines mark milestones; dotted lines mark other payments over $1,000. Red shading = cash below zero. Tap the chart for details.</p>
               </Card>
-              <div className="space-y-3">
+              <div id="what-to-watch" className="scroll-mt-28 space-y-3">
                 <h2 className="text-sm font-semibold">What to watch</h2>
                 <WarningsList warnings={result.warnings} />
               </div>

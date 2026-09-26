@@ -99,6 +99,16 @@ export function newScenario(name = 'Our BTO plan', start: YearMonth = currentYm(
   }
 }
 
+/**
+ * A new plan from the setup wizard: like newScenario, plus the Enhanced CPF Housing Grant
+ * worked out from your income (it's $0 if you're not eligible, so it's safe to include).
+ */
+export function newPlan(name?: string): Scenario {
+  const s = newScenario(name)
+  s.flat.grants = [{ id: 'ehg', name: 'Enhanced CPF Housing Grant', amount: 0, auto: 'EHG', splitA: 50, when: { milestone: 'keys' } }]
+  return s
+}
+
 /** The example scenario shown on first load. Fixed dates so tests are stable. */
 export function seedScenario(): Scenario {
   const start = '2026-09'

@@ -36,6 +36,37 @@ export function SummaryCards({ result }: { result: SimResult }) {
   )
 }
 
+// ---------------- Verdict ----------------
+
+/** The answer in one line, above everything else: covered every month, or where it breaks. */
+export function Verdict({ result, onDetails }: { result: SimResult; onDetails: () => void }) {
+  const errors = result.warnings.filter((w) => w.severity === 'error')
+  const checks = result.warnings.filter((w) => w.severity === 'warning').length
+  const low = result.summary.leanestCash
+  const bad = errors.length > 0
+  return (
+    <button type="button" onClick={onDetails}
+      className={`flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-1 rounded-xl border px-4 py-3 text-left ${bad ? 'border-critical/40 bg-critical/10' : 'border-good/30 bg-good/10'}`}>
+      <span className="min-w-0 text-sm">
+        {bad ? (
+          <>
+            <b className="text-critical"><span aria-hidden>✖ </span>{errors[0].title}</b>
+            {low.amount < 0 && <span className="text-ink-2"> · cash down to <span className="tnum text-critical">{money(low.amount)}</span></span>}
+            {errors.length > 1 && <span className="text-ink-2"> · {errors.length - 1} more problem{errors.length > 2 ? 's' : ''}</span>}
+          </>
+        ) : (
+          <>
+            <b className="text-good-ink"><span aria-hidden>✔ </span>Every payment is covered</b>
+            <span className="text-ink-2"> · lowest cash <span className="tnum">{money(low.amount)}</span> ({formatYm(low.ym)})</span>
+            {checks > 0 && <span className="text-ink-2"> · {checks} thing{checks > 1 ? 's' : ''} to check</span>}
+          </>
+        )}
+      </span>
+      {(bad || checks > 0) && <span className="shrink-0 text-xs font-medium text-accent">{bad ? 'What to change' : 'See details'} ↓</span>}
+    </button>
+  )
+}
+
 // ---------------- Warnings ----------------
 
 const SEV: Record<Warning['severity'], { icon: string; label: string; cls: string }> = {

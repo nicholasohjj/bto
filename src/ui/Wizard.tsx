@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { resolvePolicy } from '../engine/policyOverrides'
 import type { Scenario } from '../engine/types'
-import { newScenario } from '../state/defaults'
+import { newPlan } from '../state/defaults'
 import { Button, Card, Field, TextInput, T } from './controls'
 import { CostsEditor, FinancingEditor, FlatEditor, PartnersEditor, type Update } from './editors'
 import { Disclaimer } from './Disclaimer'
@@ -10,7 +10,7 @@ const STEPS = ['Welcome', 'About you', 'The flat', 'Financing', 'Other costs'] a
 
 export function Wizard({ onFinish, onSkip, canSkip, firstRun }: { onFinish: (s: Scenario) => void; onSkip: () => void; canSkip: boolean; firstRun: boolean }) {
   const [step, setStep] = useState(0)
-  const [draft, setDraft] = useState<Scenario>(() => newScenario())
+  const [draft, setDraft] = useState<Scenario>(() => newPlan())
   const policy = useMemo(() => resolvePolicy(draft.policyOverrides), [draft.policyOverrides])
   const update: Update = (fn) => setDraft((s) => { const d = structuredClone(s); fn(d); return d })
   const last = step === STEPS.length - 1
