@@ -15,7 +15,7 @@ export type Update = (fn: (draft: Scenario) => void) => void
 
 // ---------------- Partners ----------------
 
-export function PartnersEditor({ scenario, update, policy }: { scenario: Scenario; update: Update; policy: Policy }) {
+export function PartnersEditor({ scenario, update, policy, brief = false }: { scenario: Scenario; update: Update; policy: Policy; brief?: boolean }) {
   const years = yearOptions(scenario)
   const single = isSingle(scenario)
   const people = single ? scenario.partners.slice(0, 1) : scenario.partners
@@ -40,11 +40,24 @@ export function PartnersEditor({ scenario, update, policy }: { scenario: Scenari
       </Card>
       <div className={`grid gap-4 ${single ? '' : 'md:grid-cols-2'}`}>
         {people.map((p, i) => (
-          <PartnerCard key={p.id} partner={p} startMonth={scenario.startMonth} policy={policy} years={years} onChange={(fn) => update((d) => fn(d.partners[i]))} />
+          <PartnerCard key={p.id} partner={p} startMonth={scenario.startMonth} policy={policy} years={years} brief={brief}
+            onChange={(fn) => update((d) => fn(d.partners[i]))}
+            isExample={(f) => isExample(scenario, `${p.id}.${f}`)} touch={(f) => update((d) => touchExample(d, `${p.id}.${f}`))} />
         ))}
       </div>
     </div>
   )
+}
+
+function isExample(s: Scenario, key: string): boolean {
+  return !!s.exampleFields?.includes(key)
+}
+function touchExample(d: Scenario, key: string) {
+  if (d.exampleFields) d.exampleFields = d.exampleFields.filter((k) => k !== key)
+}
+/** Marks a value that's still the made-up starting example. */
+function ExampleTag() {
+  return <span className="ml-1.5 rounded bg-warning/25 px-1.5 py-px text-[10px] font-medium text-ink" title="A made-up starting value. Replace it with yours.">example</span>
 }
 
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
@@ -56,9 +69,14 @@ function yearOptions(s: Scenario): number[] {
   return Array.from({ length: Math.max(1, to - from + 1) }, (_, i) => from + i)
 }
 
-function PartnerCard({ partner: p, startMonth, policy, years, onChange }: {
+function PartnerCard({ partner: p, startMonth, policy, years, onChange, brief, isExample: ex, touch }: {
   partner: Partner; startMonth: string; policy: Policy; years: number[]; onChange: (fn: (p: Partner) => void) => void
+  brief: boolean; isExample: (field: string) => boolean; touch: (field: string) => void
 }) {
+  // The setup wizard shows the essentials; everything else is one tap away.
+  const [more, setMore] = useState(!brief)
+  /** Change a field that may still hold an example value, and stop marking it as one. */
+  const set = (field: string, fn: (d: Partner) => void) => { onChange(fn); if (ex(field)) touch(field) }
   const age = Math.floor(ageInMonths(p.birthYearMonth, startMonth) / 12)
   const oaShare = ratesFor(ageInMonths(p.birthYearMonth, startMonth), policy, prYear(p, startMonth)).oaRatio
   const topUps = voluntaryList(p)
@@ -73,24 +91,21 @@ function PartnerCard({ partner: p, startMonth, policy, years, onChange }: {
       <div className="grid grid-cols-1 gap-3 min-[360px]:grid-cols-2">
         {/* Full row: a month input needs ~170px, more than half a partner card on desktop. */}
         <div className="min-[360px]:col-span-2">
-          <Field label="Birth month" hint={`Age ${age} now`}>
-            <MonthInput value={p.birthYearMonth} onChange={(v) => onChange((d) => { d.birthYearMonth = v })} ariaLabel={`${p.name} birth month`} />
+          <Field label={<>Birth month{ex('birthYearMonth') && <ExampleTag />}</>} hint={`Age ${age} now`}>
+            <MonthInput value={p.birthYearMonth} onChange={(v) => set('birthYearMonth', (d) => { d.birthYearMonth = v })} ariaLabel={`${p.name} birth month`} />
           </Field>
         </div>
-        <Field label="Gross monthly salary">
-          <MoneyInput value={p.grossMonthly} onChange={(v) => onChange((d) => { d.grossMonthly = v })} ariaLabel={`${p.name} salary`} />
+        <Field label={<>Gross monthly salary{ex('grossMonthly') && <ExampleTag />}</>}>
+          <MoneyInput value={p.grossMonthly} onChange={(v) => set('grossMonthly', (d) => { d.grossMonthly = v })} ariaLabel={`${p.name} salary`} />
         </Field>
-        <Field label="Usual yearly raise" tipText="Applied every January. For uneven raises, a new job or time without income, use “Job & pay changes” below.">
-          <NumberInput suffix="%" value={p.annualRaisePct} min={-20} max={50} onChange={(v) => onChange((d) => { d.annualRaisePct = v })} ariaLabel={`${p.name} raise`} />
+        <Field label={<>CPF OA balance now{ex('cpfOA') && <ExampleTag />}</>} tip="OA">
+          <MoneyInput value={p.cpfOA} onChange={(v) => set('cpfOA', (d) => { d.cpfOA = v })} ariaLabel={`${p.name} OA`} />
         </Field>
-        <Field label="CPF OA balance now" tip="OA">
-          <MoneyInput value={p.cpfOA} onChange={(v) => onChange((d) => { d.cpfOA = v })} ariaLabel={`${p.name} OA`} />
+        <Field label={<>Cash savings now{ex('cash') && <ExampleTag />}</>} tip="cash">
+          <MoneyInput value={p.cash} onChange={(v) => set('cash', (d) => { d.cash = v })} ariaLabel={`${p.name} cash`} />
         </Field>
-        <Field label="Cash savings now" tip="cash">
-          <MoneyInput value={p.cash} onChange={(v) => onChange((d) => { d.cash = v })} ariaLabel={`${p.name} cash`} />
-        </Field>
-        <Field label="Cash saved per month" tipText="What you put aside each month after normal spending. Don’t subtract rent or mortgage — the app does that.">
-          <MoneyInput value={p.monthlyCashSavings} onChange={(v) => onChange((d) => { d.monthlyCashSavings = v })} ariaLabel={`${p.name} monthly savings`} />
+        <Field label={<>Cash saved per month{ex('monthlyCashSavings') && <ExampleTag />}</>} tipText="What you put aside each month after normal spending. Don’t subtract rent or mortgage — the app does that.">
+          <MoneyInput value={p.monthlyCashSavings} onChange={(v) => set('monthlyCashSavings', (d) => { d.monthlyCashSavings = v })} ariaLabel={`${p.name} monthly savings`} />
         </Field>
         <div className="min-[360px]:col-span-2">
           <Toggle label="Still studying / in NS" tip="workStart" checked={!!p.workStartMonth}
@@ -108,6 +123,17 @@ function PartnerCard({ partner: p, startMonth, policy, years, onChange }: {
             </Field>
           </>
         )}
+      </div>
+      {!more && (
+        <button type="button" className="mt-3 text-sm font-medium text-accent" onClick={() => setMore(true)}>
+          More details: raises, bonuses, pay changes, citizenship, debts ▾
+        </button>
+      )}
+      {more && (<>
+      <div className="mt-3 grid grid-cols-1 gap-3 min-[360px]:grid-cols-2">
+        <Field label="Usual yearly raise" tipText="Applied every January. For uneven raises, a new job or time without income, use “Job & pay changes” below.">
+          <NumberInput suffix="%" value={p.annualRaisePct} min={-20} max={50} onChange={(v) => onChange((d) => { d.annualRaisePct = v })} ariaLabel={`${p.name} raise`} />
+        </Field>
         <Field label="Citizenship" tip="citizenship">
           <Select value={p.citizenship ?? 'SC'} ariaLabel={`${p.name} citizenship`}
             onChange={(v) => onChange((d) => { d.citizenship = v; if (v === 'SPR') d.prSinceMonth ??= startMonth })}
@@ -201,6 +227,7 @@ function PartnerCard({ partner: p, startMonth, policy, years, onChange }: {
           </p>
         )}
       </div>
+      </>)}
     </Card>
   )
 }
@@ -269,8 +296,9 @@ function IncomeChanges({ partner: p, startMonth, years, onChange }: {
 
 // ---------------- Flat ----------------
 
-export function FlatEditor({ scenario, update, policy }: { scenario: Scenario; update: Update; policy: Policy }) {
+export function FlatEditor({ scenario, update, policy, brief = false }: { scenario: Scenario; update: Update; policy: Policy; brief?: boolean }) {
   const f = scenario.flat
+  const [more, setMore] = useState(!brief)
   const el = assessEligibility(scenario, policy)
   const saleType = f.saleType ?? 'BTO'
   const completed = isCompleted(scenario)
@@ -306,16 +334,18 @@ export function FlatEditor({ scenario, update, policy }: { scenario: Scenario; u
       </Card>
       <Card>
         <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-          <Field label="Flat price" tipText="If you pick Optional Component Scheme items at booking (flooring, internal doors, bathroom fittings), their cost is added to the flat price, so include it here.">
-            <MoneyInput value={f.price} onChange={(v) => update((d) => { d.flat.price = v })} ariaLabel="Flat price" />
+          <Field label={<>Flat price{isExample(scenario, 'flat.price') && <ExampleTag />}</>} tipText="If you pick Optional Component Scheme items at booking (flooring, internal doors, bathroom fittings), their cost is added to the flat price, so include it here.">
+            <MoneyInput value={f.price} onChange={(v) => update((d) => { d.flat.price = v; touchExample(d, 'flat.price') })} ariaLabel="Flat price" />
           </Field>
           <Field label="Flat type">
             <Select value={f.type} onChange={(v) => update((d) => { d.flat.type = v })} options={FLAT_TYPES} ariaLabel="Flat type" />
           </Field>
-          <Field label="Classification" tip="classification">
-            <Select value={f.classification} onChange={(v) => update((d) => { d.flat.classification = v })} ariaLabel="Classification"
-              options={[{ value: 'Standard', label: 'Standard' }, { value: 'Plus', label: 'Plus' }, { value: 'Prime', label: 'Prime' }]} />
-          </Field>
+          {more && (
+            <Field label="Classification" tip="classification">
+              <Select value={f.classification} onChange={(v) => update((d) => { d.flat.classification = v })} ariaLabel="Classification"
+                options={[{ value: 'Standard', label: 'Standard' }, { value: 'Plus', label: 'Plus' }, { value: 'Prime', label: 'Prime' }]} />
+            </Field>
+          )}
           <div className="col-span-2 md:col-span-3">
             <Field label="You are" tip="household">
               <Select value={f.household ?? 'firstTimers'} onChange={(v) => update((d) => { d.flat.household = v })} ariaLabel="Household status"
@@ -375,14 +405,21 @@ export function FlatEditor({ scenario, update, policy }: { scenario: Scenario; u
             </Field>
           ))}
         </div>
-        <div className="mt-3 grid grid-cols-1 gap-3 min-[360px]:grid-cols-2 md:grid-cols-4">
-          <Field label="HFE letter applied" tip="HFE" hint="Apply before the sales exercise opens; valid 9 months">
-            <MonthInput value={hfeMonth(scenario, policy)} onChange={(v) => update((d) => { d.flat.hfeMonth = v })} ariaLabel="HFE letter applied" />
-          </Field>
-        </div>
+        {more && (
+          <div className="mt-3 grid grid-cols-1 gap-3 min-[360px]:grid-cols-2 md:grid-cols-4">
+            <Field label="HFE letter applied" tip="HFE" hint="Apply before the sales exercise opens; valid 9 months">
+              <MonthInput value={hfeMonth(scenario, policy)} onChange={(v) => update((d) => { d.flat.hfeMonth = v })} ariaLabel="HFE letter applied" />
+            </Field>
+          </div>
+        )}
         <p className="mt-2 text-[11px] text-muted">Simulation runs from {scenario.startMonth} to 12 months after key collection.</p>
       </Card>
-      <Card>
+      {!more && (
+        <button type="button" className="text-sm font-medium text-accent" onClick={() => setMore(true)}>
+          More details: grants ({money(f.grants.reduce((s, g) => s + grantAmount(g, el), 0))}, worked out for you), classification, HFE letter date ▾
+        </button>
+      )}
+      {more && <Card>
         <div className="mb-2 flex items-center text-sm font-semibold">Grants <InfoTip term="grant" /></div>
         {f.grants.length === 0 && <p className="mb-2 text-sm text-ink-2">No grants yet. Add the amounts from your HFE letter.</p>}
         {f.grants.map((g, i) => (
@@ -414,7 +451,7 @@ export function FlatEditor({ scenario, update, policy }: { scenario: Scenario; u
           )}
           <Button variant="ghost" onClick={() => update((d) => { d.flat.grants.push({ id: newId('g'), name: 'Other grant', amount: 0, splitA: 50, when: { milestone: 'keys' } }) })}>+ Other grant</Button>
         </div>
-      </Card>
+      </Card>}
     </div>
   )
 }
@@ -449,8 +486,9 @@ function EligibilitySummary({ el }: { el: ReturnType<typeof assessEligibility> }
 
 // ---------------- Financing ----------------
 
-export function FinancingEditor({ scenario, update, policy }: { scenario: Scenario; update: Update; policy: Policy }) {
+export function FinancingEditor({ scenario, update, policy, brief = false }: { scenario: Scenario; update: Update; policy: Policy; brief?: boolean }) {
   const fin = scenario.financing
+  const [more, setMore] = useState(!brief)
   const isHdb = fin.loanType === 'HDB'
   const ltvRule = maxLtvFor(scenario, policy)
   const maxLtv = ltvRule.max
@@ -495,7 +533,7 @@ export function FinancingEditor({ scenario, update, policy }: { scenario: Scenar
           </div>
         )}
       </Card>
-      <LoanChangesEditor scenario={scenario} update={update} />
+      {more && <LoanChangesEditor scenario={scenario} update={update} />}
       <Card>
         {isSinglesPurchase(scenario) ? (
           <p className="py-1 text-xs text-ink-2">Singles pay the standard downpayment: the staggered scheme and Deferred Income Assessment are for couples.</p>
@@ -513,7 +551,12 @@ export function FinancingEditor({ scenario, update, policy }: { scenario: Scenar
             : <Toggle label="Staggered downpayment" tip="staggered" checked={fin.staggered} onChange={(v) => update((d) => { d.financing.staggered = v })} />}
         <DownpaymentPreview scenario={scenario} policy={policy} />
       </Card>
-      <Card>
+      {!more && (
+        <button type="button" className="text-sm font-medium text-accent" onClick={() => setMore(true)}>
+          More details: rate changes and prepayments, CPF vs cash, splitting payments ▾
+        </button>
+      )}
+      {more && <Card>
         <Field label={<>Pay CPF-allowed items with CPF: <span className="ml-1 tnum text-ink">{fin.cpfUsagePct}%</span></>} tip="cpfSlider"
           hint={isHdb ? `HDB loan rule: OA above ${money(policy.hdbLoan.oaRetainMax)}${isSingle(scenario) ? '' : ' each'} is used for the downpayment even if the slider is lower.` : 'Min cash rules for bank loans are always applied.'}>
           <div className="flex items-center gap-3 text-xs text-muted">
@@ -528,8 +571,8 @@ export function FinancingEditor({ scenario, update, policy }: { scenario: Scenar
               options={[{ value: 'cpfFirst', label: 'CPF OA first' }, { value: 'cashOnly', label: 'Cash only' }]} />
           </Field>
         </div>
-      </Card>
-      {!isSingle(scenario) && (
+      </Card>}
+      {more && !isSingle(scenario) && (
         <Card>
           <Field label={<>Joint payments: {a.name} {fin.jointSplitA}% · {b.name} {100 - fin.jointSplitA}%</>} tip="jointSplit">
             <Slider value={fin.jointSplitA} onChange={(v) => update((d) => { d.financing.jointSplitA = v })} ariaLabel="Joint split" />
@@ -711,7 +754,8 @@ function DownpaymentPreview({ scenario: raw, policy }: { scenario: Scenario; pol
 
 // ---------------- Costs ----------------
 
-export function CostsEditor({ scenario, update, policy }: { scenario: Scenario; update: Update; policy: Policy }) {
+export function CostsEditor({ scenario, update, policy, brief = false }: { scenario: Scenario; update: Update; policy: Policy; brief?: boolean }) {
+  const [more, setMore] = useState(!brief)
   const loanGuess = scenario.flat.price * scenario.financing.ltv
   // Rows open for editing; items you just added open straight away.
   const [open, setOpen] = useState<Set<string>>(() => new Set())
@@ -743,7 +787,7 @@ export function CostsEditor({ scenario, update, policy }: { scenario: Scenario; 
           </div>
         )}
       </Card>
-      <Card>
+      {more && <Card>
         <div className="mb-2 text-sm font-semibold">Assumptions</div>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Interest on cash" tip="cashInterest">
@@ -755,24 +799,32 @@ export function CostsEditor({ scenario, update, policy }: { scenario: Scenario; 
               onChange={(v) => update((d) => { d.assumptions = { cashInterestPct: d.assumptions?.cashInterestPct ?? 0, inflationPct: v } })} ariaLabel="Inflation" />
           </Field>
         </div>
-      </Card>
-      <CostGroup title="Buying fees" hint="Worked out from HDB’s rates. Tap one to see or change it."
-        items={scenario.costs.filter((c) => BUYING_KINDS.includes(c.kind))} {...groupProps} />
-      <CostGroup title="Running costs after keys" hint="Monthly and yearly bills once the flat is yours."
+      </Card>}
+      {!more && (
+        <p className="text-xs text-ink-2">Fees such as stamp duty, legal fees and S&amp;CC are worked out for you from HDB’s rates.</p>
+      )}
+      {more && <CostGroup title="Buying fees" hint="Worked out from HDB’s rates. Tap one to see or change it."
+        items={scenario.costs.filter((c) => BUYING_KINDS.includes(c.kind))} {...groupProps} />}
+      {more && <CostGroup title="Running costs after keys" hint="Monthly and yearly bills once the flat is yours."
         items={scenario.costs.filter((c) => RUNNING_KINDS.includes(c.kind))} {...groupProps}
         footer={!scenario.costs.some((c) => c.kind === 'hps') && (
           <Button variant="secondary" onClick={() => add({ ...defaultCosts().find((c) => c.kind === 'hps')!, id: newId('hps') })}>+ Home Protection Scheme</Button>
-        )} />
+        )} />}
       <CostGroup title="Your costs" hint="Renovation, furniture and anything else. Your own costs rise with the inflation setting."
         items={scenario.costs.filter((c) => !BUYING_KINDS.includes(c.kind) && !RUNNING_KINDS.includes(c.kind) && c.kind !== 'inflow')} {...groupProps}
         footer={[['Wedding', 30000], ['Car', 20000], ['Travel', 5000], ['Other', 1000]].map(([label, amt]) => (
           <Button key={label} variant="secondary" onClick={() => add({ id: newId('c'), label: String(label), kind: 'custom', amount: Number(amt), auto: false, when: { date: scenario.startMonth }, funding: 'cashOnly', payer: 'joint', delayable: true })}>+ {label}</Button>
         ))} />
-      <CostGroup title="Money coming in" tip="inflow" hint="One-off cash you expect: gifts from family, hongbao, selling a car, an insurance payout…"
+      {!more && (
+        <button type="button" className="text-sm font-medium text-accent" onClick={() => setMore(true)}>
+          More details: all fees, money coming in (gifts, hongbao), interest and inflation ▾
+        </button>
+      )}
+      {more && <CostGroup title="Money coming in" tip="inflow" hint="One-off cash you expect: gifts from family, hongbao, selling a car, an insurance payout…"
         items={scenario.costs.filter((c) => c.kind === 'inflow')} {...groupProps} inflow
         footer={[['Gift from family', 10000], ['Hongbao', 20000], ['Sale of car / items', 15000], ['Other', 5000]].map(([label, amt]) => (
           <Button key={label} variant="secondary" onClick={() => add({ id: newId('in'), label: String(label), kind: 'inflow', amount: Number(amt), auto: false, when: { date: scenario.startMonth }, funding: 'cashOnly', payer: 'joint' })}>+ {label}</Button>
-        ))} />
+        ))} />}
     </div>
   )
 }

@@ -48,10 +48,11 @@ export function Wizard({ onFinish, onSkip, canSkip, firstRun }: { onFinish: (s: 
           <Disclaimer />
         </div>
       )}
-      {step === 1 && <PartnersEditor scenario={draft} update={update} policy={policy} />}
-      {step === 2 && <FlatEditor scenario={draft} update={update} policy={policy} />}
-      {step === 3 && <FinancingEditor scenario={draft} update={update} policy={policy} />}
-      {step === 4 && <CostsEditor scenario={draft} update={update} policy={policy} />}
+      {step === 1 && <PartnersEditor scenario={draft} update={update} policy={policy} brief />}
+      {step === 2 && <FlatEditor scenario={draft} update={update} policy={policy} brief />}
+      {step === 3 && <FinancingEditor scenario={draft} update={update} policy={policy} brief />}
+      {step === 4 && <CostsEditor scenario={draft} update={update} policy={policy} brief />}
+      {step > 0 && <p className="mt-3 text-xs text-muted">Only the basics here. You can change anything, and add more detail, later under Edit plan.</p>}
 
       <div className="sticky bottom-0 -mx-4 mt-6 flex justify-between gap-2 border-t border-line bg-page/95 px-4 py-3 backdrop-blur">
         <Button variant="secondary" disabled={step === 0} onClick={() => setStep((s) => s - 1)}>Back</Button>

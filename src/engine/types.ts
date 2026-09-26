@@ -225,6 +225,11 @@ export type PolicyOverrides = Record<string, number>
 
 export interface Scenario {
   schemaVersion: 1
+  /**
+   * Values that are still the made-up starting examples (e.g. "A.grossMonthly", "flat.price"). Each is
+   * removed when you change it; the app flags plans that still have some.
+   */
+  exampleFields?: string[]
   /** Version of the default cost list this plan has (2 added resale levy, S&CC, property tax). */
   costDefaultsVersion?: number
   id: string

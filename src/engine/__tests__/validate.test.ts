@@ -119,3 +119,26 @@ describe('Enhanced CPF Housing Grant in new plans', () => {
     expect(runScenario(s).warnings.map((w) => w.id)).not.toContain('ehg-missing')
   })
 })
+
+describe('example starting values', () => {
+  const w = (s: ReturnType<typeof newPlan>) => runScenario(s).warnings.find((x) => x.id === 'example-values')
+  it('a new plan flags its made-up values', () => {
+    expect(w(newPlan())?.explanation).toMatch(/Partner A’s birth month, salary, CPF OA, cash savings, monthly savings; Partner B’s .*; the flat price/)
+  })
+  it('lists only what’s left, and nothing once all are replaced', () => {
+    const s = newPlan()
+    s.exampleFields = ['A.grossMonthly']
+    expect(w(s)?.explanation).toMatch(/Partner A’s salary\./)
+    s.exampleFields = []
+    expect(w(s)).toBeUndefined()
+  })
+  it('singles aren’t told about the empty second person', () => {
+    const s = newPlan()
+    s.buyers = 'single'
+    s.exampleFields = ['B.grossMonthly']
+    expect(w(s)).toBeUndefined()
+  })
+  it('example plans and older saved plans have none', () => {
+    expect(w(seedScenario())).toBeUndefined()
+  })
+})

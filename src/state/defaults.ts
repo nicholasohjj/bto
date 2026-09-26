@@ -127,6 +127,11 @@ export function newScenario(name = 'Our BTO plan', start: YearMonth = currentYm(
 export function newPlan(name?: string): Scenario {
   const s = newScenario(name)
   s.flat.grants = [{ id: 'ehg', name: 'Enhanced CPF Housing Grant', amount: 0, auto: 'EHG', splitA: 50, when: { milestone: 'keys' } }]
+  // The starting figures are made up; mark them until you replace them.
+  s.exampleFields = [
+    ...(['A', 'B'] as const).flatMap((id) => ['birthYearMonth', 'grossMonthly', 'cpfOA', 'cash', 'monthlyCashSavings'].map((f) => `${id}.${f}`)),
+    'flat.price',
+  ]
   return s
 }
 

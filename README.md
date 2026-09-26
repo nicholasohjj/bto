@@ -14,6 +14,8 @@ npm run build      # production build in dist/ (static files; host anywhere)
 npm run lint
 ```
 
+The setup wizard asks only for the essentials (each editor has a `brief` mode with a “More details” link); everything else is in Edit plan. New plans mark their made-up starting values (`exampleFields`: salary, savings, CPF, monthly savings, birth month, price) with an “example” tag until changed, and Overview warns while any are left.
+
 Everything runs in the browser. The layout works from 320px phones to desktop. It can be installed with **Add to Home Screen** (`public/manifest.webmanifest`) and works offline after one visit: `public/sw.js` loads pages from the network first and falls back to the cache, and serves the hashed build files from the cache. It's only registered in production builds. The build (`swAssets` in `vite.config.ts`) writes the list of build files and a per-build cache name into `dist/sw.js`, so every deploy gets a fresh cache and the old one is deleted.
 
 Charts load as a separate file (`ui/lazyCharts.tsx`): the charting library is about half the code, so the page shows first and the charts follow.

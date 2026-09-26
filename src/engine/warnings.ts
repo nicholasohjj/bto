@@ -559,6 +559,25 @@ export function buildWarnings(core: CoreResult, extras: WarningExtras = {}): War
     })
   }
 
+  // --- Made-up starting values still in the plan ---
+  const people = isSingle(s) ? [s.partners[0]] : s.partners
+  const FIELD_NAMES: Record<string, string> = { grossMonthly: 'salary', cash: 'cash savings', cpfOA: 'CPF OA', monthlyCashSavings: 'monthly savings', birthYearMonth: 'birth month' }
+  const leftovers = [
+    ...people.map((p) => {
+      const fields = (s.exampleFields ?? []).filter((k) => k.startsWith(`${p.id}.`)).map((k) => FIELD_NAMES[k.slice(2)]).filter(Boolean)
+      return fields.length ? `${isSingle(s) ? 'your' : `${p.name}’s`} ${fields.join(', ')}` : ''
+    }),
+    s.exampleFields?.includes('flat.price') ? 'the flat price' : '',
+  ].filter(Boolean)
+  if (leftovers.length) {
+    warnings.push({
+      id: 'example-values', severity: 'warning',
+      title: 'Some numbers are still examples',
+      explanation: `These are made-up starting values, not yours: ${leftovers.join('; ')}. The results won’t mean much until you replace them.`,
+      fixes: ['Change them in Edit plan (Us and Flat); fields marked “example” are the ones left.'],
+    })
+  }
+
   // --- A grant you'd likely get but haven't added (plans made before the wizard included it) ---
   const ehg = core.schedule.eligibility.ehg
   const hasEhg = s.flat.grants.some((g) => g.auto === 'EHG' || /enhanced/i.test(g.name))
