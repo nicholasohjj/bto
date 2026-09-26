@@ -14,7 +14,9 @@ npm run build      # production build in dist/ (static files; host anywhere)
 npm run lint
 ```
 
-Everything runs in the browser. The layout works from 320px phones to desktop. On phones, the payment and comparison tables switch to card lists. Scenarios are saved in `localStorage`. To share with your partner:
+Everything runs in the browser. The layout works from 320px phones to desktop. It can be installed with **Add to Home Screen** (`public/manifest.webmanifest`) and works offline after one visit: `public/sw.js` loads pages from the network first and falls back to the cache, and serves the hashed build files from the cache. It's only registered in production builds. Bump `CACHE` in `sw.js` if you change what it caches.
+
+Shared links show a preview card (title, description and `public/og.png`) from the `og:` tags in `index.html`. Those URLs are absolute (`https://bto-chi.vercel.app/…`), so update them if the domain changes. The icons and preview image are rendered from SVG with `rsvg-convert`. On phones, the payment and comparison tables switch to card lists. Scenarios are saved in `localStorage`. To share with your partner:
 
 - **⋯ → Share link** (`state/share.ts`) puts the scenario in the link itself, deflated with the browser's `CompressionStream` and base64url-encoded after `#s=`. The part after `#` is never sent to the server. Opening the link adds the plan, or switches to it if the same plan is already there.
 - **⋯ → Export** (a `.json` file) and **⋯ → Import** on the other phone.
