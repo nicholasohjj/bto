@@ -3,7 +3,7 @@ import { isWorking, salaryAt } from './cpf'
 import { addMonths } from './dates'
 import type { Scenario, YearMonth } from './types'
 import { ageInMonths } from './cpf'
-import { isCompleted, isSingle, isSinglesPurchase, normalizeScenario } from './saleType'
+import { isCompleted, isSingle, isSinglesPurchase, leaseFactor, normalizeScenario } from './saleType'
 
 export interface Eligibility {
   /** Month the HFE letter / income assessment is assumed (application, or DIA assessment). */
@@ -76,11 +76,19 @@ export function assessEligibility(raw: Scenario, policy: Policy): Eligibility {
   const assessedAt = grantAssessmentMonth(s, policy)
   const windowEnd = addMonths(assessedAt, -el.ehgIncomeLagMonths)
   const months = el.ehgEmploymentMonths
-  const averageTo = (end: YearMonth) => {
+  // HDB's method: each person's total income over the 12-month window divided by the months they
+  // actually worked (no-pay months don't count), then added up across the household.
+  const averageTo = (end: YearMonth) => s.partners.reduce((sum, p) => {
     let total = 0
-    for (let i = 0; i < months; i++) total += householdIncome(s, addMonths(end, -i))
-    return total / months
-  }
+    let worked = 0
+    for (let i = 0; i < months; i++) {
+      const ym = addMonths(end, -i)
+      if (!isWorking(p, ym)) continue
+      total += salaryAt(p, s.startMonth, ym)
+      worked++
+    }
+    return sum + (worked ? total / worked : 0)
+  }, 0)
   // Grant (and, under DIA, HDB loan) income: at the HFE application, or deferred under DIA.
   const avgIncome = averageTo(windowEnd)
   // Buying the flat is decided at the HFE application, even under DIA.
@@ -138,11 +146,17 @@ export function assessEligibility(raw: Scenario, policy: Policy): Eligibility {
     const top = el.ehgFamilies[el.ehgFamilies.length - 1]?.upTo ?? 0
     ehgReason = ehg > 0 ? 'Based on your average household income.' : `Average income is above the $${top.toLocaleString()} grant ceiling.`
   }
+  // Full EHG only if the remaining lease covers the youngest to 95; otherwise pro-rated (none at ≤ 20 years).
+  const lease = leaseFactor(s, policy)
+  if (ehg > 0 && lease.factor < 1) {
+    ehg = Math.round(ehg * lease.factor)
+    ehgReason += ` Pro-rated to ${Math.round(lease.factor * 100)}% because the lease doesn’t cover the youngest of you to ${policy.lease.coverToAge}.`
+  }
 
   let stepUp = 0
   let stepUpReason: string
   if (household !== 'secondTimers') stepUpReason = 'Only for second-timer families.'
-  else if (!s.flat.fromRentalOr2Room) stepUpReason = 'Only if you now live in public rental or own a 2-room flat.'
+  else if (!s.flat.fromRentalOr2Room) stepUpReason = 'Only if you now live in public rental, or own a 2-room or 3-room flat (Standard, or in a non-mature estate).'
   else if (!(s.flat.type === '2R' || s.flat.type === '3R') || s.flat.classification !== 'Standard') stepUpReason = 'Only for a 2-room Flexi or 3-room Standard flat.'
   else if (avgIncome > el.stepUpIncomeCeiling) stepUpReason = `Income is above $${el.stepUpIncomeCeiling.toLocaleString()}.`
   else if (!employmentOk) stepUpReason = `Needs ${months} months of continuous work.`

@@ -5,7 +5,7 @@ import { buildSchedule, maxLtvFor } from '../payments'
 import { resolvePolicy } from '../policyOverrides'
 import { ordinaryWageCpf, prYear, ratesFor, salaryAt } from '../cpf'
 import { jobLossImpact, withJobLoss } from '../whatIf'
-import { typicalDates } from '../saleType'
+import { leaseFactor, typicalDates } from '../saleType'
 import { monthsBetween } from '../dates'
 import { assessEligibility, tierAmount } from '../eligibility'
 import { buyersStampDuty } from '../stampDuty'
@@ -657,5 +657,109 @@ describe('HFE letter and HDB’s check before keys', () => {
   it('doesn’t repeat the check under DIA, which already assesses near keys', () => {
     const noPay = (s: Scenario) => { s.financing.deferredIncomeAssessment = true; s.partners.forEach((p, i) => { p.incomeChanges = [{ id: `gap${i}`, kind: 'noIncome', from: '2029-06', until: '2030-06', monthlyCashChange: 0 }] }) }
     expect(ids(noPay)).not.toContain('loan-review')
+  })
+})
+
+describe('HDB’s income average: total income ÷ months worked, per person', () => {
+  // Application Feb 2026 → HFE Jan 2026 → window Dec 2024 – Nov 2025. Both earn $4,000.
+  it('someone who started work mid-window is averaged over the months they worked', () => {
+    const el = assessEligibility(base((s) => { s.partners[1].workStartMonth = '2025-06' }), policy)
+    expect(el.windowEnd).toBe('2025-11')
+    expect(el.avgIncome).toBeCloseTo(8000, 6) // $4,000 each, not $4,000 + $2,000
+  })
+  it('no-pay months don’t count', () => {
+    const el = assessEligibility(base((s) => { s.partners[0].incomeChanges = [{ id: 'npl', kind: 'noIncome', from: '2025-03', until: '2025-05', monthlyCashChange: 0 }] }), policy)
+    expect(el.avgIncome).toBeCloseTo(8000, 6)
+  })
+  it('someone who didn’t work at all in the window adds nothing', () => {
+    const el = assessEligibility(base((s) => { s.partners[1].workStartMonth = '2026-06' }), policy)
+    expect(el.avgIncome).toBeCloseTo(4000, 6)
+  })
+})
+
+describe('Enhanced CPF Housing Grant: HDB’s worked examples (hdb.gov.sg, 2024)', () => {
+  const el = P.eligibility
+  it('families table: $4,200 → $70,000; $3,000 → $95,000; $4,400 → $70,000', () => {
+    expect(tierAmount(4200, el.ehgFamilies)).toBe(70000)
+    expect(tierAmount(3000, el.ehgFamilies)).toBe(95000)
+    expect(tierAmount(4400, el.ehgFamilies)).toBe(70000)
+  })
+  it('singles table on half the income: $2,000 → $40,000; $2,200 → $35,000', () => {
+    expect(tierAmount(2000, el.ehgSingles)).toBe(40000)
+    expect(tierAmount(2200, el.ehgSingles)).toBe(35000)
+  })
+
+  const ehgPlan = (f: (s: Scenario) => void) => base((s) => {
+    s.flat.grants = [{ id: 'ehg', name: 'EHG', amount: 0, auto: 'EHG', splitA: 50, when: { milestone: 'keys' } }]
+    f(s)
+  })
+  it('Mr and Mrs G: first-timer + second-timer, $4,000 → $40,000, all to the first-timer', () => {
+    const s = ehgPlan((s) => { s.flat.household = 'firstAndSecond'; s.flat.secondTimer = 'B'; s.partners.forEach((p) => { p.grossMonthly = 2000 }) })
+    const { eligibility, grantCredits } = buildSchedule(s, policy)
+    expect(eligibility.ehg).toBe(40000)
+    expect(grantCredits[0].amounts).toEqual({ A: 40000, B: 0 })
+    const flipped = buildSchedule(ehgPlan((s) => { s.flat.household = 'firstAndSecond'; s.flat.secondTimer = 'A'; s.partners.forEach((p) => { p.grossMonthly = 2000 }) }), policy)
+    expect(flipped.grantCredits[0].amounts).toEqual({ A: 0, B: 40000 })
+  })
+  it('two first-timers still split it as set', () => {
+    const { grantCredits } = buildSchedule(ehgPlan(() => {}), policy)
+    expect(grantCredits[0].amounts.A).toBe(grantCredits[0].amounts.B)
+  })
+  it('pro-rates the grant when the lease doesn’t cover the youngest to 95', () => {
+    // A 50-year lease covers the youngest (29 at AFL here) only to 79: 50 of the 66 years needed.
+    const full = assessEligibility(ehgPlan(() => {}), policy).ehg
+    const s = ehgPlan((s) => { s.flat.saleType = 'SBF'; s.flat.remainingLeaseYears = 50 })
+    const short = assessEligibility(s, policy)
+    const lf = leaseFactor(s, policy)
+    expect(lf.needed).toBe(66)
+    expect(short.ehg).toBe(Math.round(full * 50 / 66))
+    expect(short.ehgReason).toMatch(/Pro-rated/)
+  })
+})
+
+describe('Top-Up Grant note for singles buying a 2-room Flexi', () => {
+  it('shows for singles buying a 2-room Flexi, not for couples', () => {
+    const single = runScenario(base((s) => { s.buyers = 'single'; s.flat.type = '2R'; s.partners[0].birthYearMonth = '1985-01' }))
+    expect(single.warnings.find((w) => w.id === 'topup-grant')?.title).toMatch(/\$15,000/)
+    expect(runScenario(base((s) => { s.flat.type = '2R' })).warnings.some((w) => w.id === 'topup-grant')).toBe(false)
+  })
+})
+
+describe('Step-Up CPF Housing Grant (hdb.gov.sg)', () => {
+  const stepUp = (f: (s: Scenario) => void) => assessEligibility(base((s) => {
+    s.flat.household = 'secondTimers'; s.flat.fromRentalOr2Room = true; s.flat.type = '3R'
+    f(s)
+  }), policy)
+  it('$15,000 up to $8,000 household income', () => {
+    expect(stepUp((s) => { s.partners.forEach((p) => { p.grossMonthly = 3900 }) }).stepUp).toBe(15000) // $7,800
+    expect(stepUp((s) => { s.partners.forEach((p) => { p.grossMonthly = 4100 }) }).stepUp).toBe(0) // $8,200
+  })
+  it('only for a 2-room Flexi or 3-room Standard flat', () => {
+    expect(stepUp((s) => { s.flat.type = '4R' }).stepUp).toBe(0)
+    expect(stepUp((s) => { s.flat.classification = 'Plus' }).stepUp).toBe(0)
+  })
+})
+
+describe('Home Protection Scheme', () => {
+  const ids = (f: (s: Scenario) => void) => runScenario(base((s) => {
+    s.costs.push({ id: 'hps', label: 'HPS', kind: 'hps', amount: 300, auto: false, when: { milestone: 'keys' }, funding: 'cpfAllowed', payer: 'joint', recurrence: { everyMonths: 12, times: 30 } })
+    f(s)
+  })).warnings.map((w) => w.id)
+  it('notes it’s optional when the mortgage is paid in cash', () => {
+    expect(ids((s) => { s.financing.mortgageFrom = 'cashOnly' })).toContain('hps-optional')
+    expect(ids(() => {})).not.toContain('hps-optional')
+  })
+  it('warns when CPF pays the mortgage but there’s no HPS', () => {
+    expect(ids((s) => { s.costs = s.costs.filter((c) => c.kind !== 'hps') })).toContain('hps-missing')
+    expect(ids(() => {})).not.toContain('hps-missing')
+  })
+})
+
+describe('buyers aged 55+', () => {
+  const ids = (f: (s: Scenario) => void) => runScenario(base(f)).warnings.map((w) => w.id)
+  it('mentions short-lease flats only when every buyer is 55+', () => {
+    expect(ids((s) => { s.partners.forEach((p) => { p.birthYearMonth = '1965-01' }) })).toContain('seniors-short-lease')
+    expect(ids((s) => { s.partners[0].birthYearMonth = '1965-01' })).not.toContain('seniors-short-lease')
+    expect(ids(() => {})).not.toContain('seniors-short-lease')
   })
 })

@@ -101,12 +101,14 @@ export interface Flat {
   grants: Grant[]
   /** First-timer status of the couple (default: both first-timers). */
   household?: 'firstTimers' | 'firstAndSecond' | 'secondTimers'
-  /** Step-Up grant: currently living in public rental or owning a 2-room flat. */
+  /** Step-Up grant: now in public rental, or owning a 2-room or 3-room flat (Standard, or in a non-mature estate). */
   fromRentalOr2Room?: boolean
   /** How you're buying: BTO (default), Sale of Balance Flats, or Open Booking of Flats. */
   saleType?: 'BTO' | 'SBF' | 'OBF'
   /** SBF/OBF: the flat is already built — AFL and key collection happen together. */
   completed?: boolean
+  /** First-timer + second-timer couples: who the second-timer is (default B). The EHG goes to the first-timer. */
+  secondTimer?: PartnerId
   /** Month you apply for the HFE letter (default: a month before the flat application). */
   hfeMonth?: YearMonth
   /** Remaining lease in years when you buy (default 99). Affects CPF use and HDB loan limit. */

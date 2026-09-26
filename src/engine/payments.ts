@@ -128,6 +128,15 @@ export function effectiveLtv(scenario: Scenario, policy: Policy): number {
   return Math.max(0, Math.min(scenario.financing.ltv, maxLtvFor(scenario, policy).max))
 }
 
+/**
+ * Partner A's share of a grant (%). A first-timer + second-timer couple's EHG (Singles) goes
+ * entirely to the first-timer (HDB); otherwise the split you set.
+ */
+export function grantSplitA(g: Scenario['flat']['grants'][number], s: Scenario): number {
+  if (g.auto === 'EHG' && s.flat.household === 'firstAndSecond' && s.buyers !== 'single') return (s.flat.secondTimer ?? 'B') === 'A' ? 0 : 100
+  return g.splitA
+}
+
 /** Grant amount: computed for auto grants (EHG / Step-Up), else as typed. */
 export function grantAmount(g: Scenario['flat']['grants'][number], elig: Eligibility): number {
   if (g.auto === 'EHG') return elig.ehg
@@ -303,7 +312,7 @@ export function buildSchedule(raw: Scenario, policy: Policy): Schedule {
     if (amount <= 0) continue
     let ym = resolveWhen(g.when, dates)
     if (ymToIndex(ym) > ymToIndex(dates.keys)) ym = dates.keys
-    const a = (amount * g.splitA) / 100
+    const a = (amount * grantSplitA(g, scenario)) / 100
     grantCredits.push({ id: g.id, label: g.name, ym, amounts: { A: a, B: amount - a } })
     grantsTotal += amount
   }

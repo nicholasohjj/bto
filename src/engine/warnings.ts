@@ -486,6 +486,26 @@ export function buildWarnings(core: CoreResult, extras: WarningExtras = {}): War
     })
   }
 
+  // --- Home Protection Scheme: compulsory only when CPF pays the instalments ---
+  const hps = s.costs.find((c) => c.kind === 'hps')
+  if (core.schedule.loan.loanAmount > 0) {
+    if (s.financing.mortgageFrom === 'cashOnly' && hps && hps.amount > 0) {
+      warnings.push({
+        id: 'hps-optional', severity: 'info', ym: s.flat.dates.keys,
+        title: 'Home Protection Scheme is optional when you pay the mortgage in cash',
+        explanation: `HPS is compulsory only if CPF pays your instalments. This plan pays them in cash but still includes ${money(hps.amount)} a year of HPS.`,
+        fixes: ['If you won’t take it, remove the HPS item under Costs (and consider other life or mortgage cover).'],
+      })
+    } else if (s.financing.mortgageFrom === 'cpfFirst' && !hps) {
+      warnings.push({
+        id: 'hps-missing', severity: 'warning', ym: s.flat.dates.keys,
+        title: 'Home Protection Scheme is compulsory when CPF pays the mortgage',
+        explanation: 'This plan pays the instalments from CPF but has no HPS premium. HPS is a yearly premium, paid from CPF OA or cash, from when the loan is disbursed.',
+        fixes: ['Add an HPS cost (yearly from key collection), or pay the mortgage in cash only (Loan section).'],
+      })
+    }
+  }
+
   // --- Turning 55 while CPF pays the mortgage (the Retirement Account transfer isn't simulated) ---
   if (core.schedule.loan.loanAmount > 0 && s.financing.mortgageFrom === 'cpfFirst') {
     const loanEnd = addMonths(s.flat.dates.keys, Math.round(core.schedule.loan.tenureYears * 12) + 1)
@@ -724,8 +744,32 @@ export function buildWarnings(core: CoreResult, extras: WarningExtras = {}): War
     warnings.push({
       id: 'resale-grants', severity: 'warning',
       title: 'Some grants are for resale flats only',
-      explanation: `${resaleOnly.map((g) => g.name).join(', ')}: the Proximity Housing Grant and CPF Housing (Family) Grant apply to resale flats, not BTO. For BTO, first-timers usually get only the Enhanced CPF Housing Grant (EHG).`,
+      explanation: `${resaleOnly.map((g) => g.name).join(', ')}: the Proximity Housing Grant and CPF Housing (Family) Grant apply to resale flats, not new flats from HDB (BTO, SBF or open booking). For a new flat, first-timers usually get only the Enhanced CPF Housing Grant (EHG).`,
       fixes: ['Remove these grants unless HDB has confirmed them in your HFE letter.'],
+    })
+  }
+  // Aged 55+: HDB also sells short-lease flats (not modelled here).
+  const buyers = isSingle(s) ? [s.partners[0]] : s.partners
+  const atHfe = hfeMonth(s, core.policy)
+  if ((s.flat.saleType ?? 'BTO') === 'BTO' && buyers.every((p) => ageInMonths(p.birthYearMonth, atHfe) >= 55 * 12)) {
+    warnings.push({
+      id: 'seniors-short-lease', severity: 'info', ym: atHfe,
+      title: 'Aged 55 or over? You can also buy a short-lease flat',
+      explanation:
+        'Singapore Citizens aged 55+ can buy a short-lease 2-room Flexi flat or a Community Care Apartment from HDB, choosing a lease of 15 to 45 years that lasts every buyer to 95. ' +
+        'There’s no housing loan for these (cash and CPF only), and the price and any extra amounts are lower with a shorter lease. This app plans 99-year flats, so it doesn’t model them.',
+      fixes: ['Check HDB’s pages for seniors, or your HFE letter, for the options and prices.'],
+    })
+  }
+  if (isSinglesPurchase(s) && s.flat.type === '2R') {
+    const el = core.policy.eligibility
+    warnings.push({
+      id: 'topup-grant', severity: 'info',
+      title: `If you marry later: a Top-Up Grant of up to ${money(el.topUpGrant2RFlexi)}`,
+      explanation:
+        `Singles who buy a 2-room Flexi from HDB and later marry a first-timer Singapore Citizen or PR can apply for a Top-Up Grant of up to ${money(el.topUpGrant2RFlexi)}, ` +
+        `within 6 months of registering the marriage, if household income is ${money(el.topUpIncomeCeiling2RFlexi)}/month or less. It isn’t in this plan.`,
+      fixes: ['Once you know the month, add it under Grants as “Other grant”.'],
     })
   }
   if (s.flat.classification !== 'Standard') {

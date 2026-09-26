@@ -155,6 +155,9 @@ export interface Policy {
     stepUpIncomeCeiling: number
     incomeCeilingSingles: number
     incomeCeilingJointSingles: number
+    /** Singles who bought a 2-room Flexi and later marry: Top-Up Grant up to this, if income ≤ the ceiling. */
+    topUpGrant2RFlexi: number
+    topUpIncomeCeiling2RFlexi: number
     singlesMinAge: number
   }
   /** Second-timers buying another subsidised flat: fixed levy by the type of their first subsidised flat. */
@@ -286,14 +289,15 @@ export const DEFAULT_POLICY: Policy = {
     // LTV for loans from financial institutions: 75%.
     // Source: hdb.gov.sg Annex C, Oct 2024 BTO sales exercise, footnote 4. VERIFIED 2026-09-23.
     maxLtv: 0.75,
-    // Minimum cash downpayment with a bank loan (75% LTV): 5% of price.
-    // Source: hdb.gov.sg (search snippet: "at least 5% of the flat price ... must be paid in
-    // cash ... for an FI loan with 75% LTV limit"). SECONDARY 2026-09-23.
+    // Minimum cash payment with a bank loan: at least 5% of the flat price (more depending on age,
+    // loan period and other housing loans). Source: hdb.gov.sg "Housing loan from financial
+    // institutions" (text supplied by the user). VERIFIED 2026-09-26.
     minCashPct: 0.05,
     // MAS medium-term interest rate floor for TDSR/MSR on bank loans: 4% p.a.
     // Source: MAS release 29 Sep 2022 (MAS site unavailable at check). SECONDARY 2026-09-23.
     stressRate: 0.04,
-    // Max bank loan tenure for HDB flats. UNVERIFIED (general knowledge, 30 years).
+    // Bank loan repayment period for HDB flats: up to 30 years.
+    // Source: hdb.gov.sg "Housing loan from financial institutions". VERIFIED 2026-09-26.
     maxTenureYears: 30,
     // Banks usually start instalments the month after disbursement. UNVERIFIED (varies by bank).
     firstInstalmentMonths: 1,
@@ -442,16 +446,24 @@ export const DEFAULT_POLICY: Policy = {
     // 12 months up to 2 months before the HFE application. Source: mynicehome.gov.sg. VERIFIED 2026-09-23.
     ehgEmploymentMonths: 12,
     ehgIncomeLagMonths: 2,
-    // Step-Up CPF Housing Grant: $15,000 for second-timer families moving from public rental / a
-    // 2-room flat to a 2-room Flexi or 3-room Standard flat; income ≤ $7,000.
-    // Source: HDB Step-Up grant page (search snippet) + guides. SECONDARY 2026-09-23.
+    // Step-Up CPF Housing Grant: $15,000 for second-timer families (1 housing subsidy taken) now in
+    // public rental, or owning a 2-room or 3-room flat (Standard, or unclassified in a non-mature
+    // estate), buying a 2-room Flexi or 3-room Standard flat from HDB; household income ≤ $8,000
+    // (averaged over months worked); 12 months' continuous work.
+    // Source: hdb.gov.sg "Step-Up CPF Housing Grant" page (text supplied by the user). VERIFIED 2026-09-26.
     stepUpAmount: 15000,
-    stepUpIncomeCeiling: 7000,
+    stepUpIncomeCeiling: 8000,
     // Singles (SC, 35+) buying a 2-room Flexi: $7,000 until 23 Aug 2026, $8,000 from 24 Aug 2026
     // (National Day Rally 2026). Source: news reports of the change. SECONDARY 2026-09-25.
     incomeCeilingSingles: 8000,
     // Joint Singles Scheme (2–4 singles): assumed the same as the families' ceiling. UNVERIFIED.
     incomeCeilingJointSingles: 16000,
+    // Top-Up Grant: singles (alone, with other single citizens or with parents) who bought a 2-room
+    // Flexi from HDB and later marry an SC/SPR first-timer (or a spouse/child becomes SC/SPR) get up
+    // to $15,000; apply within 6 months; household income ≤ $8,000 (99-year lease).
+    // Source: hdb.gov.sg "CPF Housing Grant for resale flats (Families)" page. VERIFIED 2026-09-26.
+    topUpGrant2RFlexi: 15000,
+    topUpIncomeCeiling2RFlexi: 8000,
     // Singles and joint singles must be Singapore Citizens aged 35 or above; new flats: 2-room
     // Flexi only (any location). Source: HDB via guides (search snippets). SECONDARY 2026-09-25.
     singlesMinAge: 35,
@@ -538,9 +550,9 @@ export const POLICY_META: Record<string, PolicyMeta> = {
   'hdbLoan.oaRetainMax': { label: 'OA you may keep with HDB loan (per person)', unit: 'sgd', status: 'verified', source: 'hdb.gov.sg Use of CPF savings (Sep 2026)' },
   'bankLoan.defaultInterestRate': { label: 'Bank loan default rate (estimate)', unit: 'pct', status: 'unverified', source: 'Market estimate' },
   'bankLoan.maxLtv': { label: 'Bank loan max LTV', unit: 'pct', status: 'verified', source: 'HDB BTO Annex C, Oct 2024' },
-  'bankLoan.minCashPct': { label: 'Bank loan min cash downpayment', unit: 'pct', status: 'secondary', source: 'hdb.gov.sg (snippet)' },
+  'bankLoan.minCashPct': { label: 'Bank loan min cash downpayment', unit: 'pct', status: 'verified', source: 'hdb.gov.sg Housing loan from FIs (Sep 2026)' },
   'bankLoan.stressRate': { label: 'Bank loan MSR/TDSR rate floor', unit: 'pct', status: 'secondary', source: 'MAS release, Sep 2022' },
-  'bankLoan.maxTenureYears': { label: 'Bank loan max tenure (HDB flat)', unit: 'years', status: 'unverified', source: 'General knowledge' },
+  'bankLoan.maxTenureYears': { label: 'Bank loan max tenure (HDB flat)', unit: 'years', status: 'verified', source: 'hdb.gov.sg Housing loan from FIs (Sep 2026)' },
   msr: { label: 'Mortgage Servicing Ratio cap', unit: 'pct', status: 'secondary', source: 'MAS' },
   tdsr: { label: 'Total Debt Servicing Ratio cap', unit: 'pct', status: 'secondary', source: 'MAS' },
   bsdTiers: { label: "Buyer's Stamp Duty tiers", unit: 'pct', status: 'verified', source: 'iras.gov.sg BSD page' },
@@ -578,15 +590,15 @@ export const POLICY_META: Record<string, PolicyMeta> = {
   'eligibility.incomeCeiling2RFlexi': { label: 'Income ceiling: 2-room Flexi (99-yr)', unit: 'sgd', status: 'verified', source: 'HDB Feb 2026 Annex B (may have changed Aug 2026)' },
   'eligibility.incomeCeilingExtended': { label: 'Income ceiling: extended family / 3Gen', unit: 'sgd', status: 'verified', source: 'hdb.gov.sg HDB housing loan eligibility (Sep 2026)' },
   'eligibility.scSprPremium': { label: 'SC/SPR household premium on new flat', unit: 'sgd', status: 'secondary', source: 'HDB (snippet)' },
-  'eligibility.ehgFamilies': { label: 'Enhanced CPF Housing Grant (families) by income', unit: 'sgd', status: 'secondary', source: 'Max/ceiling cpf.gov.sg; bands ohmyhome.com' },
-  'eligibility.ehgSingles': { label: 'EHG (singles table; FT+ST couples use half income)', unit: 'sgd', status: 'secondary', source: 'mynicehome.gov.sg + ohmyhome.com' },
+  'eligibility.ehgFamilies': { label: 'Enhanced CPF Housing Grant (families) by income', unit: 'sgd', status: 'verified', source: 'hdb.gov.sg EHG page: max, $9,000 ceiling and 3 worked examples match' },
+  'eligibility.ehgSingles': { label: 'EHG (singles table; FT+ST couples use half income)', unit: 'sgd', status: 'verified', source: 'hdb.gov.sg EHG page: $60,000 max, $4,500 half-income ceiling, 2 worked examples match' },
   'eligibility.ehgEmploymentMonths': { label: 'EHG: months of continuous work needed', unit: 'months', status: 'verified', source: 'mynicehome.gov.sg' },
   'eligibility.ehgIncomeLagMonths': { label: 'EHG: income window ends months before HFE', unit: 'months', status: 'verified', source: 'mynicehome.gov.sg' },
   'eligibility.incomeCeilingSingles': { label: 'Income ceiling: singles', unit: 'sgd', status: 'verified', source: 'hdb.gov.sg HDB housing loan eligibility (Sep 2026)' },
   'eligibility.incomeCeilingJointSingles': { label: 'Income ceiling: Joint Singles Scheme', unit: 'sgd', status: 'unverified', source: 'Assumed = families' },
   'eligibility.singlesMinAge': { label: 'Singles: minimum age', unit: 'years', status: 'secondary', source: 'HDB via guides (snippet)' },
-  'eligibility.stepUpAmount': { label: 'Step-Up CPF Housing Grant', unit: 'sgd', status: 'secondary', source: 'HDB (snippet) + guides' },
-  'eligibility.stepUpIncomeCeiling': { label: 'Step-Up grant income ceiling', unit: 'sgd', status: 'secondary', source: 'HDB (snippet) + guides' },
+  'eligibility.stepUpAmount': { label: 'Step-Up CPF Housing Grant', unit: 'sgd', status: 'verified', source: 'hdb.gov.sg Step-Up CPF Housing Grant (Sep 2026)' },
+  'eligibility.stepUpIncomeCeiling': { label: 'Step-Up grant income ceiling', unit: 'sgd', status: 'verified', source: 'hdb.gov.sg Step-Up CPF Housing Grant (Sep 2026)' },
   'fees.conveyancingTiers': { label: 'HDB conveyancing fee tiers (per $)', unit: 'ratio', status: 'unverified', source: 'First tier verified on cpf.gov.sg' },
   'fees.conveyancingRoundTo': { label: 'Conveyancing: round price up to', unit: 'sgd', status: 'unverified', source: 'General knowledge' },
   'fees.conveyancingMin': { label: 'Conveyancing minimum fee', unit: 'sgd', status: 'secondary', source: 'Secondary' },

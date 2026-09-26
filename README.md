@@ -95,14 +95,14 @@ src/
     - If the lease won't last the youngest of you to 95, CPF use and the HDB loan limit are pro-rated (lease ÷ years to 95).
     - 20 years or less: no CPF and no HDB loan.
 - **Eligibility and grants** (`eligibility.ts`).
-  - Household income is averaged over 12 months, ending 2 months before you apply for the HFE letter (Key dates; default a month before the flat application, since you need a valid letter to apply and it takes up to a month; valid 9 months, with a warning if it would expire or comes after the application). Under DIA, the assessment month.
+  - Household income uses the 12 months ending 2 months before you apply for the HFE letter. Like HDB, each person's gross pay (no bonuses or employer CPF) is averaged over the months they actually worked in that window (no-pay months don't count), then the averages are added. HFE month: set under Key dates (default a month before the flat application, since you need a valid letter to apply and it takes up to a month; valid 9 months, with a warning if it would expire or comes after the application). Under DIA, the assessment month.
   - That income is checked against the ceiling for the flat type.
   - The **Enhanced CPF Housing Grant** can be auto-calculated:
     - Both first-timers: families table.
-    - One first-timer, one second-timer: singles table on half the income.
+    - One first-timer, one second-timer: singles table on half the income, all paid to the first-timer (pick who's the second-timer in the Flat section).
     - Both second-timers: none.
     - At least one of you must have worked 12 months straight.
-  - The **Step-Up grant** can be auto-calculated for second-timers moving from public rental or a 2-room flat.
+  - The **Step-Up grant** ($15,000, income up to $8,000) can be auto-calculated for second-timers in public rental or owning a 2- or 3-room flat, buying a 2-room Flexi or 3-room Standard flat.
   - Citizen + PR couples: the $10,000 premium is added to the price. Two PRs are flagged as not eligible for a BTO.
 - **Loan limits.**
   - A bank loan's LTV drops to 55% (with 10% cash) if the tenure is over 25 years, or the loan runs past the borrowers' income-weighted average age of 65.
@@ -192,17 +192,20 @@ Users can override any figure for a single scenario under **Advanced settings**.
 | HDB loan rate = CPF OA rate + 0.1% (2.5% + 0.1% = 2.6%) | Verified peg (hdb.gov.sg, checked 2026-09-26); OA rate 2.5% secondary |
 | Accrued interest = OA rate, monthly/compounded yearly | Secondary (CPF page for the method returned 404) |
 | Staggered downpayment: HDB loan 5% at AFL / 20% at keys; bank loan 10% at AFL (≥ 5% cash) / 15%, or 10% cash / 35% at 55% LTV; eligibility (HFE by younger's 30th birthday, ≤ 5-room, right-sizers ≤ 3-room) | Verified (hdb.gov.sg Staggered Downpayment Scheme page, checked 2026-09-26) |
-| Bank loan min 5% cash | Secondary |
 | MSR 30% and 3% floor for HDB loans | Verified (hdb.gov.sg HDB housing loan page, checked 2026-09-26) |
 | TDSR 55%, 4% stress rate for bank loans | Secondary (MAS site was down) |
 | Fire insurance premiums | Secondary |
 | HDB loan tenure: shortest of 25 yrs, 65 − average age, lease − 20 | Verified (hdb.gov.sg HDB housing loan page, checked 2026-09-26) |
-| Bank loan max tenure 30 yrs | **Not verified** |
+| Bank loan: up to 30 years; 75% LTV; at least 5% cash; Letter of Offer before AFL; private lawyer; no refinancing to HDB | Verified (hdb.gov.sg Housing loan from FIs, checked 2026-09-26) |
+| Bank loan 55% LTV / 10% cash when tenure > 25 yrs or past age 65 | Secondary (MAS; HDB only says banks may restrict) |
+| HPS compulsory only when CPF pays the instalments | Verified (hdb.gov.sg, checked 2026-09-26) |
+| Seniors (SC 55+): short-lease 2-room Flexi / Community Care Apartments, lease 15–45 yrs to cover all to 95, no housing loan — not modelled; a note points to them when every buyer is 55+ | Verified (hdb.gov.sg seniors page, checked 2026-09-26) |
 | HDB loan: first instalment on the 1st of the 2nd month after disbursement (keys); partial repayments ≥ $5,000 in $1,000 steps, no fee | Verified (hdb.gov.sg Payments for HDB housing loan, checked 2026-09-26) |
 | Bank loan: first instalment the month after keys | **Not verified** (varies by bank) |
 | HDB → bank refinancing is one-way; takes ~6–8 weeks; a bank loan can't be refinanced to HDB | Verified (hdb.gov.sg Refinancing HDB housing loan, checked 2026-09-26) |
 | HDB loan repayment period can be changed later (branch appointment; new CPF form; HPS extended) | Verified (hdb.gov.sg, checked 2026-09-26); limits for extensions not stated, so the purchase-time limits are used for the warning |
 | HFE letter: valid 9 months; needed when you apply; up to a month to process; HDB re-checks finances before keys (HDB loans) | Verified (hdb.gov.sg HFE letter pages, checked 2026-09-26) |
+| HFE income: 12 months to 2 months before the HFE month; each person's total ÷ months worked; bonuses and employer CPF excluded | Verified (hdb.gov.sg Income guidelines, checked 2026-09-26) |
 | HDB loan: each applicant may keep up to $20k OA | Verified (hdb.gov.sg Use of CPF savings, checked 2026-09-26) |
 | Conveyancing tiers after the first; GST 9% | **Not verified** (HDB page blocked automated access) |
 | Survey fee per flat type (only the $163.50–$408.75 range verified) | **Not verified** |
@@ -211,9 +214,10 @@ Users can override any figure for a single scenario under **Advanced settings**.
 | 2-room Flexi ceiling $7,000 (Feb 2026; may have risen in Aug 2026) | Verified for Feb 2026 (HDB Annex B) |
 | Income ceilings $16,000 families / $24,000 extended families / $8,000 singles | Verified (hdb.gov.sg HDB housing loan eligibility, checked 2026-09-26) |
 | CPF Annual Limit $37,740; voluntary top-ups allocated like normal contributions | Secondary (cpf.gov.sg search snippet) |
-| EHG table bands (max $120k, ceiling $9k verified); singles table for FT+ST couples | Secondary for the bands |
+| EHG: families up to $120k (ceiling $9,000); FT+ST couples get EHG (Singles) up to $60k on half the income (ceiling $4,500), paid to the first-timer; pro-rated if the lease doesn't cover the youngest to 95 | Verified (hdb.gov.sg EHG page; the app's tables reproduce HDB's 5 worked examples, checked 2026-09-26). Band values between the examples are secondary |
+| Top-Up Grant: singles who bought a 2-room Flexi and later marry: up to $15,000 (income ≤ $8,000; apply within 6 months) — shown as a note, not added. Resale-only grants (Family Grant, Proximity) are flagged on new flats | Verified (hdb.gov.sg CPF Housing Grant for resale flats page, checked 2026-09-26) |
 | EHG 12-month work rule and income window | Verified (mynicehome.gov.sg) |
-| Step-Up grant $15,000, income ≤ $7,000 | Secondary |
+| Step-Up grant $15,000: second-timers in public rental or owning a 2-/3-room flat (Standard, or non-mature estate), buying a 2-room Flexi or 3-room Standard flat; income ≤ $8,000 | Verified (hdb.gov.sg Step-Up CPF Housing Grant, checked 2026-09-26) |
 | SC/SPR $10,000 premium | Secondary |
 | CPF Valuation Limit / 120% Withdrawal Limit with BRS (bank loans) | Verified (cpf.gov.sg) |
 | BRS $110,200 (2026) | Secondary |

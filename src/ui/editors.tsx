@@ -1,12 +1,12 @@
 import type { FlatType, Policy } from '../config/policy'
 import { ageInMonths, estimatedLivingCosts, prYear, ratesFor } from '../engine/cpf'
-import { assessmentMonth, autoAmount, downpaymentSchedule, effectiveLtv, grantAmount, hdbMaxTenure, loanChangesOf, maxLtvFor, voluntaryList } from '../engine/payments'
+import { assessmentMonth, autoAmount, downpaymentSchedule, effectiveLtv, grantAmount, grantSplitA, hdbMaxTenure, loanChangesOf, maxLtvFor, voluntaryList } from '../engine/payments'
 import { assessEligibility, hfeMonth } from '../engine/eligibility'
 import { isCompleted, isSingle, isSinglesPurchase, leaseFactor, normalizeScenario, typicalDates } from '../engine/saleType'
 import { addMonths, formatYm } from '../engine/dates'
 import { money } from '../engine/format'
 import type { CostItem, Milestone, Partner, Scenario, When } from '../engine/types'
-import { newId } from '../state/defaults'
+import { defaultCosts, newId } from '../state/defaults'
 import { FLAT_TYPES, MILESTONES } from './labels'
 import { Button, Card, Field, InfoTip, MoneyInput, MonthInput, NumberInput, PercentInput, Segmented, Select, Slider, TextInput, Toggle } from './controls'
 
@@ -329,9 +329,15 @@ export function FlatEditor({ scenario, update, policy }: { scenario: Scenario; u
           </div>
           {f.household === 'secondTimers' && (
             <div className="col-span-2 md:col-span-3">
-              <Toggle label="We now live in public rental or own a 2-room flat" tip="stepUp" checked={!!f.fromRentalOr2Room}
+              <Toggle label="We now live in public rental, or own a 2- or 3-room flat (Standard, or in a non-mature estate)" tip="stepUp" checked={!!f.fromRentalOr2Room}
                 onChange={(v) => update((d) => { d.flat.fromRentalOr2Room = v })} />
             </div>
+          )}
+          {f.household === 'firstAndSecond' && !isSingle(scenario) && (
+            <div className="col-span-2 md:col-span-1"><Field label="Who’s the second-timer?" tipText="The Enhanced CPF Housing Grant (Singles) is paid to the first-timer’s CPF only.">
+              <Select value={f.secondTimer ?? 'B'} onChange={(v) => update((d) => { d.flat.secondTimer = v })} ariaLabel="Second-timer"
+                options={[{ value: 'A' as const, label: scenario.partners[0].name }, { value: 'B' as const, label: scenario.partners[1].name }]} />
+            </Field></div>
           )}
           {(f.household ?? 'firstTimers') !== 'firstTimers' && (
             <>
@@ -389,7 +395,11 @@ export function FlatEditor({ scenario, update, policy }: { scenario: Scenario; u
                 </div>
               ) : <MoneyInput value={g.amount} onChange={(v) => update((d) => { d.flat.grants[i].amount = v })} ariaLabel="Grant amount" />}
             </Field>
-            <Field label={`% to ${scenario.partners[0].name}`}><NumberInput suffix="%" min={0} max={100} value={g.splitA} onChange={(v) => update((d) => { d.flat.grants[i].splitA = v })} ariaLabel="Grant split" /></Field>
+            <Field label={`% to ${scenario.partners[0].name}`}>
+              {g.auto === 'EHG' && f.household === 'firstAndSecond'
+                ? <div className="rounded-lg bg-surface-2 px-3 py-2 text-sm" title="HDB pays the grant to the first-timer">All to {scenario.partners[grantSplitA(g, scenario) === 100 ? 0 : 1].name} <span className="text-xs text-muted">(first-timer)</span></div>
+                : <NumberInput suffix="%" min={0} max={100} value={g.splitA} onChange={(v) => update((d) => { d.flat.grants[i].splitA = v })} ariaLabel="Grant split" />}
+            </Field>
             <Field label="Credited at" tipText="When the grant lands in your OA. For BTO flats this is usually at key collection (not confirmed — check your HFE/HDB letters).">
               <Select value={'milestone' in g.when ? g.when.milestone : 'keys'} onChange={(v) => update((d) => { d.flat.grants[i].when = { milestone: v } })} options={MILESTONES.filter((m) => m.value !== 'application')} ariaLabel="Grant timing" />
             </Field>
@@ -423,7 +433,7 @@ function EligibilitySummary({ el }: { el: ReturnType<typeof assessEligibility> }
         </>
       ) : (
         <>
-          {row(`Avg household income (12 mths to ${formatYm(el.windowEnd)})`, `${money(el.avgIncome)}/mth`)}
+          {row(`Avg household income (months worked in the 12 to ${formatYm(el.windowEnd)})`, `${money(el.avgIncome)}/mth`)}
           {row('Income ceiling for this flat', money(el.incomeCeiling), el.aboveCeiling)}
         </>
       )}
@@ -464,7 +474,7 @@ export function FinancingEditor({ scenario, update, policy }: { scenario: Scenar
         <p className="mt-1.5 text-[11px] text-muted">
           {isHdb
             ? 'You declare your financing when you sign the AFL. HDB assesses your loan with the HFE letter, and re-checks your finances nearer completion; the loan can be reduced if you can’t afford it any more.'
-            : 'You’ll need the bank’s Letter of Offer before signing the AFL (HDB requirement), and at least the minimum cash downpayment. When you apply for the HFE letter, you can also ask banks for an In-Principle Approval (free) to see how much they’d lend.'}
+            : 'You’ll need the bank’s Letter of Offer before signing the AFL (HDB requirement), and at least the minimum cash downpayment. When you apply for the HFE letter, you can ask DBS, Hong Leong Finance, Maybank, OCBC or UOB for a free In-Principle Approval on the HDB Flat Portal, then turn one into a Letter of Offer after booking. Other banks can be approached directly. A bank loan needs a private lawyer.'}
         </p>
         <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
           <Field label="Loan-to-value" tip="LTV" hint={ltvRule.reduced ? <span className="text-critical">Max {Math.round(maxLtv * 100)}%: {ltvRule.reason}</span> : `Max ${Math.round(maxLtv * 100)}%`}>
@@ -743,6 +753,9 @@ export function CostsEditor({ scenario, update, policy }: { scenario: Scenario; 
             d.costs.push({ id: newId('c'), label: String(label), kind: 'custom', amount: Number(amt), auto: false, when: { date: d.startMonth }, funding: 'cashOnly', payer: 'joint', delayable: true })
           })}>+ {label}</Button>
         ))}
+        {!scenario.costs.some((c) => c.kind === 'hps') && (
+          <Button variant="secondary" onClick={() => update((d) => { d.costs.push({ ...defaultCosts().find((c) => c.kind === 'hps')!, id: newId('hps') }) })}>+ Home Protection Scheme</Button>
+        )}
       </div>
       <Card>
         <div className="mb-1 flex items-center text-sm font-semibold">Money coming in<InfoTip term="inflow" /></div>
