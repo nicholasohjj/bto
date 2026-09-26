@@ -15,3 +15,7 @@ export const MILESTONES: { value: Milestone; label: string }[] = [
   { value: 'afl', label: 'AFL signing' },
   { value: 'keys', label: 'Key collection' },
 ]
+
+/** Guide pages and their shareable addresses. */
+export type LearnPage = 'guide' | 'glossary' | 'faq' | 'rules'
+export const LEARN_PATHS: Record<LearnPage, string> = { guide: '/guide', glossary: '/glossary', faq: '/faq', rules: '/rules' }

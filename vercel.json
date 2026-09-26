@@ -1,3 +1,8 @@
 {
-  "rewrites": [{ "source": "/guide", "destination": "/index.html" }]
+  "rewrites": [
+    { "source": "/guide", "destination": "/index.html" },
+    { "source": "/glossary", "destination": "/index.html" },
+    { "source": "/faq", "destination": "/index.html" },
+    { "source": "/rules", "destination": "/index.html" }
+  ]
 }

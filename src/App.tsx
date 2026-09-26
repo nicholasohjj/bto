@@ -14,6 +14,8 @@ import { Disclaimer } from './ui/Disclaimer'
 import { CostsEditor, FinancingEditor, FlatEditor, PartnersEditor, type Update } from './ui/editors'
 import { AccruedView, AffordCard, CompareView, Verdict, JobLossCard, LoanPanel, ScheduleTable, SummaryCards, WarningsList } from './ui/views'
 import { GuidePage } from './ui/GuidePage'
+import { FaqPage, GlossaryPage, LearnNav, RulesPage } from './ui/LearnPages'
+import { LEARN_PATHS, type LearnPage } from './ui/labels'
 import { PrintSummary } from './ui/PrintSummary'
 import { Wizard } from './ui/Wizard'
 
@@ -27,21 +29,21 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'advanced', label: 'Advanced settings' },
   { id: 'guide', label: 'Guide' },
 ]
-/** The guide has its own address so it can be shared: /guide. */
-const GUIDE_PATH = '/guide'
+/** Guide pages have their own addresses so they can be shared: /guide, /glossary, /faq, /rules. */
+const pageForPath = (path: string): LearnPage | null =>
+  (Object.entries(LEARN_PATHS) as [LearnPage, string][]).find(([, p]) => p === path)?.[0] ?? null
 type EditSection = 'us' | 'flat' | 'financing' | 'costs'
 
 export default function App() {
   const [state, setState] = useState<AppState>(loadState)
-  const [tab, setTabState] = useState<Tab>(() => (location.pathname === GUIDE_PATH ? 'guide' : 'overview'))
-  const setTab = (t: Tab) => {
-    setTabState(t)
-    const path = t === 'guide' ? GUIDE_PATH : '/'
-    if (location.pathname !== path) history.replaceState(null, '', path + location.search + location.hash)
-  }
+  const [tab, setTabState] = useState<Tab>(() => (pageForPath(location.pathname) ? 'guide' : 'overview'))
+  const [learnPage, setLearnPageState] = useState<LearnPage>(() => pageForPath(location.pathname) ?? 'guide')
+  const goTo = (path: string) => { if (location.pathname !== path) history.replaceState(null, '', path + location.search + location.hash) }
+  const setTab = (t: Tab) => { setTabState(t); goTo(t === 'guide' ? LEARN_PATHS[learnPage] : '/') }
+  const setLearnPage = (p: LearnPage) => { setLearnPageState(p); goTo(LEARN_PATHS[p]); window.scrollTo(0, 0) }
   const [editSection, setEditSection] = useState<EditSection>('us')
   // People arriving on the guide read it first; the setup wizard waits until they open a plan.
-  const [wizardOpen, setWizardOpen] = useState(!state.wizardDone && location.pathname !== GUIDE_PATH)
+  const [wizardOpen, setWizardOpen] = useState(!state.wizardDone && !pageForPath(location.pathname))
   const [renaming, setRenaming] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -55,7 +57,7 @@ export default function App() {
       const code = sharedCode(location.hash)
       if (!code) return
       // Clear the hash first so a reload (or StrictMode's second run) doesn't add it again.
-      history.replaceState(null, '', location.pathname + location.search)
+      history.replaceState(null, '', (pageForPath(location.pathname) ? '/' : location.pathname) + location.search)
       try {
         const shared = await decodeScenario(code)
         setState((st) => {
@@ -65,7 +67,7 @@ export default function App() {
           return { ...st, scenarios: [...st.scenarios, added], activeId: added.id, wizardDone: true }
         })
         setWizardOpen(false)
-        setTab('overview')
+        setTabState('overview')
         setMessage(`Opened “${shared.name}” from a shared link.`)
       } catch (e) {
         setMessage(`Couldn’t open the shared link: ${(e as Error).message}`)
@@ -316,7 +318,15 @@ export default function App() {
 
         {tab === 'compare' && <CompareView scenarios={state.scenarios} results={results} compareIds={state.compareIds} onToggle={toggleCompare} />}
         {tab === 'advanced' && <AdvancedSettings scenario={active} update={update} />}
-        {tab === 'guide' && <GuidePage policy={policy} scenario={active} result={result} onOpenPlan={() => { setTab('overview'); if (!state.wizardDone) setWizardOpen(true) }} />}
+        {tab === 'guide' && (
+          <>
+            <LearnNav page={learnPage} onPage={setLearnPage} />
+            {learnPage === 'guide' && <GuidePage policy={policy} scenario={active} result={result} onOpenPlan={() => { setTab('overview'); if (!state.wizardDone) setWizardOpen(true) }} />}
+            {learnPage === 'glossary' && <GlossaryPage />}
+            {learnPage === 'faq' && <FaqPage policy={policy} />}
+            {learnPage === 'rules' && <RulesPage />}
+          </>
+        )}
         </ErrorBoundary>
 
         <footer className="pt-4 pb-8"><Disclaimer compact /></footer>
