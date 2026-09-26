@@ -2,17 +2,16 @@
 // build files is enough. Pages load from the network first (so a new deploy shows up
 // straight away) and fall back to the cache offline; hashed build files never change,
 // so they're served from the cache.
-const CACHE = 'bto-v2'
+// Both are filled in by the build (see swAssets in vite.config.ts): every build file,
+// including the separately loaded charts, and a cache name that changes with each build.
+const CACHE = 'bto-' + /*__BUILD_HASH__*/'dev'
+const ASSETS = /*__BUILD_ASSETS__*/[]
 const STATIC = ['/', '/icon.svg', '/icon-192.png', '/icon-512.png', '/apple-touch-icon.png', '/manifest.webmanifest']
 
 self.addEventListener('install', (event) => {
   event.waitUntil((async () => {
     const cache = await caches.open(CACHE)
-    await cache.addAll(STATIC)
-    // Also cache the scripts and styles the page uses, so it works offline after one visit.
-    const html = await (await cache.match('/')).text()
-    const assets = [...new Set(html.match(/\/assets\/[^"'\s)]+/g) ?? [])]
-    await cache.addAll(assets)
+    await cache.addAll([...STATIC, ...ASSETS])
     await self.skipWaiting()
   })())
 })

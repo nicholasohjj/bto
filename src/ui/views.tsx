@@ -5,7 +5,7 @@ import { jobLossImpact, withJobLoss } from '../engine/whatIf'
 import { affordablePrice, type AffordLimit } from '../engine/afford'
 import { money } from '../engine/format'
 import type { Scenario, SimResult, Warning } from '../engine/types'
-import { CompareChart } from './charts'
+import { CompareChart } from './lazyCharts'
 import { Button, Card, InfoTip, Select, T, Toggle } from './controls'
 import type { Term } from './glossary'
 
