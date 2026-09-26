@@ -1,7 +1,7 @@
 import type { Policy } from '../config/policy'
 import { ageInMonths, bonusAmount, bonusCpf, cashSavingsAt, isWorking, partnerMonthCpf, prYear, ratesFor, salaryAt } from './cpf'
-import { addMonths, monthOf, ymToIndex } from './dates'
-import { buildSchedule, cpfCapFor, loanChangesOf, type Obligation, type Schedule } from './payments'
+import { addMonths, indexToYm, monthOf, ymToIndex } from './dates'
+import { buildSchedule, cpfCapFor, loanChangesOf, preKeysSwitch, type Obligation, type Schedule } from './payments'
 import { leaseFactor, normalizeScenario } from './saleType'
 import { resolvePolicy } from './policyOverrides'
 import { round2 } from './stampDuty'
@@ -320,8 +320,11 @@ export function simulateCore(
   let instalment = schedule.loan.monthlyInstalment
   let rate = financing.rate
   let loanType = financing.loanType
-  let loanEndIdx = keysIdx + Math.round(financing.tenureYears * 12)
-  const firstInstalmentIdx = keysIdx + 1
+  // HDB: first instalment on the 1st of the 2nd month after keys; banks usually the month after.
+  // A switch to a bank loan dated before keys means the loan at keys is a bank loan.
+  const startsAsBank = loanType === 'bank' || !!preKeysSwitch(scenario)
+  const firstInstalmentIdx = keysIdx + (startsAsBank ? policy.bankLoan : policy.hdbLoan).firstInstalmentMonths
+  let loanEndIdx = firstInstalmentIdx - 1 + Math.round(schedule.loan.tenureYears * 12)
   // Loan changes take effect in their month (or at the first instalment if dated earlier).
   const changesByIdx = new Map<number, NonNullable<Scenario['financing']['loanChanges']>>()
   for (const c of loanChangesOf(financing, flat.dates.keys)) {
@@ -329,7 +332,7 @@ export function simulateCore(
     changesByIdx.set(at, [...(changesByIdx.get(at) ?? []), c])
   }
   const loanPath: LoanStep[] = schedule.loan.loanAmount > 0
-    ? [{ ym: addMonths(flat.dates.keys, 1), loanType, rate, instalment, monthsLeft: loanEndIdx - keysIdx, outstanding, change: 'start' }]
+    ? [{ ym: indexToYm(firstInstalmentIdx), loanType, rate, instalment, monthsLeft: loanEndIdx - firstInstalmentIdx + 1, outstanding, change: 'start' }]
     : []
 
   for (let idx = startIdx; idx <= endIdx; idx++) {
@@ -447,9 +450,10 @@ export function simulateCore(
         monthEvents.push({ ym, itemId: c.id, label, kind: 'loanChange', amount: 0, fromCash: 0, fromCpf: 0, shortfall: 0, cpfFallbackToCash: 0, after: combined() })
       }
     }
-    if (idx > keysIdx && outstanding > 0.005 && instalment > 0) {
+    if (idx >= firstInstalmentIdx && outstanding > 0.005 && instalment > 0) {
       const interest = outstanding * (rate / 12)
-      const amount = round2(Math.min(instalment, outstanding + interest))
+      // The last scheduled instalment clears what's left (rounding leaves a few cents otherwise).
+      const amount = round2(idx >= loanEndIdx ? outstanding + interest : Math.min(instalment, outstanding + interest))
       const before = { A: pots.A.oa, B: pots.B.oa }
       const ev = payObligation(
         {

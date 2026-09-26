@@ -1,7 +1,7 @@
 import { ageInMonths } from './cpf'
 import { addMonths, formatYm, monthsBetween, ymToIndex } from './dates'
 import { money } from './format'
-import { loanChangesOf, maxLtvFor, preKeysSwitch, weightedAge } from './payments'
+import { hdbMaxTenure, loanChangesOf, maxLtvFor, preKeysSwitch, weightedAge } from './payments'
 import { monthlyInstalment } from './loan'
 import { householdIncome } from './eligibility'
 import { isCompleted, isSingle, isSinglesPurchase, leaseFactor } from './saleType'
@@ -245,20 +245,21 @@ export function buildWarnings(core: CoreResult, extras: WarningExtras = {}): War
         : [`Set the loan-to-value to ${Math.round(maxLtv * 100)}% or less.`],
     })
   }
-  if (isHdb) {
-    const endAge = weightedAge(s, s.flat.dates.afl) + s.financing.tenureYears
-    const limit = core.policy.hdbLoan.maxAgeAtEnd
-    if (endAge > limit + 0.5) {
+  if (isHdb && core.schedule.loan.loanAmount > 0) {
+    const cap = hdbMaxTenure(s, core.policy)
+    if (s.financing.tenureYears > cap.years) {
       warnings.push({
-        id: 'hdb-age', severity: 'warning',
-        title: `HDB loan would run past age ${limit}`,
-        explanation: `You’d be about ${Math.round(endAge)} at the end of a ${s.financing.tenureYears}-year loan. HDB usually limits the tenure so the loan ends by ${limit}, which means a higher monthly instalment.`,
-        fixes: [`Try a tenure of ${Math.max(5, Math.floor(s.financing.tenureYears - (endAge - limit)))} years.`],
+        id: 'hdb-tenure', severity: 'warning', ym: s.flat.dates.keys,
+        title: `HDB lends over ${cap.years} years at most, not ${s.financing.tenureYears}`,
+        explanation:
+          `An HDB loan runs for the shortest of: ${cap.byMax} years; ${core.policy.hdbLoan.maxAgeAtEnd} minus your average age at application (${Number.isInteger(cap.avgAge) ? cap.avgAge : cap.avgAge.toFixed(1)}), which is ${cap.byAge} years; ` +
+          `and the remaining lease minus ${core.policy.lease.minYearsForCpf}, which is ${cap.byLease} years. The plan uses ${cap.years} years: ${money(core.schedule.loan.monthlyInstalment)}/month.`,
+        fixes: [`Set the tenure to ${cap.years} years (Loan section) so the numbers match.`],
       })
     }
   }
   const maxTenure = isHdb ? core.policy.hdbLoan.maxTenureYears : core.policy.bankLoan.maxTenureYears
-  if (s.financing.tenureYears > maxTenure) {
+  if (!isHdb && s.financing.tenureYears > maxTenure) {
     warnings.push({
       id: 'tenure', severity: 'warning',
       title: `Tenure longer than ${maxTenure} years`,
@@ -371,14 +372,6 @@ export function buildWarnings(core: CoreResult, extras: WarningExtras = {}): War
       fixes: [],
     })
   }
-  if (isHdb && lf.factor > 0 && s.financing.tenureYears > lf.lease - lp.minYearsForCpf) {
-    warnings.push({
-      id: 'lease-tenure', severity: 'warning',
-      title: `HDB loan tenure longer than the lease allows`,
-      explanation: `HDB loan tenure can be at most the remaining lease minus ${lp.minYearsForCpf} years: ${Math.max(0, lf.lease - lp.minYearsForCpf)} years here.`,
-      fixes: [`Use a tenure of ${Math.max(1, lf.lease - lp.minYearsForCpf)} years or less.`],
-    })
-  }
 
   // --- Loan changes after key collection ---
   const firstInstalment = addMonths(s.flat.dates.keys, 1)
@@ -486,6 +479,41 @@ export function buildWarnings(core: CoreResult, extras: WarningExtras = {}): War
         'In Loan changes, add “Switch to bank loan” dated at key collection to see the extra cash needed.',
         'Or choose Bank loan as your loan type from the start.',
       ],
+    })
+  }
+
+  // --- Turning 55 while CPF pays the mortgage (the Retirement Account transfer isn't simulated) ---
+  if (core.schedule.loan.loanAmount > 0 && s.financing.mortgageFrom === 'cpfFirst') {
+    const loanEnd = addMonths(s.flat.dates.keys, Math.round(core.schedule.loan.tenureYears * 12) + 1)
+    const people = isSingle(s) ? [s.partners[0]] : s.partners
+    const turning = people
+      .map((p) => ({ name: p.name, at: addMonths(p.birthYearMonth, 55 * 12) }))
+      .filter((x) => x.at > core.startMonth && x.at <= loanEnd)
+      .sort((a, b) => (a.at < b.at ? -1 : 1))[0]
+    if (turning) {
+      const inPlan = turning.at <= core.endMonth
+      warnings.push({
+        id: 'cpf-55', severity: inPlan ? 'warning' : 'info', ym: turning.at,
+        title: `${isSingle(s) ? 'You turn' : `${turning.name} turns`} 55 in ${formatYm(turning.at)}, before the loan is paid off`,
+        explanation:
+          `At 55, CPF opens a Retirement Account and moves your Special Account, then Ordinary Account savings into it, up to the Full Retirement Sum (${money(core.policy.cpf.fullRetirementSum)}). ` +
+          `This app doesn’t model that move${inPlan ? ', so the CPF OA shown from that month may be too high' : ''}. Your OA contributions after 55 can still pay the loan.`,
+        fixes: ['Plan to pay more of the instalment in cash after 55, or prepay part of the loan with OA before then.'],
+      })
+    }
+  }
+
+  // --- HDB partial repayments: at least $5,000, in multiples of $1,000 (paying it all off is fine) ---
+  const hp = core.policy.hdbLoan
+  const oddPrepay = (extras.loanPath ?? core.loanPath).find((st) =>
+    st.change === 'prepay' && st.loanType === 'HDB' && st.outstanding > 0.5 && st.prepaid !== undefined &&
+    (st.prepaid < hp.minPrepay - 0.5 || Math.abs(st.prepaid / hp.prepayStep - Math.round(st.prepaid / hp.prepayStep)) > 1e-6))
+  if (oddPrepay) {
+    warnings.push({
+      id: 'hdb-prepay-amount', severity: 'warning', ym: oddPrepay.ym,
+      title: `HDB takes partial repayments of ${money(hp.minPrepay)} or more, in ${money(hp.prepayStep)} steps`,
+      explanation: `The prepayment of ${money(oddPrepay.prepaid!)} in ${formatYm(oddPrepay.ym)} doesn’t fit HDB’s rule (loans from April 2012). Paying off the whole loan can be any amount.`,
+      fixes: [`Round it to ${money(Math.max(hp.minPrepay, Math.round(oddPrepay.prepaid! / hp.prepayStep) * hp.prepayStep))} (Loan changes).`],
     })
   }
 

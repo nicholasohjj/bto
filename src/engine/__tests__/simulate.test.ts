@@ -140,11 +140,11 @@ describe('simulation', () => {
     expect(afl.cpfFallbackToCash).toBeGreaterThan(0)
     expect(afl.fromCpf + afl.fromCash).toBeCloseTo(94000, 4)
   })
-  it('starts the mortgage the month after keys, from CPF first', () => {
+  it('starts an HDB mortgage on the 1st of the 2nd month after keys, from CPF first', () => {
     const core = simulateCore(base())
     const mort = core.events.filter((e) => e.kind === 'mortgage')
-    expect(mort[0].ym).toBe('2030-01')
-    expect(mort).toHaveLength(12)
+    expect(mort[0].ym).toBe('2030-02') // keys Dec 2029
+    expect(mort).toHaveLength(11) // Feb–Dec 2030, within 12 months of keys
     expect(mort[0].amount).toBeCloseTo(1633.2, 0)
     expect(mort[0].fromCpf).toBeCloseTo(mort[0].amount, 4)
   })

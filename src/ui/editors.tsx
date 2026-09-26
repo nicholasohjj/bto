@@ -1,6 +1,6 @@
 import type { FlatType, Policy } from '../config/policy'
 import { ageInMonths, estimatedLivingCosts, prYear, ratesFor } from '../engine/cpf'
-import { assessmentMonth, autoAmount, downpaymentSchedule, effectiveLtv, grantAmount, loanChangesOf, maxLtvFor, voluntaryList } from '../engine/payments'
+import { assessmentMonth, autoAmount, downpaymentSchedule, effectiveLtv, grantAmount, hdbMaxTenure, loanChangesOf, maxLtvFor, voluntaryList } from '../engine/payments'
 import { assessEligibility } from '../engine/eligibility'
 import { isCompleted, isSingle, isSinglesPurchase, leaseFactor, normalizeScenario, typicalDates } from '../engine/saleType'
 import { addMonths, formatYm } from '../engine/dates'
@@ -468,7 +468,7 @@ export function FinancingEditor({ scenario, update, policy }: { scenario: Scenar
           <Field label="Interest rate">
             <PercentInput value={fin.rate} max={20} onChange={(v) => update((d) => { d.financing.rate = v })} ariaLabel="Interest rate" />
           </Field>
-          <Field label="Tenure">
+          <Field label="Tenure" hint={isHdb ? `HDB max for you: ${hdbMaxTenure(scenario, policy).years} yrs` : undefined}>
             <NumberInput suffix="yrs" min={1} max={35} value={fin.tenureYears} onChange={(v) => update((d) => { d.financing.tenureYears = v })} ariaLabel="Tenure" />
           </Field>
         </div>

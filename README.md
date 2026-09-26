@@ -67,6 +67,7 @@ src/
   - **Bonuses** can be months of salary or a fixed dollar amount, paid every year or in one year only. Employees pay CPF on them, capped by the annual salary ceiling.
   - **Voluntary CPF top-ups** can be monthly, yearly or once, per partner. They're paid from that partner's cash and split across OA, SA and MA using the normal allocation ratios. They're capped by the CPF Annual Limit ($37,740 a year, normal + voluntary), and never exceed the cash that partner has. Any cut is noted, and "pause top-ups" is offered as a fix when cash runs short.
   - OA interest accrues monthly and is credited in December.
+  - **Turning 55 isn't simulated.** At 55, CPF moves SA then OA savings into a new Retirement Account up to the Full Retirement Sum ($220,400); OA contributions after 55 can still pay the loan. The app doesn't track SA, so it warns instead: a warning if someone turns 55 within the plan while CPF pays the mortgage (OA shown after that may be too high), a note if it happens later but before the loan ends.
 - **Pay that isn't steady** (Us → Job & pay changes, per partner).
   - **New job / new pay** from a month: a new gross salary, optionally with new monthly savings. Raises continue from there.
   - **Time without income**, from a month with an optional end. No salary, CPF or bonus, and living costs come out of savings each month (defaults to take-home pay minus savings).
@@ -93,7 +94,6 @@ src/
   - **Remaining lease (age-95 rule):**
     - If the lease won't last the youngest of you to 95, CPF use and the HDB loan limit are pro-rated (lease ÷ years to 95).
     - 20 years or less: no CPF and no HDB loan.
-    - HDB loan tenure ≤ lease − 20.
 - **Eligibility and grants** (`eligibility.ts`).
   - Household income is averaged over 12 months, ending 2 months before the HFE application (assumed to be the application month; under DIA, the assessment month).
   - That income is checked against the ceiling for the flat type.
@@ -106,7 +106,7 @@ src/
   - Citizen + PR couples: the $10,000 premium is added to the price. Two PRs are flagged as not eligible for a BTO.
 - **Loan limits.**
   - A bank loan's LTV drops to 55% (with 10% cash) if the tenure is over 25 years, or the loan runs past the borrowers' income-weighted average age of 65.
-  - An HDB loan that runs past 65 gets a warning.
+  - An HDB loan runs for the shortest of 25 years, 65 minus the applicants' average age (whole years, at application), and the remaining lease minus 20 years. A longer tenure is capped automatically, like the LTV, with a warning showing the instalment it gives.
 - **Loan changes after key collection** (Loan section).
   - **Rate changes:** add as many as you like, to model a floating rate (e.g. fixed 2.2% for 3 years, then 3.0%, then 2.8%). Works for HDB and bank loans.
   - **Refinance / switch HDB → bank:** a new rate, an optional new remaining tenure, cash costs, and a lock-in penalty as % of the balance. From an HDB loan it's one-way, and the bank-loan CPF limit applies from then (CPF already used counts).
@@ -155,7 +155,7 @@ src/
     - If income is above the HDB loan ceiling ($16,000 families / $8,000 singles), it's flagged as "no HDB loan". The fix is a "Switch to bank loan" dated at keys, which shows the extra cash for the bank's 5% rule.
     - The Flat page shows both incomes.
 - **HDB loan rule.** With an HDB loan, OA above the retention limit ($20k each) is used for the downpayment, even if the slider is set lower.
-- **Mortgage.** The mortgage starts the month after keys. It is paid from OA first, then cash (you can change this).
+- **Mortgage.** An HDB loan's first instalment is on the 1st of the 2nd month after keys (keys in March → 1 May); a bank loan's the month after keys. It is paid from OA first, then cash (you can change this). HDB partial repayments must be at least $5,000 in $1,000 steps (paying the loan off can be any amount); other amounts are flagged.
 - **Joint payments** are split by the joint-split slider. With "Pool our cash" on, one partner's cash covers the other's shortfall.
 - **MSR/TDSR.**
   - These are tested at the higher of your loan rate and the stress-test rate (3% for HDB loans, 4% for bank loans).
@@ -188,20 +188,24 @@ Users can override any figure for a single scenario under **Advanced settings**.
 | Deferred Income Assessment: eligibility, 2.5% at AFL, income assessed ~3 months before completion, grant paid at keys | Verified (HDB "Annex A: Details on Deferred Income Assessment", 2024) |
 | DIA with a bank loan: 2.5% cash at AFL; keys 22.5% (≥ 2.5% cash), or 42.5% (≥ 7.5% cash) at 55% LTV | Verified (hdb.gov.sg Staggered Downpayment Scheme page, checked 2026-09-26) |
 | Caveat fee $64.45; first conveyancing tier $0.90 per $1,000 | Verified (cpf.gov.sg) |
-| OA interest 2.5%, HDB loan rate 2.6% | Secondary (CPF releases seen in search; page not read) |
+| HDB loan rate = CPF OA rate + 0.1% (2.5% + 0.1% = 2.6%) | Verified peg (hdb.gov.sg, checked 2026-09-26); OA rate 2.5% secondary |
 | Accrued interest = OA rate, monthly/compounded yearly | Secondary (CPF page for the method returned 404) |
 | Staggered downpayment: HDB loan 5% at AFL / 20% at keys; bank loan 10% at AFL (≥ 5% cash) / 15%, or 10% cash / 35% at 55% LTV; eligibility (HFE by younger's 30th birthday, ≤ 5-room, right-sizers ≤ 3-room) | Verified (hdb.gov.sg Staggered Downpayment Scheme page, checked 2026-09-26) |
 | Bank loan min 5% cash | Secondary |
-| MSR 30%, TDSR 55%, stress rates 3% HDB / 4% bank | Secondary (MAS site was down) |
+| MSR 30% and 3% floor for HDB loans | Verified (hdb.gov.sg HDB housing loan page, checked 2026-09-26) |
+| TDSR 55%, 4% stress rate for bank loans | Secondary (MAS site was down) |
 | Fire insurance premiums | Secondary |
-| HDB loan max tenure 25 yrs; bank 30 yrs | **Not verified** |
-| HDB loan: may keep up to $20k OA (per person here) | **Not verified** |
+| HDB loan tenure: shortest of 25 yrs, 65 − average age, lease − 20 | Verified (hdb.gov.sg HDB housing loan page, checked 2026-09-26) |
+| Bank loan max tenure 30 yrs | **Not verified** |
+| HDB loan: first instalment on the 1st of the 2nd month after disbursement (keys); partial repayments ≥ $5,000 in $1,000 steps, no fee | Verified (hdb.gov.sg Payments for HDB housing loan, checked 2026-09-26) |
+| Bank loan: first instalment the month after keys | **Not verified** (varies by bank) |
+| HDB loan: each applicant may keep up to $20k OA | Verified (hdb.gov.sg Use of CPF savings, checked 2026-09-26) |
 | Conveyancing tiers after the first; GST 9% | **Not verified** (HDB page blocked automated access) |
 | Survey fee per flat type (only the $163.50–$408.75 range verified) | **Not verified** |
 | CPF rates for PRs in years 1–2; low-wage (≤ $750) formulas | Verified (cpf.gov.sg 2026 rate tables) |
 | OA share for PR graduated rates (assumed = citizen ratios) | **Not verified** |
-| Income ceilings $14k / $7k (2-room Flexi) / $21k (extended), Feb 2026 | Verified (HDB Feb 2026 Annex B) |
-| Families' ceiling raised to $16,000 from 24 Aug 2026 | News + confirmed by you; not yet read on hdb.gov.sg (2-room Flexi ceiling may also have changed) |
+| 2-room Flexi ceiling $7,000 (Feb 2026; may have risen in Aug 2026) | Verified for Feb 2026 (HDB Annex B) |
+| Income ceilings $16,000 families / $24,000 extended families / $8,000 singles | Verified (hdb.gov.sg HDB housing loan eligibility, checked 2026-09-26) |
 | CPF Annual Limit $37,740; voluntary top-ups allocated like normal contributions | Secondary (cpf.gov.sg search snippet) |
 | EHG table bands (max $120k, ceiling $9k verified); singles table for FT+ST couples | Secondary for the bands |
 | EHG 12-month work rule and income window | Verified (mynicehome.gov.sg) |
@@ -210,7 +214,6 @@ Users can override any figure for a single scenario under **Advanced settings**.
 | CPF Valuation Limit / 120% Withdrawal Limit with BRS (bank loans) | Verified (cpf.gov.sg) |
 | BRS $110,200 (2026) | Secondary |
 | Bank loan LTV 55% if tenure > 25 yrs or past age 65; 10% cash | Secondary (MAS explainer snippet) |
-| HDB loan must end by age 65 | **Not verified** |
 | Bank loan: BSD reimbursed from CPF after 2 months | **Not verified** (estimate) |
 | Resale levy $15k / $30k / $40k / $45k / $50k / $55k (2-room … EC); cash only; half in some cases | Secondary (2026 guides agree; hdb.gov.sg not read). 3Gen assumed = 5-room: **not verified** |
 | S&CC per month (Singapore Citizen owner-occupier) | Verified for one town council (Bishan-Toa Payoh, 1 Jul 2024); varies by town |

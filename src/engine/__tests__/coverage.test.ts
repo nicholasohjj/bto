@@ -6,6 +6,7 @@ import { resolvePolicy } from '../policyOverrides'
 import { ordinaryWageCpf, prYear, ratesFor, salaryAt } from '../cpf'
 import { jobLossImpact, withJobLoss } from '../whatIf'
 import { typicalDates } from '../saleType'
+import { monthsBetween } from '../dates'
 import { assessEligibility, tierAmount } from '../eligibility'
 import { buyersStampDuty } from '../stampDuty'
 import { newScenario } from '../../state/defaults'
@@ -119,9 +120,19 @@ describe('loan rules', () => {
     const s = base((s) => { s.financing.loanType = 'bank'; s.financing.tenureYears = 25; for (const p of s.partners) p.birthYearMonth = '1985-01' })
     expect(maxLtvFor(s, policy).reduced).toBe(true)
   })
-  it('warns when an HDB loan runs past 65', () => {
+  it('caps an HDB loan at 65 minus the average age, and says so', () => {
+    // Born Jan 1985, both about 41 at application: 65 − 41 = 24 years, under the 25 you asked for.
     const r = runScenario(base((s) => { for (const p of s.partners) p.birthYearMonth = '1985-01' }))
-    expect(r.warnings.some((w) => w.id === 'hdb-age')).toBe(true)
+    expect(r.loan.tenureYears).toBe(24)
+    expect(r.warnings.find((w) => w.id === 'hdb-tenure')!.title).toMatch(/at most, not 25/)
+  })
+  it('uses the plain average age for the HDB cap, not the income-weighted one', () => {
+    // Ages ~21 and ~61 average 41 → 24 years, whoever earns more.
+    const r = runScenario(base((s) => {
+      s.partners[0].birthYearMonth = '2005-01'; s.partners[0].grossMonthly = 20000
+      s.partners[1].birthYearMonth = '1965-01'; s.partners[1].grossMonthly = 1000
+    }))
+    expect(r.loan.tenureYears).toBe(24)
   })
   it('changes the instalment when the rate changes after lock-in', () => {
     const core = simulateCore(base((s) => { s.financing.loanType = 'bank'; s.financing.rate = 0.02; s.financing.rateAfter = { afterYears: 0.5, rate: 0.04 } }))
@@ -326,7 +337,7 @@ describe('loan changes after key collection', () => {
   })
   it('applies changes dated before keys from the first instalment', () => {
     const r = runScenario(base((s) => { s.financing.loanChanges = [{ id: 'r', kind: 'rate', from: '2027-01', rate: 0.03 }] }))
-    expect(r.loanPath[1].ym).toBe('2030-01')
+    expect(r.loanPath[1].ym).toBe('2030-02') // keys Dec 2029: first HDB instalment 1 Feb 2030
     expect(r.warnings.some((w) => w.id === 'loan-change-early')).toBe(true)
   })
 })
@@ -384,7 +395,7 @@ describe('SBF and open booking', () => {
     expect(loan.assessedAt).toBe('2026-09')
     const r = runScenario(s)
     expect(r.milestones.afl).toBe('2026-09')
-    expect(r.events.find((e) => e.kind === 'mortgage')!.ym).toBe('2026-10')
+    expect(r.events.find((e) => e.kind === 'mortgage')!.ym).toBe('2026-11')
   })
   it('open booking: no ballot — application is the booking month', () => {
     const s = base((s) => {
@@ -428,7 +439,7 @@ describe('remaining lease (age-95 rule)', () => {
     const r = runScenario(s)
     expect(r.warnings.some((w) => w.id === 'lease-prorated')).toBe(true)
     expect(r.warnings.find((w) => w.id === 'ltv')!.title).toMatch(/HDB will lend/)
-    expect(r.warnings.some((w) => w.id === 'lease-tenure')).toBe(false) // 25 ≤ 60 − 20
+    expect(r.warnings.some((w) => w.id === 'hdb-tenure')).toBe(false) // 25 ≤ 60 − 20
   })
   it('no CPF or HDB loan with 20 years or less', () => {
     const s = base((s) => { s.flat.saleType = 'SBF'; s.flat.remainingLeaseYears = 20 })
@@ -441,7 +452,8 @@ describe('remaining lease (age-95 rule)', () => {
   })
   it('limits HDB loan tenure to lease − 20', () => {
     const r = runScenario(base((s) => { s.flat.saleType = 'SBF'; s.flat.remainingLeaseYears = 40 }))
-    expect(r.warnings.some((w) => w.id === 'lease-tenure')).toBe(true)
+    expect(r.loan.tenureYears).toBe(20)
+    expect(r.warnings.some((w) => w.id === 'hdb-tenure')).toBe(true)
   })
   it('a 99-year lease is unaffected', () => {
     expect(buildSchedule(base(), policy).loan.cpfCap).toBe(Infinity)
@@ -528,7 +540,7 @@ describe('partial prepayments', () => {
     const step = core.loanPath.find((p) => p.change === 'prepay')!
     expect(step.prepaid).toBe(50000)
     expect(step.instalment).toBeLessThan(core.loanPath[0].instalment - 200)
-    expect(step.monthsLeft).toBe(core.loanPath[0].monthsLeft - 12)
+    expect(step.monthsLeft).toBe(core.loanPath[0].monthsLeft - monthsBetween(core.loanPath[0].ym, step.ym))
     expect(core.events.find((e) => e.itemId === 'p-prepay')!.fromCash).toBe(50000)
   })
   it('“finish sooner” keeps the instalment and shortens the loan', () => {
@@ -561,5 +573,48 @@ describe('partial prepayments', () => {
     expect(steps.at(-1)!.monthsLeft).toBe(0)
     const lastMortgage = core.events.filter((e) => e.kind === 'mortgage').at(-1)!
     expect(lastMortgage.ym < '2036-01').toBe(true)
+  })
+})
+
+describe('HDB loan servicing rules', () => {
+  it('a bank loan starts the month after keys', () => {
+    const core = simulateCore(base((s) => { s.financing.loanType = 'bank' }))
+    expect(core.events.find((e) => e.kind === 'mortgage')!.ym).toBe('2030-01')
+  })
+  it('a switch to a bank loan before keys starts like a bank loan', () => {
+    const core = simulateCore(base((s) => { s.financing.loanChanges = [{ id: 'sw', kind: 'refinance', from: '2029-12', rate: 0.025, tenureYears: 25, costs: 0, penaltyPct: 0 }] as Scenario['financing']['loanChanges'] }))
+    expect(core.events.find((e) => e.kind === 'mortgage')!.ym).toBe('2030-01')
+  })
+  it('still pays the full tenure: n instalments from the first one', () => {
+    const core = simulateCore(base(), undefined, { monthsAfterKeys: 26 * 12 })
+    const mort = core.events.filter((e) => e.kind === 'mortgage')
+    expect(mort).toHaveLength(25 * 12)
+    expect(mort.at(-1)!.ym).toBe('2055-01')
+  })
+  const prepay = (amount: number) => runScenario(base((s) => { s.financing.loanChanges = [{ id: 'p', kind: 'prepay', from: '2031-06', amount, source: 'cash', then: 'lowerInstalment' }] as Scenario['financing']['loanChanges'] }))
+  it('flags HDB partial repayments under $5,000 or not in $1,000 steps', () => {
+    expect(prepay(3000).warnings.map((w) => w.id)).toContain('hdb-prepay-amount')
+    expect(prepay(12500).warnings.map((w) => w.id)).toContain('hdb-prepay-amount')
+    expect(prepay(12000).warnings.map((w) => w.id)).not.toContain('hdb-prepay-amount')
+  })
+  it('paying the whole loan off can be any amount', () => {
+    expect(prepay(999_999).warnings.map((w) => w.id)).not.toContain('hdb-prepay-amount')
+  })
+})
+
+describe('turning 55 while CPF pays the loan', () => {
+  const ids = (f: (s: Scenario) => void) => runScenario(base(f)).warnings.filter((w) => w.id === 'cpf-55')
+  it('a warning if it happens within the plan', () => {
+    const [w] = ids((s) => { s.partners[1].birthYearMonth = '1975-06' }) // 55 in Jun 2030, keys Dec 2029
+    expect(w.severity).toBe('warning')
+    expect(w.title).toMatch(/turns 55 in Jun 2030/)
+  })
+  it('a note if it happens later but before the loan ends', () => {
+    const [w] = ids((s) => { s.partners.forEach((p) => { p.birthYearMonth = '1985-01' }) })
+    expect(w.severity).toBe('info')
+  })
+  it('nothing when the loan ends before 55, or when paying the mortgage in cash', () => {
+    expect(ids((s) => { s.financing.tenureYears = 15 })).toHaveLength(0)
+    expect(ids((s) => { s.partners[1].birthYearMonth = '1975-06'; s.financing.mortgageFrom = 'cashOnly' })).toHaveLength(0)
   })
 })

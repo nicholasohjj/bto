@@ -74,6 +74,8 @@ export interface Policy {
     /** With a bank loan: CPF usable up to this multiple of the Valuation Limit if BRS set aside. */
     withdrawalLimitMultiple: number
     basicRetirementSum: number
+    /** At 55, SA then OA savings move to a new Retirement Account up to this sum. */
+    fullRetirementSum: number
     /** Max total CPF contributions (mandatory + voluntary) per person per calendar year. */
     annualLimit: number
   }
@@ -84,6 +86,11 @@ export interface Policy {
     maxTenureYears: number
     oaRetainMax: number
     maxAgeAtEnd: number
+    /** First instalment this many months after key collection (loan disbursement). */
+    firstInstalmentMonths: number
+    /** Partial repayments: at least this much, in multiples of prepayStep. */
+    minPrepay: number
+    prepayStep: number
   }
   bankLoan: {
     defaultInterestRate: number
@@ -91,6 +98,8 @@ export interface Policy {
     minCashPct: number
     stressRate: number
     maxTenureYears: number
+    /** First instalment this many months after key collection. */
+    firstInstalmentMonths: number
     /** LTV drops to this if tenure > ltvTenureYears or the loan runs past ltvMaxAge. */
     reducedLtv: number
     reducedMinCashPct: number
@@ -225,29 +234,45 @@ export const DEFAULT_POLICY: Policy = {
     // Basic Retirement Sum for the 2026 cohort: $110,200 (FRS $220,400).
     // Source: cpf.gov.sg retirement sum FAQs (search snippet). SECONDARY 2026-09-23.
     basicRetirementSum: 110200,
+    // At 55, CPF creates a Retirement Account and moves Special Account, then Ordinary Account
+    // savings into it to meet the Full Retirement Sum. After 55, new OA contributions can still pay
+    // the housing loan. Source: hdb.gov.sg "CPF rules after 55" (text supplied by the user, VERIFIED
+    // 2026-09-26); FRS = 2 × BRS for the 2026 cohort (SECONDARY). Not simulated: the app doesn't track SA.
+    fullRetirementSum: 220400,
     // CPF Annual Limit: mandatory + voluntary contributions per calendar year ≤ $37,740.
     // Voluntary top-ups are allocated to OA/SA/MA using the normal allocation rates.
     // Source: cpf.gov.sg "Top up Ordinary, Special and MediSave savings" (search snippet). SECONDARY 2026-09-24.
     annualLimit: 37740,
   },
   hdbLoan: {
-    // HDB concessionary rate = OA rate + 0.1% = 2.6% p.a.
-    // Source: hdb.gov.sg "Interest Rate for HDB Housing Loan" (search snippet) and CPF
-    // news releases for Jul–Sep 2026. SECONDARY 2026-09-23.
+    // HDB concessionary rate = CPF OA rate + 0.1%, reviewed quarterly: 2.5% + 0.1% = 2.6% p.a.
+    // Source: hdb.gov.sg "Details on the HDB housing loan" (pegging rule, text supplied by the user,
+    // VERIFIED 2026-09-26); OA rate 2.5% from CPF releases (SECONDARY).
     interestRate: 0.026,
     // LTV limit for HDB loans lowered from 80% to 75% from the Oct 2024 BTO exercise.
     // Source: hdb.gov.sg Annex C, Oct 2024 BTO sales exercise, footnote 4. VERIFIED 2026-09-23.
     maxLtv: 0.75,
-    // Interest rate floor HDB uses to assess loan eligibility (3% p.a., from 30 Sep 2022).
-    // Source: MAS/HDB joint release 29 Sep 2022 (MAS page unavailable at check). SECONDARY 2026-09-23.
+    // Interest rate floor HDB uses to work out the loan amount: the higher of 3.0% p.a. and the
+    // prevailing HDB rate. Source: hdb.gov.sg "Details on the HDB housing loan". VERIFIED 2026-09-26.
     stressRate: 0.03,
-    // Maximum HDB loan tenure. UNVERIFIED (general knowledge, 25 years).
+    // HDB loan repayment period: the shortest of 25 years, 65 minus the average age of the
+    // applicants, and the remaining lease minus 20 years (see hdbMaxTenure).
+    // Source: hdb.gov.sg "Details on the HDB housing loan". VERIFIED 2026-09-26.
     maxTenureYears: 25,
-    // With an HDB loan you must use your OA savings for the flat but may keep up to
-    // $20,000 in OA (modelled per person). UNVERIFIED (general knowledge).
+    // With an HDB loan, the OA balance must go towards the flat before the loan is granted, but
+    // each applicant may keep up to $20,000 in their OA.
+    // Source: hdb.gov.sg "Use of CPF savings" (HDB housing loan). VERIFIED 2026-09-26.
     oaRetainMax: 20000,
-    // HDB loan tenure generally runs to at most age 65. UNVERIFIED (general knowledge).
+    // "65 years minus the average age of the applicants" caps the tenure (plain average).
+    // Source: hdb.gov.sg "Details on the HDB housing loan". VERIFIED 2026-09-26.
     maxAgeAtEnd: 65,
+    // Instalments start on the 1st day of the 2nd month after the loan is disbursed (at key
+    // collection): keys in March → first instalment 1 May. Partial capital repayments: at least
+    // $5,000 in multiples of $1,000 (loans from 1 Apr 2012), no fee or lock-in.
+    // Source: hdb.gov.sg "Payments for HDB housing loan" pages (text supplied by the user). VERIFIED 2026-09-26.
+    firstInstalmentMonths: 2,
+    minPrepay: 5000,
+    prepayStep: 1000,
   },
   bankLoan: {
     // Not a policy figure: a typical fixed rate to start from. Edit freely.
@@ -265,6 +290,8 @@ export const DEFAULT_POLICY: Policy = {
     stressRate: 0.04,
     // Max bank loan tenure for HDB flats. UNVERIFIED (general knowledge, 30 years).
     maxTenureYears: 30,
+    // Banks usually start instalments the month after disbursement. UNVERIFIED (varies by bank).
+    firstInstalmentMonths: 1,
     // MAS: for HDB flats, LTV falls to 55% if tenure > 25 years or the loan runs beyond
     // the (income-weighted average) borrower age of 65; min cash rises to 10%.
     // Source: MAS "Loan Tenure and Loan-to-Value Limits" (search snippet) + SDS guides. SECONDARY 2026-09-23.
@@ -368,10 +395,12 @@ export const DEFAULT_POLICY: Policy = {
     // 24 Aug 2026 (National Day Rally 2026). News reports, confirmed by the user 2026-09-24;
     // not yet read on hdb.gov.sg ($14,000 VERIFIED in HDB Feb 2026 BTO Annex B, Table B(1)).
     incomeCeilingFamilies: 16000,
+    // HDB loan ceilings on hdb.gov.sg ("HDB housing loan" eligibility, text supplied by the user,
+    // VERIFIED 2026-09-26): $16,000 families, $24,000 extended families, $8,000 singles.
     // 2-room Flexi (99-year lease): $7,000 in HDB Feb 2026 Annex B (VERIFIED); may have been
-    // raised after 24 Aug 2026. Extended families: $21,000 (VERIFIED, Feb 2026).
+    // raised after 24 Aug 2026. Extended families were $21,000 in Feb 2026, now $24,000.
     incomeCeiling2RFlexi: 7000,
-    incomeCeilingExtended: 21000,
+    incomeCeilingExtended: 24000,
     // SC/SPR households pay a $10,000 premium on a new flat (Citizen Top-Up refunds it when
     // the SPR becomes an SC). Source: HDB (search snippet). SECONDARY 2026-09-23.
     scSprPremium: 10000,
@@ -489,11 +518,11 @@ export const POLICY_META: Record<string, PolicyMeta> = {
   'cpf.annualSalaryCeiling': { label: 'CPF annual salary ceiling', unit: 'sgd', status: 'verified', source: 'cpf.gov.sg OW ceiling FAQ' },
   'cpf.oaInterestRate': { label: 'CPF OA interest rate', unit: 'pct', status: 'secondary', source: 'CPF interest rate releases, 2026' },
   'cpf.accruedInterestRate': { label: 'CPF accrued interest rate on housing', unit: 'pct', status: 'secondary', source: 'cpf.gov.sg housing refund pages' },
-  'hdbLoan.interestRate': { label: 'HDB loan interest rate', unit: 'pct', status: 'secondary', source: 'hdb.gov.sg interest rate page / CPF releases' },
+  'hdbLoan.interestRate': { label: 'HDB loan interest rate (CPF OA rate + 0.1%)', unit: 'pct', status: 'verified', source: 'hdb.gov.sg (peg rule, Sep 2026); OA rate from CPF releases' },
   'hdbLoan.maxLtv': { label: 'HDB loan max LTV', unit: 'pct', status: 'verified', source: 'HDB BTO Annex C, Oct 2024' },
-  'hdbLoan.stressRate': { label: 'HDB loan assessment rate floor', unit: 'pct', status: 'secondary', source: 'MAS/HDB release, Sep 2022' },
-  'hdbLoan.maxTenureYears': { label: 'HDB loan max tenure', unit: 'years', status: 'unverified', source: 'General knowledge' },
-  'hdbLoan.oaRetainMax': { label: 'OA you may keep with HDB loan (per person)', unit: 'sgd', status: 'unverified', source: 'General knowledge' },
+  'hdbLoan.stressRate': { label: 'HDB loan assessment rate floor', unit: 'pct', status: 'verified', source: 'hdb.gov.sg Details on the HDB housing loan (Sep 2026)' },
+  'hdbLoan.maxTenureYears': { label: 'HDB loan max tenure (also ≤ 65 − average age, ≤ lease − 20)', unit: 'years', status: 'verified', source: 'hdb.gov.sg Details on the HDB housing loan (Sep 2026)' },
+  'hdbLoan.oaRetainMax': { label: 'OA you may keep with HDB loan (per person)', unit: 'sgd', status: 'verified', source: 'hdb.gov.sg Use of CPF savings (Sep 2026)' },
   'bankLoan.defaultInterestRate': { label: 'Bank loan default rate (estimate)', unit: 'pct', status: 'unverified', source: 'Market estimate' },
   'bankLoan.maxLtv': { label: 'Bank loan max LTV', unit: 'pct', status: 'verified', source: 'HDB BTO Annex C, Oct 2024' },
   'bankLoan.minCashPct': { label: 'Bank loan min cash downpayment', unit: 'pct', status: 'secondary', source: 'hdb.gov.sg (snippet)' },
@@ -524,22 +553,23 @@ export const POLICY_META: Record<string, PolicyMeta> = {
   'cpf.lowWage': { label: 'CPF for wages ≤ $750', unit: 'sgd', status: 'verified', source: 'cpf.gov.sg contribution table 1' },
   'cpf.withdrawalLimitMultiple': { label: 'Withdrawal Limit (× Valuation Limit, bank loan)', unit: 'ratio', status: 'verified', source: 'cpf.gov.sg home purchase guide' },
   'cpf.basicRetirementSum': { label: 'Basic Retirement Sum (2026)', unit: 'sgd', status: 'secondary', source: 'cpf.gov.sg FAQ (snippet)' },
-  'hdbLoan.maxAgeAtEnd': { label: 'HDB loan: latest age at end of loan', unit: 'years', status: 'unverified', source: 'General knowledge' },
+  'cpf.fullRetirementSum': { label: 'Full Retirement Sum (2026, moved to RA at 55)', unit: 'sgd', status: 'secondary', source: 'cpf.gov.sg FAQ (snippet); rule verified on hdb.gov.sg' },
+  'hdbLoan.maxAgeAtEnd': { label: 'HDB loan: tenure ≤ this minus average age', unit: 'years', status: 'verified', source: 'hdb.gov.sg Details on the HDB housing loan (Sep 2026)' },
   'bankLoan.reducedLtv': { label: 'Bank loan reduced LTV (long tenure / past 65)', unit: 'pct', status: 'secondary', source: 'MAS explainer (snippet)' },
   'bankLoan.reducedMinCashPct': { label: 'Bank loan min cash at reduced LTV', unit: 'pct', status: 'secondary', source: 'SDS guides' },
   'bankLoan.ltvTenureYears': { label: 'Bank loan: tenure above which LTV is reduced', unit: 'years', status: 'secondary', source: 'MAS explainer (snippet)' },
   'bankLoan.ltvMaxAge': { label: 'Bank loan: age above which LTV is reduced', unit: 'years', status: 'secondary', source: 'MAS explainer (snippet)' },
   'bankLoan.bsdReimburseMonths': { label: 'Bank loan: months until BSD reimbursed from CPF', unit: 'months', status: 'unverified', source: 'Estimate' },
-  'eligibility.incomeCeilingFamilies': { label: 'BTO income ceiling (families)', unit: 'sgd', status: 'secondary', source: 'NDR 2026 (from 24 Aug 2026); confirmed by you' },
+  'eligibility.incomeCeilingFamilies': { label: 'BTO income ceiling (families)', unit: 'sgd', status: 'verified', source: 'hdb.gov.sg HDB housing loan eligibility (Sep 2026)' },
   'cpf.annualLimit': { label: 'CPF Annual Limit (mandatory + voluntary)', unit: 'sgd', status: 'secondary', source: 'cpf.gov.sg (snippet)' },
   'eligibility.incomeCeiling2RFlexi': { label: 'Income ceiling: 2-room Flexi (99-yr)', unit: 'sgd', status: 'verified', source: 'HDB Feb 2026 Annex B (may have changed Aug 2026)' },
-  'eligibility.incomeCeilingExtended': { label: 'Income ceiling: extended family / 3Gen', unit: 'sgd', status: 'verified', source: 'HDB Feb 2026 Annex B' },
+  'eligibility.incomeCeilingExtended': { label: 'Income ceiling: extended family / 3Gen', unit: 'sgd', status: 'verified', source: 'hdb.gov.sg HDB housing loan eligibility (Sep 2026)' },
   'eligibility.scSprPremium': { label: 'SC/SPR household premium on new flat', unit: 'sgd', status: 'secondary', source: 'HDB (snippet)' },
   'eligibility.ehgFamilies': { label: 'Enhanced CPF Housing Grant (families) by income', unit: 'sgd', status: 'secondary', source: 'Max/ceiling cpf.gov.sg; bands ohmyhome.com' },
   'eligibility.ehgSingles': { label: 'EHG (singles table; FT+ST couples use half income)', unit: 'sgd', status: 'secondary', source: 'mynicehome.gov.sg + ohmyhome.com' },
   'eligibility.ehgEmploymentMonths': { label: 'EHG: months of continuous work needed', unit: 'months', status: 'verified', source: 'mynicehome.gov.sg' },
   'eligibility.ehgIncomeLagMonths': { label: 'EHG: income window ends months before HFE', unit: 'months', status: 'verified', source: 'mynicehome.gov.sg' },
-  'eligibility.incomeCeilingSingles': { label: 'Income ceiling: singles', unit: 'sgd', status: 'secondary', source: 'NDR 2026 news ($7k → $8k)' },
+  'eligibility.incomeCeilingSingles': { label: 'Income ceiling: singles', unit: 'sgd', status: 'verified', source: 'hdb.gov.sg HDB housing loan eligibility (Sep 2026)' },
   'eligibility.incomeCeilingJointSingles': { label: 'Income ceiling: Joint Singles Scheme', unit: 'sgd', status: 'unverified', source: 'Assumed = families' },
   'eligibility.singlesMinAge': { label: 'Singles: minimum age', unit: 'years', status: 'secondary', source: 'HDB via guides (snippet)' },
   'eligibility.stepUpAmount': { label: 'Step-Up CPF Housing Grant', unit: 'sgd', status: 'secondary', source: 'HDB (snippet) + guides' },

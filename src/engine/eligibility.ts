@@ -148,7 +148,8 @@ export function assessEligibility(raw: Scenario, policy: Policy): Eligibility {
 
   const hdbLoanIncomeCeiling = isSingle(s)
     ? el.incomeCeilingSingles
-    : s.buyers === 'jointSingles' ? el.incomeCeilingJointSingles : el.incomeCeilingFamilies
+    : s.buyers === 'jointSingles' ? el.incomeCeilingJointSingles
+      : s.flat.type === '3Gen' ? el.incomeCeilingExtended : el.incomeCeilingFamilies
   const hdbLoanBlockedByDia = !!s.financing.deferredIncomeAssessment && s.financing.loanType === 'HDB' && avgIncome > hdbLoanIncomeCeiling
 
   return {

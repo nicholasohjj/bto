@@ -75,6 +75,27 @@ export function weightedAge(scenario: Scenario, ym: YearMonth): number {
 }
 
 /**
+ * HDB loan tenure limit: the shortest of 25 years, 65 minus the applicants' average age
+ * (plain average, at flat application), and the remaining lease minus 20 years.
+ */
+export function hdbMaxTenure(raw: Scenario, policy: Policy): { years: number; byMax: number; byAge: number; byLease: number; avgAge: number } {
+  const s = normalizeScenario(raw)
+  // Ages in whole years, as HDB states them; a half-year average rounds the tenure down.
+  const ages = s.partners.map((p) => Math.floor(ageInMonths(p.birthYearMonth, s.flat.dates.application) / 12))
+  const avgAge = ages.reduce((a, b) => a + b, 0) / ages.length
+  const byMax = policy.hdbLoan.maxTenureYears
+  const byAge = Math.floor(policy.hdbLoan.maxAgeAtEnd - avgAge)
+  const byLease = (s.flat.remainingLeaseYears ?? 99) - policy.lease.minYearsForCpf
+  return { years: Math.max(1, Math.min(byMax, byAge, byLease)), byMax, byAge, byLease, avgAge }
+}
+
+/** The tenure the loan actually runs for: HDB loans are held to HDB's limit (like the LTV cap). */
+export function effectiveTenure(s: Scenario, policy: Policy): number {
+  const f = s.financing
+  return f.loanType === 'HDB' ? Math.min(f.tenureYears, hdbMaxTenure(s, policy).years) : f.tenureYears
+}
+
+/**
  * Highest LTV allowed. Bank loans drop to the reduced LTV if the tenure is
  * over 25 years or the loan runs past (weighted) age 65.
  */
@@ -446,7 +467,7 @@ export function buildSchedule(raw: Scenario, policy: Policy): Schedule {
   const assessedAt = assessmentMonth(scenario, policy)
   const isHdb = financing.loanType === 'HDB'
   const rate = financing.rate
-  const tenure = financing.tenureYears
+  const tenure = effectiveTenure(scenario, policy)
   const instalment = monthlyInstalment(loanAmount, rate, tenure)
   const stressRate = Math.max(rate, isHdb ? policy.hdbLoan.stressRate : policy.bankLoan.stressRate)
   const stressInstalment = monthlyInstalment(loanAmount, stressRate, tenure)
