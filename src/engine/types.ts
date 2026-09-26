@@ -186,6 +186,7 @@ export type CostKind =
   | 'legal'
   | 'survey'
   | 'caveat'
+  | 'keyFees'
   | 'fire'
   | 'hps'
   | 'reno'

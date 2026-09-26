@@ -13,9 +13,10 @@ export function defaultCosts(): CostItem[] {
     applicationFeeDefault(),
     { id: 'option-fee', label: 'Option fee', kind: 'optionFee', amount: 0, auto: true, when: { milestone: 'booking' }, funding: 'cashOnly', payer: 'joint' },
     { id: 'bsd', label: "Buyer's Stamp Duty", kind: 'bsd', amount: 0, auto: true, when: { milestone: 'afl' }, funding: 'cpfAllowed', payer: 'joint' },
-    { id: 'legal', label: 'Legal / conveyancing fees', kind: 'legal', amount: 0, auto: true, when: { milestone: 'keys' }, funding: 'cpfAllowed', payer: 'joint' },
+    { id: 'legal', label: 'Legal / conveyancing fees', kind: 'legal', amount: 0, auto: true, when: { milestone: 'afl' }, funding: 'cpfAllowed', payer: 'joint' },
     { id: 'survey', label: 'Survey fee', kind: 'survey', amount: 0, auto: true, when: { milestone: 'keys' }, funding: 'cpfAllowed', payer: 'joint' },
     { id: 'caveat', label: 'Caveat registration', kind: 'caveat', amount: 0, auto: true, when: { milestone: 'keys' }, funding: 'cpfAllowed', payer: 'joint' },
+    keyFeesDefault(),
     { id: 'fire', label: 'HDB fire insurance (5 yrs)', kind: 'fire', amount: 0, auto: true, when: { milestone: 'keys' }, funding: 'cashOnly', payer: 'joint', recurrence: { everyMonths: 60, times: 6 } },
     { id: 'hps', label: 'Home Protection Scheme (yearly)', kind: 'hps', amount: 300, auto: false, when: { milestone: 'keys' }, funding: 'cpfAllowed', payer: 'joint', recurrence: { everyMonths: 12, times: 30 } },
     { id: 'reno', label: 'Renovation', kind: 'reno', amount: 40000, auto: false, when: { milestone: 'keys', offsetMonths: 1 }, funding: 'cashOnly', payer: 'joint', delayable: true },
@@ -26,7 +27,11 @@ export function defaultCosts(): CostItem[] {
 }
 
 /** Default costs added in version 2 of the default cost list. */
-export const COST_DEFAULTS_VERSION = 3
+export const COST_DEFAULTS_VERSION = 5
+/** Added in version 5: fees at key collection (mortgage stamp duty, registration). */
+export function keyFeesDefault(): CostItem {
+  return { id: 'key-fees', label: 'Mortgage stamp duty & registration fees', kind: 'keyFees', amount: 0, auto: true, when: { milestone: 'keys' }, funding: 'cpfAllowed', payer: 'joint' }
+}
 /** Added in version 3: HDB's $10 application fee. */
 export function applicationFeeDefault(): CostItem {
   return { id: 'application-fee', label: 'Application fee', kind: 'applicationFee', amount: 0, auto: true, when: { milestone: 'application' }, funding: 'cashOnly', payer: 'joint' }
@@ -50,9 +55,14 @@ export function upgradeCosts(s: Scenario): Scenario {
   const added: CostItem[] = [
     ...(from < 2 ? runningCostDefaults() : []),
     ...(from < 3 ? [applicationFeeDefault()] : []),
+    ...(from < 5 ? [keyFeesDefault()] : []),
   ]
   const have = new Set(s.costs.map((c) => c.kind))
-  return { ...s, costDefaultsVersion: COST_DEFAULTS_VERSION, costs: [...s.costs, ...added.filter((c) => !have.has(c.kind))] }
+  // v4: legal fees are paid at AFL (hdb.gov.sg); move the default item if it's still at keys.
+  const moved = from < 4
+    ? s.costs.map((c) => (c.kind === 'legal' && 'milestone' in c.when && c.when.milestone === 'keys' && !c.when.offsetMonths ? { ...c, when: { milestone: 'afl' as const } } : c))
+    : s.costs
+  return { ...s, costDefaultsVersion: COST_DEFAULTS_VERSION, costs: [...moved, ...added.filter((c) => !have.has(c.kind))] }
 }
 
 export function blankPartner(id: 'A' | 'B', start: YearMonth): Partner {

@@ -362,6 +362,15 @@ export function buildWarnings(core: CoreResult, extras: WarningExtras = {}): War
       })
     }
   }
+  // Flats still being built: HDB invites you to sign the AFL within 9 months of booking.
+  if (!isCompleted(s) && monthsBetween(s.flat.dates.booking, s.flat.dates.afl) > lp.completedKeysWithinMonths) {
+    warnings.push({
+      id: 'afl-late', severity: 'warning', ym: s.flat.dates.afl,
+      title: `AFL signing is ${monthsBetween(s.flat.dates.booking, s.flat.dates.afl)} months after booking`,
+      explanation: `HDB invites you to sign the Agreement for Lease within ${lp.completedKeysWithinMonths} months of booking, so the AFL payments are likely due earlier than planned.`,
+      fixes: [`Set AFL signing within ${lp.completedKeysWithinMonths} months of booking (Flat section).`],
+    })
+  }
   const lf = leaseFactor(s, core.policy)
   if (lf.factor === 0) {
     warnings.push({
@@ -607,13 +616,23 @@ export function buildWarnings(core: CoreResult, extras: WarningExtras = {}): War
   const dia = !!s.financing.deferredIncomeAssessment
   if (dia) {
     const maxAge = core.policy.dia.maxAgeYears
-    const ages = s.partners.map((p) => Math.floor(ageInMonths(p.birthYearMonth, s.flat.dates.application) / 12))
+    // Checked at the HFE letter application (hdb.gov.sg DIA page).
+    const hfeAt = hfeMonth(s, core.policy)
+    const ages = s.partners.map((p) => Math.floor(ageInMonths(p.birthYearMonth, hfeAt) / 12))
     if (ages.every((a) => a > maxAge)) {
       warnings.push({
-        id: 'dia-age', severity: 'error', ym: s.flat.dates.application,
+        id: 'dia-age', severity: 'error', ym: hfeAt,
         title: 'Probably not eligible for Deferred Income Assessment',
-        explanation: `At least one of you must be ${maxAge} or younger when applying for the HFE letter. At application (${formatYm(s.flat.dates.application)}) you’ll be ${ages[0]} and ${ages[1]}.`,
-        fixes: ['Turn off Deferred Income Assessment, or apply earlier.'],
+        explanation: `At least one of you must be ${maxAge} or younger when applying for the HFE letter. In ${formatYm(hfeAt)} you’ll be ${ages[0]} and ${ages[1]}.`,
+        fixes: ['Turn off Deferred Income Assessment, or apply for the HFE letter earlier.'],
+      })
+    }
+    if ((s.flat.household ?? 'firstTimers') === 'secondTimers') {
+      warnings.push({
+        id: 'dia-household', severity: 'error', ym: hfeAt,
+        title: 'Deferred Income Assessment needs a first-timer',
+        explanation: 'At least one of you must be a first-timer; second-timer couples can’t use it.',
+        fixes: ['Turn off Deferred Income Assessment (Loan section).'],
       })
     }
     warnings.push({
@@ -623,7 +642,7 @@ export function buildWarnings(core: CoreResult, extras: WarningExtras = {}): War
         (isCompleted(s)
           ? `For a completed flat, HDB looks at your income at flat booking (projected`
           : `HDB will look at your income about ${core.policy.dia.assessmentMonthsBeforeKeys} months before key collection (projected`) + `  ${money(loan.grossIncomeAtAssessment)}/month combined) to decide your Enhanced CPF Housing Grant and HDB loan. ` +
-        `The grant is paid at key collection. Both of you must be full-time students/NSFs, or have finished within ${core.policy.dia.recentGradMonths} months, when you apply for the HFE letter.`,
+        `The grant is paid at key collection. At least one of you must be a full-time student/NSF, or have finished within ${core.policy.dia.recentGradMonths} months, when you apply for the HFE letter.`,
       fixes: [],
     })
     const early = s.flat.grants.filter((g) => !('milestone' in g.when && g.when.milestone === 'keys' && !g.when.offsetMonths))
@@ -782,8 +801,18 @@ export function buildWarnings(core: CoreResult, extras: WarningExtras = {}): War
     warnings.push({
       id: 'plus-prime', severity: 'info',
       title: `${s.flat.classification} flat: extra conditions not modelled`,
-      explanation: `${s.flat.classification} flats come with a longer minimum occupation period, resale restrictions and a subsidy recovery on resale. These don’t change what you pay before key collection, so this timeline isn’t affected.`,
+      explanation:
+        `${s.flat.classification} flats have a 10-year minimum occupation period (5 for Standard), you return a share of the resale price to HDB when you sell (${s.flat.classification === 'Prime' ? 'more than for Plus' : 'less than for Prime'}; the percentage is announced at launch), ` +
+        'and you can’t rent out the whole flat (spare rooms are allowed for 3-room or bigger). None of this changes what you pay up to key collection, so this timeline isn’t affected.',
       fixes: [],
+    })
+  }
+  if (s.flat.type === 'Exec' && (s.flat.saleType ?? 'BTO') === 'BTO') {
+    warnings.push({
+      id: 'exec-not-bto', severity: 'warning',
+      title: 'Executive flats aren’t sold as BTO',
+      explanation: 'HDB offers Executive flats only in Sale of Balance Flats exercises (when available) or on the resale market. BTO flat types go up to 5-room and 3Gen.',
+      fixes: ['Pick a 5-room or 3Gen flat, or switch “How you’re buying” to SBF.'],
     })
   }
   const keysMonth = core.months.find((m) => m.ym === s.flat.dates.keys)

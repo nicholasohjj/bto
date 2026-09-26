@@ -232,6 +232,13 @@ export function autoAmount(item: CostItem, scenario: Scenario, policy: Policy, l
       return policy.fees.surveyFee[type]
     case 'caveat':
       return policy.fees.caveatFee
+    case 'keyFees': {
+      // Mortgage stamp duty on any loan; HDB's two in-escrow registration fees when HDB is your lawyer (HDB loan).
+      const f = policy.fees
+      const duty = loanAmount > 0 ? Math.min(f.mortgageStampDutyMax, loanAmount * f.mortgageStampDutyPct) : 0
+      const registration = scenario.financing.loanType === 'HDB' ? f.escrowRegistrationFee * (loanAmount > 0 ? 2 : 1) : 0
+      return round2(duty + registration)
+    }
     case 'fire':
       return policy.fees.fireInsurance5yr[type]
     case 'resaleLevy':

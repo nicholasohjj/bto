@@ -126,7 +126,7 @@ src/
 - **CPF limit for the flat.** With a bank loan, CPF used for the flat is capped at the price. It goes up to 120% if you tick that you've set aside the Basic Retirement Sum. After that, the mortgage is paid in cash. HDB loans have no cap.
 - **Stamp duty with a bank loan.** It's paid in cash at AFL and reimbursed from CPF 2 months later (the CPF share follows the slider).
 - **Resale levy** (Flat section, second-timers): pick your first subsidised flat and the levy is added at key collection, in cash (it can't be paid with CPF or a loan). $15,000 (2-room) to $55,000 (EC); a "half levy" toggle covers e.g. a divorced second-timer buying with a first-timer. If you'll sell your current flat after keys, it comes out of the sale proceeds instead: edit or remove the item. Second-timers who haven't picked are warned.
-- **Running costs after keys** (Costs section): service & conservancy charges every month (one town council's Singapore Citizen owner-occupier rate by flat type; rebates not included) and property tax every year from 12 months after keys (owner-occupier bands on an estimated annual value, editable under Advanced settings; $0 for most flats). Both are cash. Plans saved before these items existed get them added once, on load or import (`upgradeCosts`); each version's additions (v2: levy, S&CC, property tax; v3: the $10 application fee) are added only once, so items you remove don't come back.
+- **Running costs after keys** (Costs section): service & conservancy charges every month (one town council's Singapore Citizen owner-occupier rate by flat type; rebates not included) and property tax every year from 12 months after keys (owner-occupier bands on an estimated annual value, editable under Advanced settings; $0 for most flats). Both are cash. Plans saved before these items existed get them added once, on load or import (`upgradeCosts`); each version's additions (v2: levy, S&CC, property tax; v3: the $10 application fee; v4: legal fees moved to AFL; v5: mortgage stamp duty & registration at keys) are applied only once, so items you remove don't come back.
 - **Money coming in** (Costs section): gifts, hongbao, car sale and similar. Entered as positive amounts and added to the chosen partner's (or both partners') cash in that month. Not counted as payments.
 - **Assumptions** (Costs section).
   - Interest on cash, compounded monthly.
@@ -146,7 +146,7 @@ src/
 - **Deferred Income Assessment (DIA)** (Loan section).
   - Uses the DIA downpayment table: 2.5% at AFL, the rest at key collection.
   - Assesses MSR/TDSR on income about 3 months before keys, instead of at AFL.
-  - Checks the age rule (at least one of you ≤ 30 at application), shows an eligibility checklist, and warns if a grant is set to arrive before keys.
+  - Checks the age rule (at least one of you ≤ 30 when applying for the HFE letter) and that at least one of you is a first-timer, shows an eligibility checklist (at least one of you studying/in NS or finished within 12 months, from July 2025; before, both), and warns if a grant is set to arrive before keys.
   - Pair it with **"Still studying / in NS"** under Us. Before the work-start month a partner has no salary, CPF or bonus, only the "saved per month until then" amount.
   - Without DIA, having no income at AFL is flagged, with a suggestion to turn DIA on.
   - **Income above the ceiling at the deferred check:**
@@ -190,6 +190,9 @@ Users can override any figure for a single scenario under **Advanced settings**.
 | Deferred Income Assessment: eligibility, 2.5% at AFL, income assessed ~3 months before completion, grant paid at keys | Verified (HDB "Annex A: Details on Deferred Income Assessment", 2024) |
 | DIA with a bank loan: 2.5% cash at AFL; keys 22.5% (≥ 2.5% cash), or 42.5% (≥ 7.5% cash) at 55% LTV | Verified (hdb.gov.sg Staggered Downpayment Scheme page, checked 2026-09-26) |
 | HDB application fee $10 (non-refundable, cash, at application) | Verified (hdb.gov.sg Plan your finances, checked 2026-09-26) |
+| DIA from the July 2025 exercise: one of the couple a student/NSF or finished within 12 months; one ≤ 30 and one first-timer at the HFE letter; HDB tells you at booking | Verified (hdb.gov.sg DIA page, checked 2026-09-26) |
+| Optional Component Scheme cost is added to the flat price (tip on the price field) | Verified (hdb.gov.sg, checked 2026-09-26) |
+| Plus/Prime: 10-year MOP (Standard 5), subsidy recovery on resale, no whole-flat rental — shown as a note; Executive flats not sold as BTO (SBF or resale only) — warned | Verified (hdb.gov.sg flat types and classification, checked 2026-09-26) |
 | Cancelling: option fee forfeited after booking; 5% of the price after signing the AFL (stamp duty refundable, legal fees not); 1-year wait — mentioned in cash-shortfall warnings and tips | Verified (hdb.gov.sg Cancellation of flat application, checked 2026-09-26) |
 | Caveat fee $64.45; first conveyancing tier $0.90 per $1,000 | Verified (cpf.gov.sg) |
 | HDB loan rate = CPF OA rate + 0.1% (2.5% + 0.1% = 2.6%) | Verified peg (hdb.gov.sg, checked 2026-09-26); OA rate 2.5% secondary |
@@ -211,8 +214,9 @@ Users can override any figure for a single scenario under **Advanced settings**.
 | HFE letter: valid 9 months; needed when you apply; up to a month to process; HDB re-checks finances before keys (HDB loans) | Verified (hdb.gov.sg HFE letter pages, checked 2026-09-26) |
 | HFE income: 12 months to 2 months before the HFE month; each person's total ÷ months worked; bonuses and employer CPF excluded | Verified (hdb.gov.sg Income guidelines, checked 2026-09-26) |
 | HDB loan: each applicant may keep up to $20k OA | Verified (hdb.gov.sg Use of CPF savings, checked 2026-09-26) |
-| Conveyancing tiers after the first; GST 9% | **Not verified** (HDB page blocked automated access) |
-| Survey fee per flat type (only the $163.50–$408.75 range verified) | **Not verified** |
+| HDB legal fee: $0.90/$0.72/$0.60 per $1,000; fee rounded up to the dollar, + 9% GST, min $21.80; paid at AFL | Verified (hdb.gov.sg Stamp duty and legal fees; HDB's $345,000 → $239.80 example is a test, checked 2026-09-26) |
+| Survey fee $163.50 / $231.60 / $299.75 / $354.25 / $408.75 (2-room … Executive); in-escrow registration $38.30 each; mortgage stamp duty 0.4% of the loan, max $500 — all at keys | Verified (hdb.gov.sg key collection fees, checked 2026-09-26); 3Gen survey fee assumed = Executive |
+| Bank loan at 55% LTV, standard: 20% at AFL (10% cash), 25% at keys; AFL within 9 months of booking | Verified (hdb.gov.sg Downpayment, checked 2026-09-26) |
 | CPF rates for PRs in years 1–2; low-wage (≤ $750) formulas | Verified (cpf.gov.sg 2026 rate tables) |
 | OA share for PR graduated rates (assumed = citizen ratios) | **Not verified** |
 | 2-room Flexi ceiling $7,000 (Feb 2026; may have risen in Aug 2026) | Verified for Feb 2026 (HDB Annex B) |

@@ -35,10 +35,12 @@ describe("Buyer's Stamp Duty", () => {
 })
 
 describe('conveyancing fee', () => {
-  it('tiers on price rounded up to $1,000, plus GST', () => {
-    // 30k×0.9‰ + 30k×0.72‰ + 420k×0.6‰ = 300.60, ×1.09
-    expect(conveyancingFee(480000, P)).toBeCloseTo(327.65, 2)
-    expect(conveyancingFee(479001, P)).toBeCloseTo(327.65, 2)
+  it('HDB’s example: $345,000 → $219.60, rounded up to $220, plus 9% GST = $239.80', () => {
+    expect(conveyancingFee(345000, P)).toBeCloseTo(239.8, 2)
+  })
+  it('rounds the fee (not the price) up to the next dollar before GST', () => {
+    // 30k×0.9‰ + 30k×0.72‰ + 420k×0.6‰ = 300.60 → 301 × 1.09
+    expect(conveyancingFee(480000, P)).toBeCloseTo(328.09, 2)
   })
   it('applies the minimum fee', () => {
     expect(conveyancingFee(1000, P)).toBe(21.8)

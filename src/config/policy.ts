@@ -173,7 +173,6 @@ export interface Policy {
   }
   fees: {
     conveyancingTiers: Tier[]
-    conveyancingRoundTo: number
     conveyancingMin: number
     gst: number
     caveatFee: number
@@ -182,6 +181,11 @@ export interface Policy {
     /** Forfeited if you cancel after signing the AFL, before keys (share of the purchase price). */
     cancelAfterAflPct: number
     surveyFee: Record<FlatType, number>
+    /** Lease / mortgage in-escrow registration fee, each (when HDB acts for you). */
+    escrowRegistrationFee: number
+    /** Stamp duty on the mortgage (Deed of Assignment): share of the loan, capped. */
+    mortgageStampDutyPct: number
+    mortgageStampDutyMax: number
     bankLegalFee: number
     fireInsurance5yr: Record<FlatType, number>
   }
@@ -354,7 +358,11 @@ export const DEFAULT_POLICY: Policy = {
     bank: {
       // Bank loan: 20% at AFL (of which 5% cash), remaining 5% at keys.
       // Source: hdb.gov.sg Annex C, Oct 2024, para 13 (20% at AFL) VERIFIED; 5% cash SECONDARY.
-      standard: { afl: { pct: 0.2, minCashPct: 0.05 }, keys: { pct: 0.05, minCashPct: 0 } },
+      // At 55% LTV: 20% at AFL, at least 10% cash; 25% at keys (hdb.gov.sg Downpayment, VERIFIED 2026-09-26).
+      standard: {
+        afl: { pct: 0.2, minCashPct: 0.05 }, keys: { pct: 0.05, minCashPct: 0 },
+        reducedLtv: { afl: { pct: 0.2, minCashPct: 0.1 }, keys: { pct: 0.25, minCashPct: 0 } },
+      },
       // Staggered with a bank loan. 75% LTV: 10% at AFL (at least 5% cash), 15% at keys.
       // 55% LTV: 10% at AFL, cash only; 35% at keys.
       // Source: hdb.gov.sg "Staggered Downpayment Scheme" page. VERIFIED 2026-09-26.
@@ -503,19 +511,19 @@ export const DEFAULT_POLICY: Policy = {
     annualValue: { '2R': 6600, '3R': 9600, '4R': 11400, '5R': 14400, '3Gen': 14400, Exec: 15600 },
   },
   fees: {
-    // HDB conveyancing fee (when HDB acts for you): per $1,000 of price, tiered, rounded
-    // up to the next $1,000, plus GST. First tier ($0.90 per $1,000 on first $30,000)
-    // from cpf.gov.sg "HDB option fee and housing expenses" (VERIFIED). Later tiers
-    // ($0.72, $0.60) UNVERIFIED (hdb.gov.sg conveyancing rules page blocked the check).
+    // HDB legal fee (when HDB acts for you), on the price for the purchase and on the loan for the
+    // mortgage: $0.90 per $1,000 on the first $30,000, $0.72 on the next $30,000, $0.60 on the rest;
+    // the fee is rounded up to the next dollar before GST; minimum $21.80 incl. GST. Paid at AFL.
+    // HDB's example: $345,000 → $219.60 → $220 → $239.80 with GST.
+    // Source: hdb.gov.sg "Stamp duty and legal fees" (text supplied by the user). VERIFIED 2026-09-26.
     conveyancingTiers: [
       { width: 30000, rate: 0.0009 },
       { width: 30000, rate: 0.00072 },
       { width: Infinity, rate: 0.0006 },
     ],
-    conveyancingRoundTo: 1000,
-    // Minimum legal fee $21.80 incl. GST. SECONDARY 2026-09-23.
+    // Minimum legal fee $21.80 incl. GST.
     conveyancingMin: 21.8,
-    // Singapore GST 9% (since 1 Jan 2024). UNVERIFIED this session (general knowledge).
+    // Singapore GST 9% (HDB's legal fee example: $220 → $239.80). VERIFIED 2026-09-26.
     gst: 0.09,
     // Caveat registration $64.45 incl. GST, CPF allowed.
     // Source: cpf.gov.sg "HDB option fee and housing expenses". VERIFIED 2026-09-23.
@@ -527,9 +535,14 @@ export const DEFAULT_POLICY: Policy = {
     // before keys → 5% of the purchase price (stamp duty refundable via IRAS; legal fees not); then a
     // 1-year wait. Source: hdb.gov.sg "Cancellation of flat application". VERIFIED 2026-09-26.
     cancelAfterAflPct: 0.05,
-    // Survey fee range $163.50–$408.75 by flat type (cpf.gov.sg, VERIFIED range);
-    // the per-type split below is interpolated. UNVERIFIED per type.
-    surveyFee: { '2R': 163.5, '3R': 218, '4R': 299.75, '5R': 354.25, '3Gen': 408.75, Exec: 408.75 },
+    surveyFee: { '2R': 163.5, '3R': 231.6, '4R': 299.75, '5R': 354.25, '3Gen': 408.75, Exec: 408.75 },
+    // At key collection: survey fee (above; 3Gen not listed, assumed = Executive), lease in-escrow and
+    // mortgage in-escrow registration $38.30 each when HDB acts for you (purchase / HDB loan), and stamp
+    // duty on the Deed of Assignment when taking a loan: 0.4% of the loan, max $500.
+    // Source: hdb.gov.sg key collection "Stamp duty and legal fees" (text supplied by the user). VERIFIED 2026-09-26.
+    escrowRegistrationFee: 38.3,
+    mortgageStampDutyPct: 0.004,
+    mortgageStampDutyMax: 500,
     // Private lawyer fees when taking a bank loan: ~$2,500–$3,000 (secondary).
     // Not a policy figure: an estimate to edit. UNVERIFIED.
     bankLegalFee: 2500,
@@ -610,12 +623,13 @@ export const POLICY_META: Record<string, PolicyMeta> = {
   'eligibility.singlesMinAge': { label: 'Singles: minimum age', unit: 'years', status: 'secondary', source: 'HDB via guides (snippet)' },
   'eligibility.stepUpAmount': { label: 'Step-Up CPF Housing Grant', unit: 'sgd', status: 'verified', source: 'hdb.gov.sg Step-Up CPF Housing Grant (Sep 2026)' },
   'eligibility.stepUpIncomeCeiling': { label: 'Step-Up grant income ceiling', unit: 'sgd', status: 'verified', source: 'hdb.gov.sg Step-Up CPF Housing Grant (Sep 2026)' },
-  'fees.conveyancingTiers': { label: 'HDB conveyancing fee tiers (per $)', unit: 'ratio', status: 'unverified', source: 'First tier verified on cpf.gov.sg' },
-  'fees.conveyancingRoundTo': { label: 'Conveyancing: round price up to', unit: 'sgd', status: 'unverified', source: 'General knowledge' },
-  'fees.conveyancingMin': { label: 'Conveyancing minimum fee', unit: 'sgd', status: 'secondary', source: 'Secondary' },
-  'fees.gst': { label: 'GST', unit: 'pct', status: 'unverified', source: 'General knowledge' },
+  'fees.conveyancingTiers': { label: 'HDB legal fee tiers (per $)', unit: 'ratio', status: 'verified', source: 'hdb.gov.sg Stamp duty and legal fees (Sep 2026)' },
+  'fees.conveyancingMin': { label: 'HDB legal fee minimum (incl. GST)', unit: 'sgd', status: 'verified', source: 'hdb.gov.sg Stamp duty and legal fees (Sep 2026)' },
+  'fees.gst': { label: 'GST', unit: 'pct', status: 'verified', source: 'hdb.gov.sg legal fee example' },
   'fees.caveatFee': { label: 'Caveat registration fee', unit: 'sgd', status: 'verified', source: 'cpf.gov.sg housing expenses article' },
-  'fees.surveyFee': { label: 'Survey fee by flat type', unit: 'sgd', status: 'unverified', source: 'Range verified on cpf.gov.sg; split interpolated' },
+  'fees.surveyFee': { label: 'Survey fee by flat type', unit: 'sgd', status: 'verified', source: 'hdb.gov.sg key collection fees (Sep 2026); 3Gen assumed = Executive' },
+  'fees.escrowRegistrationFee': { label: 'In-escrow registration fee (each)', unit: 'sgd', status: 'verified', source: 'hdb.gov.sg key collection fees (Sep 2026)' },
+  'fees.mortgageStampDutyMax': { label: 'Mortgage stamp duty cap (0.4% of loan)', unit: 'sgd', status: 'verified', source: 'hdb.gov.sg key collection fees (Sep 2026)' },
   'fees.bankLegalFee': { label: 'Private lawyer fee (bank loan)', unit: 'sgd', status: 'unverified', source: 'Estimate' },
   'fees.fireInsurance5yr': { label: 'HDB fire insurance (5-yr premium)', unit: 'sgd', status: 'secondary', source: 'Etiqa / secondary' },
 }

@@ -10,9 +10,9 @@ export function buyersStampDuty(price: number, policy: Policy): number {
 /** HDB conveyancing fee on an amount (price or loan), incl. GST. */
 export function conveyancingFee(amount: number, policy: Policy): number {
   if (amount <= 0) return 0
-  const { conveyancingTiers, conveyancingRoundTo, conveyancingMin, gst } = policy.fees
-  const rounded = Math.ceil(amount / conveyancingRoundTo) * conveyancingRoundTo
-  const fee = tieredAmount(rounded, conveyancingTiers) * (1 + gst)
+  const { conveyancingTiers, conveyancingMin, gst } = policy.fees
+  // HDB rounds the fee (not the amount) up to the next dollar, then adds GST.
+  const fee = Math.ceil(tieredAmount(amount, conveyancingTiers) - 1e-9) * (1 + gst)
   return round2(Math.max(conveyancingMin, fee))
 }
 

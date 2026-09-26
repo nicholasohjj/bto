@@ -305,7 +305,7 @@ export function FlatEditor({ scenario, update, policy }: { scenario: Scenario; u
       </Card>
       <Card>
         <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-          <Field label="Flat price">
+          <Field label="Flat price" tipText="If you pick Optional Component Scheme items at booking (flooring, internal doors, bathroom fittings), their cost is added to the flat price, so include it here.">
             <MoneyInput value={f.price} onChange={(v) => update((d) => { d.flat.price = v })} ariaLabel="Flat price" />
           </Field>
           <Field label="Flat type">
@@ -375,7 +375,7 @@ export function FlatEditor({ scenario, update, policy }: { scenario: Scenario; u
           ))}
         </div>
         <div className="mt-3 grid grid-cols-1 gap-3 min-[360px]:grid-cols-2 md:grid-cols-4">
-          <Field label="HFE letter applied" tip="HFE" hint="Needed when you apply; valid 9 months">
+          <Field label="HFE letter applied" tip="HFE" hint="Apply before the sales exercise opens; valid 9 months">
             <MonthInput value={hfeMonth(scenario, policy)} onChange={(v) => update((d) => { d.flat.hfeMonth = v })} ariaLabel="HFE letter applied" />
           </Field>
         </div>
@@ -648,13 +648,16 @@ function LoanChangesEditor({ scenario, update }: { scenario: Scenario; update: U
 }
 
 function DiaChecklist({ scenario, policy }: { scenario: Scenario; policy: Policy }) {
-  const ages = scenario.partners.map((p) => Math.floor(ageInMonths(p.birthYearMonth, scenario.flat.dates.application) / 12))
+  const hfe = hfeMonth(scenario, policy)
+  const ages = scenario.partners.map((p) => Math.floor(ageInMonths(p.birthYearMonth, hfe) / 12))
   const ageOk = ages.some((a) => a <= policy.dia.maxAgeYears)
+  // Studying/NS at the HFE letter, or finished within the 12 months before it (from “Still studying / in NS”).
+  const studyOk = scenario.partners.some((p) => !!p.workStartMonth && p.workStartMonth > addMonths(hfe, -policy.dia.recentGradMonths)) || null
   const items: { ok: boolean | null; text: string }[] = [
-    { ok: null, text: `Both of you are full-time students or NSFs, or finished within the last ${policy.dia.recentGradMonths} months, when you apply for the HFE letter` },
-    { ok: ageOk, text: `At least one of you is ${policy.dia.maxAgeYears} or younger (you’ll be ${ages.join(' and ')} at application)` },
+    { ok: studyOk, text: `At least one of you is a full-time student or NSF, or finished within the last ${policy.dia.recentGradMonths} months, when you apply for the HFE letter (${formatYm(hfe)})` },
+    { ok: ageOk, text: `At least one of you is ${policy.dia.maxAgeYears} or younger then (you’ll be ${ages.join(' and ')})` },
     { ok: null, text: 'You are married, or applying under the Fiancé/Fiancée Scheme' },
-    { ok: null, text: 'At least one of you is a first-timer' },
+    { ok: (scenario.flat.household ?? 'firstTimers') !== 'secondTimers', text: 'At least one of you is a first-timer' },
   ]
   return (
     <div className="my-2 rounded-lg bg-surface-2 p-3 text-xs">
@@ -784,7 +787,7 @@ const KIND_TIP: Partial<Record<CostItem['kind'], Parameters<typeof InfoTip>[0]['
   optionFee: 'optionFee', bsd: 'BSD', legal: 'legal', hps: 'HPS', fire: 'fire', resaleLevy: 'resaleLevy', scc: 'scc', propertyTax: 'propertyTax',
 }
 /** Cost kinds whose amount the app can work out from the plan and policy. */
-const AUTO_KINDS: CostItem['kind'][] = ['applicationFee', 'optionFee', 'bsd', 'legal', 'survey', 'caveat', 'fire', 'resaleLevy', 'scc', 'propertyTax']
+const AUTO_KINDS: CostItem['kind'][] = ['applicationFee', 'optionFee', 'bsd', 'legal', 'survey', 'caveat', 'keyFees', 'fire', 'resaleLevy', 'scc', 'propertyTax']
 
 function CostRow({ item, computed, onChange, onRemove, partnerNames, inflow = false }: {
   item: CostItem; computed: number; onChange: (fn: (c: CostItem) => void) => void; onRemove?: () => void; partnerNames: [string, string]; inflow?: boolean

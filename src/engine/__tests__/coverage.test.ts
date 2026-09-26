@@ -9,7 +9,7 @@ import { leaseFactor, typicalDates } from '../saleType'
 import { monthsBetween } from '../dates'
 import { assessEligibility, tierAmount } from '../eligibility'
 import { buyersStampDuty } from '../stampDuty'
-import { newScenario } from '../../state/defaults'
+import { newScenario, upgradeCosts } from '../../state/defaults'
 import type { Scenario } from '../types'
 
 function base(fn: (s: Scenario) => void = () => {}): Scenario {
@@ -774,5 +774,60 @@ describe('cost of pulling out, in cash shortfall warnings', () => {
   it('between booking and AFL: the option fee', () => {
     const w = cashWarning((s) => { s.costs.push({ id: 'x', label: 'Big bill', kind: 'custom', amount: 500000, auto: false, when: { date: '2026-08' }, funding: 'cashOnly', payer: 'joint' }) })
     expect(w?.explanation).toMatch(/costs the option fee/)
+  })
+})
+
+describe('signing the AFL (hdb.gov.sg example and rules)', () => {
+  it('HDB’s example: $345,000 flat, HDB loan: 10% less the option fee, $5,100 stamp duty, legal fees, all at AFL', () => {
+    const s = base((s) => { s.flat.price = 345000; s.costs = newScenario('t', '2026-01').costs })
+    const obs = buildSchedule(s, policy).obligations.filter((o) => o.ym === s.flat.dates.afl)
+    expect(obs.find((o) => o.id === 'dp-afl')!.amount).toBe(32500)
+    expect(obs.find((o) => o.kind === 'bsd')!.amount).toBe(5100)
+    expect(obs.find((o) => o.kind === 'legal')).toBeDefined() // purchase $239.80 + mortgage fee on the loan
+  })
+  it('bank loan at 55% LTV, standard: 20% at AFL with 10% cash, 25% at keys', () => {
+    const s = base((s) => { s.financing.loanType = 'bank'; s.financing.tenureYears = 30 })
+    const obs = buildSchedule(s, policy).obligations
+    expect(obs.find((o) => o.id === 'dp-afl')!.amount).toBe(94000) // 20% of $480,000 less $2,000
+    expect(obs.find((o) => o.id === 'dp-afl')!.minCash).toBe(46000) // 10% less the option fee
+    expect(obs.find((o) => o.id === 'dp-keys')!.amount).toBe(120000)
+  })
+  it('flags an AFL more than 9 months after booking', () => {
+    expect(runScenario(base((s) => { s.flat.dates.afl = '2027-06' })).warnings.some((w) => w.id === 'afl-late')).toBe(true) // booking Jun 2026
+    expect(runScenario(base()).warnings.some((w) => w.id === 'afl-late')).toBe(false)
+  })
+  it('moves a saved plan’s legal fees from keys to AFL once', () => {
+    const old = { ...newScenario('t', '2026-01'), costDefaultsVersion: 3 }
+    old.costs = old.costs.map((c) => (c.kind === 'legal' ? { ...c, when: { milestone: 'keys' as const } } : c))
+    expect(upgradeCosts(old).costs.find((c) => c.kind === 'legal')!.when).toEqual({ milestone: 'afl' })
+  })
+})
+
+describe('fees at key collection (hdb.gov.sg)', () => {
+  const keyFees = (f: (s: Scenario) => void) => {
+    const s = base((s) => { s.costs = newScenario('t', '2026-01').costs; f(s) })
+    return buildSchedule(s, policy).obligations.find((o) => o.kind === 'keyFees')
+  }
+  it('HDB loan: $500 mortgage stamp duty (0.4%, capped) + 2 × $38.30 registration', () => {
+    expect(keyFees(() => {})).toMatchObject({ ym: '2029-12', amount: 576.6 })
+  })
+  it('bank loan: only the mortgage stamp duty', () => {
+    expect(keyFees((s) => { s.financing.loanType = 'bank' })!.amount).toBe(500)
+  })
+  it('small loan: 0.4% of the loan', () => {
+    expect(keyFees((s) => { s.flat.price = 100000 })!.amount).toBeCloseTo(0.004 * 75000 + 76.6, 2)
+  })
+  it('survey fee for a 3-room is $231.60', () => {
+    expect(P.fees.surveyFee['3R']).toBe(231.6)
+  })
+})
+
+describe('flat types and classification', () => {
+  it('flags an Executive flat as a BTO, but not in SBF', () => {
+    expect(runScenario(base((s) => { s.flat.type = 'Exec' })).warnings.some((w) => w.id === 'exec-not-bto')).toBe(true)
+    expect(runScenario(base((s) => { s.flat.type = 'Exec'; s.flat.saleType = 'SBF' })).warnings.some((w) => w.id === 'exec-not-bto')).toBe(false)
+  })
+  it('spells out Plus/Prime conditions', () => {
+    expect(runScenario(base((s) => { s.flat.classification = 'Prime' })).warnings.find((w) => w.id === 'plus-prime')!.explanation).toMatch(/10-year minimum occupation period/)
   })
 })

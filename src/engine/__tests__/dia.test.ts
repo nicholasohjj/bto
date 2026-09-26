@@ -117,3 +117,22 @@ describe('DIA when income ends up above the ceiling', () => {
     expect(runScenario(s).warnings.some((w) => w.id === 'income-ceiling')).toBe(true)
   })
 })
+
+describe('DIA eligibility (hdb.gov.sg, from July 2025)', () => {
+  const ids = (f: (s: Scenario) => void) => {
+    const s = newScenario('t', '2026-01')
+    s.flat.dates = { application: '2026-02', booking: '2026-06', afl: '2026-12', keys: '2029-12' }
+    s.financing.deferredIncomeAssessment = true
+    f(s)
+    return runScenario(s).warnings.map((w) => w.id)
+  }
+  it('checks the age limit at the HFE letter, not the flat application', () => {
+    // 30 at the HFE letter (Jan 2026), 31 by the application (Feb 2026): still eligible.
+    expect(ids((s) => { s.partners[0].birthYearMonth = '1995-02'; s.partners[1].birthYearMonth = '1990-01' })).not.toContain('dia-age')
+    expect(ids((s) => { s.partners[0].birthYearMonth = '1994-12'; s.partners[1].birthYearMonth = '1990-01' })).toContain('dia-age')
+  })
+  it('needs at least one first-timer', () => {
+    expect(ids((s) => { s.flat.household = 'secondTimers' })).toContain('dia-household')
+    expect(ids((s) => { s.flat.household = 'firstAndSecond' })).not.toContain('dia-household')
+  })
+})
