@@ -3,7 +3,7 @@ import { addMonths, formatYm, monthsBetween, ymToIndex } from './dates'
 import { money } from './format'
 import { hdbMaxTenure, loanChangesOf, maxLtvFor, preKeysSwitch, weightedAge } from './payments'
 import { monthlyInstalment } from './loan'
-import { householdIncome } from './eligibility'
+import { hfeMonth, householdIncome } from './eligibility'
 import { isCompleted, isSingle, isSinglesPurchase, leaseFactor } from './saleType'
 import { simulateCore, type CoreResult, type LoanStep } from './simulate'
 import type { Milestone, Scenario, Warning, When, YearMonth } from './types'
@@ -374,7 +374,8 @@ export function buildWarnings(core: CoreResult, extras: WarningExtras = {}): War
   }
 
   // --- Loan changes after key collection ---
-  const firstInstalment = addMonths(s.flat.dates.keys, 1)
+  // The loan's real first instalment (HDB: the 2nd month after keys; banks: the month after).
+  const firstInstalment = core.loanPath[0]?.ym ?? addMonths(s.flat.dates.keys, 1)
   const changes = loanChangesOf(s.financing, s.flat.dates.keys)
   // A refinance dated before keys is a financing switch, explained separately below.
   const early = changes.filter((c) => c.from < firstInstalment && c.kind !== 'refinance')
@@ -435,7 +436,10 @@ export function buildWarnings(core: CoreResult, extras: WarningExtras = {}): War
   for (const step of path.filter((p) => p.change === 'tenure' || p.change === 'refinance')) {
     const totalYears = (ymToIndex(step.ym) - ymToIndex(firstInstalment) + step.monthsLeft) / 12
     const maxYears = step.loanType === 'HDB' ? core.policy.hdbLoan.maxTenureYears : core.policy.bankLoan.maxTenureYears
-    const endAge = weightedAge(s, step.ym) + step.monthsLeft / 12
+    // HDB goes by the applicants' plain average age (whole years); banks by the income-weighted one.
+    const endAge = (step.loanType === 'HDB'
+      ? s.partners.reduce((a, p) => a + Math.floor(ageInMonths(p.birthYearMonth, step.ym) / 12), 0) / s.partners.length
+      : weightedAge(s, step.ym)) + step.monthsLeft / 12
     const ageLimit = step.loanType === 'HDB' ? core.policy.hdbLoan.maxAgeAtEnd : core.policy.bankLoan.ltvMaxAge
     if (totalYears > maxYears + 0.05 || endAge > ageLimit + 0.5) {
       warnings.push({
@@ -613,6 +617,43 @@ export function buildWarnings(core: CoreResult, extras: WarningExtras = {}): War
       explanation: 'Neither of you has a salary in the month your loan is assessed, so you wouldn’t get a loan.' + (dia ? '' : ' If you are students/NSFs, turn on Deferred Income Assessment so income is checked just before key collection.'),
       fixes: ['Check each partner’s “Starts full-time work” month.', ...(dia ? [] : ['Turn on Deferred Income Assessment (Loan section).'])],
     })
+  }
+
+  // --- HFE letter timing: needed (valid) when you apply; valid 9 months ---
+  const hfe = hfeMonth(s, core.policy)
+  if (hfe > s.flat.dates.application) {
+    warnings.push({
+      id: 'hfe-after-application', severity: 'warning', ym: hfe,
+      title: 'The HFE letter comes after the flat application',
+      explanation: `You need a valid HFE letter when you apply for the flat (${formatYm(s.flat.dates.application)}), and it can take up to a month to process.`,
+      fixes: [`Set the HFE letter to ${formatYm(addMonths(s.flat.dates.application, -core.policy.hfe.monthsBeforeApplication))} or earlier (Flat section, Key dates).`],
+    })
+  } else if (monthsBetween(hfe, s.flat.dates.application) > core.policy.hfe.validityMonths) {
+    warnings.push({
+      id: 'hfe-expired', severity: 'warning', ym: s.flat.dates.application,
+      title: `The HFE letter would expire before you apply`,
+      explanation: `An HFE letter is valid for ${core.policy.hfe.validityMonths} months. Applied for in ${formatYm(hfe)}, it runs out before ${formatYm(s.flat.dates.application)}, so you’d need a fresh one and HDB would look at your income then.`,
+      fixes: ['Move the HFE letter date closer to the flat application (Flat section, Key dates).'],
+    })
+  }
+
+  // --- HDB re-checks your finances before keys (uncompleted flats; DIA already assesses then) ---
+  if (isHdb && !dia && !isCompleted(s) && !preKeysSwitch(s) && loan.loanAmount > 0) {
+    const reviewAt = addMonths(s.flat.dates.keys, -core.policy.dia.assessmentMonthsBeforeKeys)
+    const income = householdIncome(s, reviewAt)
+    const ratio = income > 0 ? loan.stressInstalment / income : Infinity
+    if (ratio > loan.msrLimit + 1e-9 && !(loan.grossIncomeAtAssessment > 0 && loan.msr > loan.msrLimit + 1e-9)) {
+      warnings.push({
+        id: 'loan-review', severity: 'warning', ym: reviewAt,
+        title: income > 0 ? 'HDB’s check before keys may cut your loan' : 'No income when HDB re-checks your loan before keys',
+        explanation:
+          `HDB reviews your finances nearer completion and may reduce the loan if you can’t afford it any more. ` +
+          (income > 0
+            ? `Around ${formatYm(reviewAt)} your income is about ${money(income)}/month, so the instalment at ${pctStr(Math.max(loan.rate, core.policy.hdbLoan.stressRate))} (${money(loan.stressInstalment)}) would be ${pctStr(ratio)} of it, above the ${pctStr(loan.msrLimit)} limit.`
+            : `Around ${formatYm(reviewAt)} neither of you has a salary in this plan.`),
+        fixes: ['Check the job and pay changes around then (Us section).', 'Keep extra cash for a bigger payment at key collection in case the loan is reduced.'],
+      })
+    }
   }
 
   // --- MSR / TDSR ---

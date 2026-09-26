@@ -73,7 +73,7 @@ src/
   - **Time without income**, from a month with an optional end. No salary, CPF or bonus, and living costs come out of savings each month (defaults to take-home pay minus savings).
   - **Different raise for a year**: overrides the usual raise that January (e.g. 0% one year, 10% the next).
   - A gap in the 12 months before the income assessment breaks the grant's continuous-work rule, and lowers the income used for the grant and loan checks.
-- **What if one of you loses your job?** (Overview, `whatIf.ts`) Re-runs the plan with each partner out of work for 3–12 months, starting now, at AFL or at keys. It shows the lowest cash afterwards and whether cash runs out, and can add the result as a scenario to compare.
+- **What if one of you loses your job?** (Overview, `whatIf.ts`) Re-runs the plan with each partner out of work for 3–12 months, starting now, at AFL or at keys. It shows the lowest cash afterwards and whether cash runs out, and can add the result as a scenario to compare. When the job loss overlaps the mortgage, it points to HDB's Financial Assistance Measures (reduce or defer instalments for 6 months; 12 months with interest suspended under the Homeowner Job Support pilot; a longer loan), or for bank loans, talking to the bank early. Deferrals aren't simulated.
 - **How much can we afford?** (Overview, `afford.ts`) Binary-searches the flat price, to the nearest $1,000, for the highest price with no month short of cash and MSR (plus TDSR for bank loans) within limits. Everything else stays the same: loan type and LTV, CPF slider, costs, grants and dates. It says which limit stops you. If the plan runs short even at $50,000, the shortfall isn't about the price, and it says so.
 - **Who's buying** (Us section).
   - **Couple**, **Single**, or **Two singles** under the Joint Singles Scheme. The scheme allows up to 4 people; the app models 2.
@@ -95,7 +95,7 @@ src/
     - If the lease won't last the youngest of you to 95, CPF use and the HDB loan limit are pro-rated (lease ÷ years to 95).
     - 20 years or less: no CPF and no HDB loan.
 - **Eligibility and grants** (`eligibility.ts`).
-  - Household income is averaged over 12 months, ending 2 months before the HFE application (assumed to be the application month; under DIA, the assessment month).
+  - Household income is averaged over 12 months, ending 2 months before you apply for the HFE letter (Key dates; default a month before the flat application, since you need a valid letter to apply and it takes up to a month; valid 9 months, with a warning if it would expire or comes after the application). Under DIA, the assessment month.
   - That income is checked against the ceiling for the flat type.
   - The **Enhanced CPF Housing Grant** can be auto-calculated:
     - Both first-timers: families table.
@@ -121,7 +121,7 @@ src/
     - **Before keys:** the bank loan starts at key collection, and the bank's cash rule applies then. At least 5% of the price must be paid in cash across the downpayment (option fee + AFL + keys), so any AFL portion paid with CPF is made up in cash at keys. The bank's MSR/TDSR at its 4% stress rate is checked against income at keys.
     - **Before AFL:** you're told to just pick "Bank loan".
     - **After keys:** no HDB penalty and no cash rule.
-  - A bank loan can never go back to an HDB loan.
+  - A bank loan can never go back to an HDB loan. Refinancing from HDB takes about 6–8 weeks from applying with the bank's Letter of Offer (shown as a tip).
   - A bank loan needs the bank's Letter of Offer before AFL (shown under Loan type).
 - **CPF limit for the flat.** With a bank loan, CPF used for the flat is capped at the price. It goes up to 120% if you tick that you've set aside the Basic Retirement Sum. After that, the mortgage is paid in cash. HDB loans have no cap.
 - **Stamp duty with a bank loan.** It's paid in cash at AFL and reimbursed from CPF 2 months later (the CPF share follows the slider).
@@ -157,6 +157,7 @@ src/
 - **HDB loan rule.** With an HDB loan, OA above the retention limit ($20k each) is used for the downpayment, even if the slider is set lower.
 - **Mortgage.** An HDB loan's first instalment is on the 1st of the 2nd month after keys (keys in March → 1 May); a bank loan's the month after keys. It is paid from OA first, then cash (you can change this). HDB partial repayments must be at least $5,000 in $1,000 steps (paying the loan off can be any amount); other amounts are flagged.
 - **Joint payments** are split by the joint-split slider. With "Pool our cash" on, one partner's cash covers the other's shortfall.
+- **HDB's check before keys.** For HDB loans on uncompleted flats (without DIA), HDB re-checks your finances nearer completion and may reduce the loan. The app checks the instalment at HDB's 3% floor against income about 3 months before keys and warns if it's over 30% (e.g. after a job loss or study).
 - **MSR/TDSR.**
   - These are tested at the higher of your loan rate and the stress-test rate (3% for HDB loans, 4% for bank loans).
   - Income is taken at AFL (or about 3 months before keys with DIA). TDSR is only checked for bank loans.
@@ -199,6 +200,9 @@ Users can override any figure for a single scenario under **Advanced settings**.
 | Bank loan max tenure 30 yrs | **Not verified** |
 | HDB loan: first instalment on the 1st of the 2nd month after disbursement (keys); partial repayments ≥ $5,000 in $1,000 steps, no fee | Verified (hdb.gov.sg Payments for HDB housing loan, checked 2026-09-26) |
 | Bank loan: first instalment the month after keys | **Not verified** (varies by bank) |
+| HDB → bank refinancing is one-way; takes ~6–8 weeks; a bank loan can't be refinanced to HDB | Verified (hdb.gov.sg Refinancing HDB housing loan, checked 2026-09-26) |
+| HDB loan repayment period can be changed later (branch appointment; new CPF form; HPS extended) | Verified (hdb.gov.sg, checked 2026-09-26); limits for extensions not stated, so the purchase-time limits are used for the warning |
+| HFE letter: valid 9 months; needed when you apply; up to a month to process; HDB re-checks finances before keys (HDB loans) | Verified (hdb.gov.sg HFE letter pages, checked 2026-09-26) |
 | HDB loan: each applicant may keep up to $20k OA | Verified (hdb.gov.sg Use of CPF savings, checked 2026-09-26) |
 | Conveyancing tiers after the first; GST 9% | **Not verified** (HDB page blocked automated access) |
 | Survey fee per flat type (only the $163.50–$408.75 range verified) | **Not verified** |

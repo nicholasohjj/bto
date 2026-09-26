@@ -462,6 +462,23 @@ export function JobLossCard({ scenario, onAddScenario }: { scenario: Scenario; o
           )
         })}
       </ul>
+      {/* Once the mortgage has started, lenders have hardship help worth knowing about. */}
+      {addMonths(from, months - 1) > scenario.flat.dates.keys && (
+        <p className="mt-3 text-xs text-ink-2">
+          {scenario.financing.loanType === 'HDB' ? (
+            <>
+              <b className="text-ink">If this happens after keys:</b> HDB’s Financial Assistance Measures can reduce or defer your instalments for 6 months
+              (interest still adds up), or for 12 months with interest suspended under the Homeowner Job Support pilot if you’re unemployed and work
+              with a career coach. HDB may also extend the loan to lower the instalment. Apply early at your HDB branch; there’s no fee.
+            </>
+          ) : (
+            <>
+              <b className="text-ink">If this happens after keys:</b> talk to your bank early about repayment options, or refinance to a lower rate.
+              Renting out a room or adding a working family member as an owner can also help.
+            </>
+          )}
+        </p>
+      )}
     </Card>
   )
 }

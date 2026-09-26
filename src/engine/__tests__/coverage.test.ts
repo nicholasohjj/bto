@@ -403,7 +403,7 @@ describe('SBF and open booking', () => {
       s.flat.dates = { application: '2025-01', booking: '2026-03', afl: '2026-03', keys: '2026-07' }
     })
     const el = assessEligibility(s, policy)
-    expect(el.assessedAt).toBe('2026-03')
+    expect(el.assessedAt).toBe('2026-02') // HFE letter a month before applying
     expect(runScenario(s).milestones.application).toBe('2026-03')
   })
   it('warns if keys for a completed flat are more than 9 months after booking', () => {
@@ -616,5 +616,46 @@ describe('turning 55 while CPF pays the loan', () => {
   it('nothing when the loan ends before 55, or when paying the mortgage in cash', () => {
     expect(ids((s) => { s.financing.tenureYears = 15 })).toHaveLength(0)
     expect(ids((s) => { s.partners[1].birthYearMonth = '1975-06'; s.financing.mortgageFrom = 'cashOnly' })).toHaveLength(0)
+  })
+})
+
+describe('changing the tenure of an HDB loan later', () => {
+  it('dates early loan changes from the real first instalment (2nd month after keys)', () => {
+    const r = runScenario(base((s) => { s.financing.loanChanges = [{ id: 'r', kind: 'rate', from: '2027-01', rate: 0.03 }] }))
+    expect(r.warnings.find((w) => w.id === 'loan-change-early')!.explanation).toMatch(/Feb 2030/)
+  })
+  it('checks the age limit with the plain average age, like HDB', () => {
+    // Ages ~25 and ~55 at the change: plain average 40 → a 25-year extension ends at 65, fine.
+    // Weighted towards the older, higher earner it would look like ~53 → 78 and be flagged.
+    const r = runScenario(base((s) => {
+      s.partners[0].birthYearMonth = '2006-01'; s.partners[0].grossMonthly = 2000
+      s.partners[1].birthYearMonth = '1976-01'; s.partners[1].grossMonthly = 12000
+      s.financing.tenureYears = 20
+      s.financing.loanChanges = [{ id: 't', kind: 'tenure', from: '2031-01', tenureYears: 24 }]
+    }))
+    expect(r.warnings.some((w) => w.id.startsWith('loan-term-'))).toBe(false)
+  })
+})
+
+describe('HFE letter and HDB’s check before keys', () => {
+  const ids = (f: (s: Scenario) => void) => runScenario(base(f)).warnings.map((w) => w.id)
+  it('assesses income at the HFE letter, a month before the flat application by default', () => {
+    expect(assessEligibility(base(), policy).assessedAt).toBe('2026-01') // application Feb 2026
+    expect(assessEligibility(base((s) => { s.flat.hfeMonth = '2025-11' }), policy).assessedAt).toBe('2025-11')
+  })
+  it('flags an HFE letter after the application, or one that would expire first', () => {
+    expect(ids((s) => { s.flat.hfeMonth = '2026-03' })).toContain('hfe-after-application')
+    expect(ids((s) => { s.flat.hfeMonth = '2025-04' })).toContain('hfe-expired') // 10 months before
+    expect(ids((s) => { s.flat.hfeMonth = '2025-05' })).not.toContain('hfe-expired') // 9 months: still valid
+  })
+  it('warns when income before keys can’t support the HDB loan', () => {
+    // Both out of work from mid-2029 (keys Dec 2029): nothing when HDB re-checks around Sep 2029.
+    const noPay = (s: Scenario) => s.partners.forEach((p, i) => { p.incomeChanges = [{ id: `gap${i}`, kind: 'noIncome', from: '2029-06', until: '2030-06', monthlyCashChange: 0 }] })
+    expect(ids(noPay)).toContain('loan-review')
+    expect(ids(() => {})).not.toContain('loan-review')
+  })
+  it('doesn’t repeat the check under DIA, which already assesses near keys', () => {
+    const noPay = (s: Scenario) => { s.financing.deferredIncomeAssessment = true; s.partners.forEach((p, i) => { p.incomeChanges = [{ id: `gap${i}`, kind: 'noIncome', from: '2029-06', until: '2030-06', monthlyCashChange: 0 }] }) }
+    expect(ids(noPay)).not.toContain('loan-review')
   })
 })

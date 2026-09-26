@@ -107,6 +107,8 @@ export interface Flat {
   saleType?: 'BTO' | 'SBF' | 'OBF'
   /** SBF/OBF: the flat is already built — AFL and key collection happen together. */
   completed?: boolean
+  /** Month you apply for the HFE letter (default: a month before the flat application). */
+  hfeMonth?: YearMonth
   /** Remaining lease in years when you buy (default 99). Affects CPF use and HDB loan limit. */
   remainingLeaseYears?: number
   /**

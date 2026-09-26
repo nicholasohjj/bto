@@ -47,9 +47,14 @@ export function tierAmount(income: number, tiers: GrantTier[]): number {
   return tiers.find((t) => income <= t.upTo)?.amount ?? 0
 }
 
+/** When you apply for the HFE letter: as set, or a month before the flat application. */
+export function hfeMonth(s: Scenario, policy: Policy): YearMonth {
+  return s.flat.hfeMonth ?? addMonths(s.flat.dates.application, -policy.hfe.monthsBeforeApplication)
+}
+
 /**
- * Month HDB assesses income for the grant: when you apply for the HFE letter
- * (assumed = BTO application month), or ~3 months before keys under DIA.
+ * Month HDB assesses income for the grant: when you apply for the HFE letter,
+ * or ~3 months before keys under DIA.
  */
 export function grantAssessmentMonth(raw: Scenario, policy: Policy): YearMonth {
   const s = normalizeScenario(raw)
@@ -58,7 +63,7 @@ export function grantAssessmentMonth(raw: Scenario, policy: Policy): YearMonth {
     if (isCompleted(s)) return s.flat.dates.booking
     return addMonths(s.flat.dates.keys, -policy.dia.assessmentMonthsBeforeKeys)
   }
-  return s.flat.dates.application
+  return hfeMonth(s, policy)
 }
 
 export function householdIncome(s: Scenario, ym: YearMonth): number {
@@ -79,7 +84,7 @@ export function assessEligibility(raw: Scenario, policy: Policy): Eligibility {
   // Grant (and, under DIA, HDB loan) income: at the HFE application, or deferred under DIA.
   const avgIncome = averageTo(windowEnd)
   // Buying the flat is decided at the HFE application, even under DIA.
-  const purchaseAssessedAt = s.flat.dates.application
+  const purchaseAssessedAt = hfeMonth(s, policy)
   const purchaseAvgIncome = s.financing.deferredIncomeAssessment
     ? averageTo(addMonths(purchaseAssessedAt, -el.ehgIncomeLagMonths))
     : avgIncome

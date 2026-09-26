@@ -1,7 +1,7 @@
 import type { FlatType, Policy } from '../config/policy'
 import { ageInMonths, estimatedLivingCosts, prYear, ratesFor } from '../engine/cpf'
 import { assessmentMonth, autoAmount, downpaymentSchedule, effectiveLtv, grantAmount, hdbMaxTenure, loanChangesOf, maxLtvFor, voluntaryList } from '../engine/payments'
-import { assessEligibility } from '../engine/eligibility'
+import { assessEligibility, hfeMonth } from '../engine/eligibility'
 import { isCompleted, isSingle, isSinglesPurchase, leaseFactor, normalizeScenario, typicalDates } from '../engine/saleType'
 import { addMonths, formatYm } from '../engine/dates'
 import { money } from '../engine/format'
@@ -368,6 +368,11 @@ export function FlatEditor({ scenario, update, policy }: { scenario: Scenario; u
             </Field>
           ))}
         </div>
+        <div className="mt-3 grid grid-cols-1 gap-3 min-[360px]:grid-cols-2 md:grid-cols-4">
+          <Field label="HFE letter applied" tip="HFE" hint="Needed when you apply; valid 9 months">
+            <MonthInput value={hfeMonth(scenario, policy)} onChange={(v) => update((d) => { d.flat.hfeMonth = v })} ariaLabel="HFE letter applied" />
+          </Field>
+        </div>
         <p className="mt-2 text-[11px] text-muted">Simulation runs from {scenario.startMonth} to 12 months after key collection.</p>
       </Card>
       <Card>
@@ -458,8 +463,8 @@ export function FinancingEditor({ scenario, update, policy }: { scenario: Scenar
         </Field>
         <p className="mt-1.5 text-[11px] text-muted">
           {isHdb
-            ? 'You declare your financing when you sign the AFL. HDB assesses your loan with the HFE letter.'
-            : 'You’ll need the bank’s Letter of Offer before signing the AFL (HDB requirement), and at least the minimum cash downpayment.'}
+            ? 'You declare your financing when you sign the AFL. HDB assesses your loan with the HFE letter, and re-checks your finances nearer completion; the loan can be reduced if you can’t afford it any more.'
+            : 'You’ll need the bank’s Letter of Offer before signing the AFL (HDB requirement), and at least the minimum cash downpayment. When you apply for the HFE letter, you can also ask banks for an In-Principle Approval (free) to see how much they’d lend.'}
         </p>
         <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
           <Field label="Loan-to-value" tip="LTV" hint={ltvRule.reduced ? <span className="text-critical">Max {Math.round(maxLtv * 100)}%: {ltvRule.reason}</span> : `Max ${Math.round(maxLtv * 100)}%`}>
@@ -554,6 +559,8 @@ function LoanChangesEditor({ scenario, update }: { scenario: Scenario; update: U
             <li>Switching to a bank loan <b>before keys</b>: the bank loan starts at key collection, and you must have paid at least 5% of the price in cash overall — any AFL part paid with CPF is made up in cash at keys.</li>
             <li><b>After keys</b>: switch any time; no HDB penalty and no cash rule.</li>
             <li>Once on a bank loan, you can’t go back to an HDB loan.</li>
+            <li>Refinancing takes about 6–8 weeks from applying with the bank’s Letter of Offer, so date the switch a couple of months after you apply.</li>
+            <li>To change the repayment period, book an appointment at your HDB branch (all owners attend). Paying with CPF needs a new CPF withdrawal form, and a longer period extends your HPS cover too.</li>
           </>
         ) : (
           <li>You can’t switch from a bank loan to an HDB loan, before or after keys. You can refinance to another bank.</li>

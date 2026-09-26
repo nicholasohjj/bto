@@ -132,6 +132,11 @@ export interface Policy {
     /** Couples: 5-room or smaller. */
     flatTypes: FlatType[]
   }
+  hfe: {
+    /** Default: the HFE letter is applied for this many months before the flat application. */
+    monthsBeforeApplication: number
+    validityMonths: number
+  }
   dia: {
     maxAgeYears: number
     assessmentMonthsBeforeKeys: number
@@ -389,6 +394,14 @@ export const DEFAULT_POLICY: Policy = {
     // Both must be full-time students/NSF, or have completed studies/NS within the last
     // 12 months (at HFE application). Source: DIA Annex A, Table A1(a). VERIFIED 2026-09-23.
     recentGradMonths: 12,
+  },
+  // HDB Flat Eligibility letter: needed (valid) when you apply for a new flat; processing takes up
+  // to a month after documents are in (longer around a sales exercise); valid 9 months from issue.
+  // So the default HFE month is 1 month before the flat application (you can change it).
+  // Source: hdb.gov.sg HFE letter pages (text supplied by the user). VERIFIED 2026-09-26.
+  hfe: {
+    monthsBeforeApplication: 1,
+    validityMonths: 9,
   },
   eligibility: {
     // Household income ceiling for BTO (families): raised from $14,000 to $16,000 from
