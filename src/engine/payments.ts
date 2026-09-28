@@ -391,7 +391,7 @@ export function buildSchedule(raw: Scenario, policy: Policy): Schedule {
       id: 'dp-keys',
       sourceId: 'dp-keys',
       label: (resale
-        ? (grantExcess > 0 ? 'Downpayment at completion (incl. grant used to cut loan)' : 'Downpayment at completion (less the deposit)')
+        ? (grantExcess > 0 ? 'Downpayment before completion (incl. grant used to cut loan)' : 'Downpayment before completion (less the deposit)')
         : grantExcess > 0 ? 'Balance at key collection (incl. grant used to cut loan)' : 'Balance downpayment at key collection') +
         (switching ? ' — switching to bank loan' : ''),
       cashRuleTotal: switching ? round2(switchCashPct(scenario, policy) * price) : undefined,
@@ -408,7 +408,10 @@ export function buildSchedule(raw: Scenario, policy: Policy): Schedule {
   if (resale) {
     const cash = { payer: 'joint' as Payer, housing: true, downpayment: false, delayable: false, funding: 'cashOnly' as FundingRule, minCash: 0, grantFunded: 0 }
     if (exerciseFee > 0) obligations.push({ ...cash, downpayment: true, id: 'exercise-fee', sourceId: 'exercise-fee', label: 'Exercise fee (rest of the deposit, to the seller)', kind: 'downpayment', ym: dates.afl, amount: round2(exerciseFee) })
-    obligations.push({ ...cash, housing: false, id: 'request-for-value', sourceId: 'request-for-value', label: 'Request for value (HDB valuation)', kind: 'custom', ym: dates.booking, amount: policy.resale.requestForValueFee })
+    // No valuation needed when paying all in cash (no loan, no CPF).
+    if (loanBeforeGrants > 0 || financing.cpfUsagePct > 0) {
+      obligations.push({ ...cash, housing: false, id: 'request-for-value', sourceId: 'request-for-value', label: 'Request for value (HDB valuation)', kind: 'custom', ym: dates.booking, amount: policy.resale.requestForValueFee })
+    }
     obligations.push({ ...cash, housing: false, id: 'resale-application', sourceId: 'resale-application', label: 'Resale application fee', kind: 'custom', ym: dates.afl, amount: flat.type === '2R' ? policy.resale.applicationFeeSmall : policy.resale.applicationFee })
     // PR-only households pay Additional Buyer's Stamp Duty on their first HDB resale flat, at completion (CPF allowed).
     if (eligibility.bothSpr) {

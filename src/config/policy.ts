@@ -483,8 +483,10 @@ export const DEFAULT_POLICY: Policy = {
   // Source: hdb.gov.sg HFE letter pages (text supplied by the user). VERIFIED 2026-09-26.
   // Resale flats. Grant amounts and the Proximity Housing Grant: hdb.gov.sg grant pages (text supplied by the
   // user; VERIFIED 2026-09-26). Loan and CPF capped at the lower of price and valuation; cash over valuation
-  // in cash (hdb.gov.sg loan pages, VERIFIED). Option fee ≤ $1,000 with option + exercise ≤ $5,000; request
-  // for value $120: 2026 guides (ohmyhome, propkaki, propseller), SECONDARY 2026-09-28. Resale application
+  // in cash (hdb.gov.sg loan pages, VERIFIED). Option fee $1–$1,000 and option + exercise ≤ $5,000, exercised
+  // within 21 days (hdb.gov.sg "Option to Purchase", VERIFIED 2026-09-28). Request for value $120 incl. GST, by
+  // the next working day after the option; not needed if paying all in cash; outcome in ~10 working days and
+  // valid 3 months (hdb.gov.sg "Request for value", VERIFIED 2026-09-28). Resale application
   // fee $80 ($40 for 1-/2-room) incl. GST; both parties submit within 7 days of exercising the option; HDB
   // accepts within 28 working days; completion about 8 weeks after acceptance — so roughly 2½–3½ months
   // after exercising (default 3). Source: hdb.gov.sg resale application and completion pages. VERIFIED 2026-09-28.
@@ -711,7 +713,7 @@ export const POLICY_META: Record<string, PolicyMeta> = {
   'downpayment.bank.standard': { label: 'Bank loan downpayment (standard)', unit: 'pct', status: 'secondary', source: 'HDB Annex C + secondary' },
   'downpayment.bank.staggered': { label: 'Bank loan downpayment (staggered)', unit: 'pct', status: 'verified', source: 'hdb.gov.sg Staggered Downpayment Scheme page (Sep 2026)' },
   'downpayment.hdb.dia': { label: 'HDB loan downpayment (Deferred Income Assessment)', unit: 'pct', status: 'verified', source: 'HDB DIA Annex A (2024)' },
-  'resale': { label: 'Resale flats: fees, grants and timing', unit: 'sgd', status: 'secondary', source: 'Grants and caps: hdb.gov.sg (verified); fees and timing: 2026 guides' },
+  'resale': { label: 'Resale flats: fees, grants and timing', unit: 'sgd', status: 'verified', source: 'hdb.gov.sg resale pages (Sep 2026); ABSD rate for PRs from IRAS (secondary)' },
   'downpayment.bank.dia': { label: 'Bank loan downpayment (Deferred Income Assessment)', unit: 'pct', status: 'verified', source: 'hdb.gov.sg Staggered Downpayment Scheme page (Sep 2026)' },
   'lease.coverToAge': { label: 'Lease must cover youngest buyer to age', unit: 'years', status: 'secondary', source: 'MND 2019 CPF/HDB loan rules (snippet)' },
   'lease.minYearsForCpf': { label: 'No CPF / HDB loan if remaining lease ≤', unit: 'years', status: 'secondary', source: 'MND 2019 CPF/HDB loan rules (snippet)' },

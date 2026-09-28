@@ -361,7 +361,7 @@ export function FlatEditor({ scenario, update, policy, brief = false }: { scenar
         {saleType !== 'BTO' && (
           <p className="mt-2 text-[11px] text-muted">
             {resale
-              ? 'Resale: you pay the option fee for an Option to Purchase, exercise it within 21 days (exercise fee, stamp duty, HDB fees), and pay the rest at completion about 8 weeks after HDB accepts the application. The option and exercise fees (up to $5,000 in total) count towards the downpayment.'
+              ? 'Resale: you pay the option fee for an Option to Purchase, exercise it within 21 days (exercise fee, stamp duty, HDB fees), pay the downpayment about a month before completion, and complete about 8 weeks after HDB accepts the application. The option and exercise fees (up to $5,000 in total) count towards the downpayment.'
               : <>
                 {saleType === 'SBF' ? 'SBF runs alongside BTO launches, with a ballot. ' : 'Open booking: no ballot — first come, first served, and you can book as early as the next working day. '}
                 {completed ? 'For a completed flat you sign the AFL and collect keys together (within 9 months of booking) and pay the full downpayment then.' : 'Changing this resets the dates to typical ones — adjust them below.'}
@@ -825,6 +825,7 @@ export function CostsEditor({ scenario, update, policy, brief = false }: { scena
   const groupProps = {
     amountOf: (c: CostItem) => (c.kind === 'inflow' ? c.amount : autoAmount(c, scenario, policy, loanGuess)),
     ymOf: (c: CostItem) => ('date' in c.when ? c.when.date : addMonths(scenario.flat.dates[c.when.milestone], c.when.offsetMonths ?? 0)),
+    resale: scenario.flat.saleType === 'resale',
     open, toggle,
     onChange: (id: string, fn: (c: CostItem) => void) => update((d) => fn(d.costs.find((x) => x.id === id)!)),
     onRemove: (c: CostItem) => (c.kind === 'optionFee' ? undefined : () => update((d) => { d.costs = d.costs.filter((x) => x.id !== c.id) })),
@@ -873,9 +874,15 @@ export function CostsEditor({ scenario, update, policy, brief = false }: { scena
         )} />}
       <CostGroup title="Your costs" hint="Renovation, furniture and anything else. Your own costs rise with the inflation setting."
         items={scenario.costs.filter((c) => !BUYING_KINDS.includes(c.kind) && !RUNNING_KINDS.includes(c.kind) && c.kind !== 'inflow')} {...groupProps}
-        footer={[['Wedding', 30000], ['Car', 20000], ['Travel', 5000], ['Other', 1000]].map(([label, amt]) => (
-          <Button key={label} variant="secondary" onClick={() => add({ id: newId('c'), label: String(label), kind: 'custom', amount: Number(amt), auto: false, when: { date: scenario.startMonth }, funding: 'cashOnly', payer: 'joint', delayable: true })}>+ {label}</Button>
-        ))} />
+        footer={<>
+          {[['Wedding', 30000], ['Car', 20000], ['Travel', 5000], ['Other', 1000]].map(([label, amt]) => (
+            <Button key={label} variant="secondary" onClick={() => add({ id: newId('c'), label: String(label), kind: 'custom', amount: Number(amt), auto: false, when: { date: scenario.startMonth }, funding: 'cashOnly', payer: 'joint', delayable: true })}>+ {label}</Button>
+          ))}
+          {scenario.flat.saleType === 'resale' && (
+            // Commission is agreed with the agent (HDB gives no rate); 1% + GST is a common starting point.
+            <Button variant="secondary" onClick={() => add({ id: newId('c'), label: 'Agent’s commission (as agreed)', kind: 'custom', amount: Math.round(scenario.flat.price * 0.01 * (1 + policy.fees.gst)), auto: false, when: { milestone: 'keys' }, funding: 'cashOnly', payer: 'joint' })}>+ Agent’s commission</Button>
+          )}
+        </>} />
       {!more && (
         <button type="button" className="text-sm font-medium text-accent" onClick={() => setMore(true)}>
           More details: all fees, money coming in (gifts, hongbao), interest and inflation ▾
@@ -894,11 +901,13 @@ const BUYING_KINDS: CostItem['kind'][] = ['applicationFee', 'optionFee', 'bsd', 
 const RUNNING_KINDS: CostItem['kind'][] = ['scc', 'propertyTax', 'fire', 'hps']
 
 /** "At AFL signing", "3 months after key collection", "Mar 2027". */
-function whenText(w: When): string {
+function whenText(w: When, resale = false): string {
   if ('date' in w) return formatYm(w.date)
-  const label = { application: 'application', booking: 'booking', afl: 'AFL signing', keys: 'key collection' }[w.milestone]
+  const label = resale
+    ? { application: 'the Option to Purchase', booking: 'the Option to Purchase', afl: 'exercising the option', keys: 'completion' }[w.milestone]
+    : { application: 'application', booking: 'booking', afl: 'AFL signing', keys: 'key collection' }[w.milestone]
   const off = w.offsetMonths ?? 0
-  if (!off) return `At ${label}`
+  if (!off) return label.startsWith('exercising') ? `When ${label}` : `At ${label}`
   return `${Math.abs(off)} month${Math.abs(off) > 1 ? 's' : ''} ${off > 0 ? 'after' : 'before'} ${label}`
 }
 
@@ -913,9 +922,9 @@ function repeatText(r: CostItem['recurrence']): { per: string; how: string } {
  * A group of costs as one compact row each (name, when, amount, cash/CPF); tap a row to edit it.
  * Worked-out items that come to $0 for this plan are listed together instead of taking a row each.
  */
-function CostGroup({ title, hint, tip, items, amountOf, ymOf, open, toggle, onChange, onRemove, partnerNames, footer, inflow = false }: {
+function CostGroup({ title, hint, tip, items, amountOf, ymOf, resale = false, open, toggle, onChange, onRemove, partnerNames, footer, inflow = false }: {
   title: string; hint: string; tip?: Parameters<typeof InfoTip>[0]['term']; items: CostItem[]
-  amountOf: (c: CostItem) => number; ymOf: (c: CostItem) => string; open: Set<string>; toggle: (id: string) => void
+  amountOf: (c: CostItem) => number; ymOf: (c: CostItem) => string; resale?: boolean; open: Set<string>; toggle: (id: string) => void
   onChange: (id: string, fn: (c: CostItem) => void) => void; onRemove: (c: CostItem) => (() => void) | undefined
   partnerNames: [string, string]; footer?: ReactNode; inflow?: boolean
 }) {
@@ -940,7 +949,7 @@ function CostGroup({ title, hint, tip, items, amountOf, ymOf, open, toggle, onCh
                   className="flex w-full items-center gap-3 px-3 py-2.5 text-left hover:bg-surface-2">
                   <span className="min-w-0 flex-1">
                     <span className="block text-sm">{c.label}</span>
-                    <span className="block text-xs text-muted">{whenText(c.when)}{r.how}</span>
+                    <span className="block text-xs text-muted">{whenText(c.when, resale)}{r.how}</span>
                   </span>
                   <span className="shrink-0 text-right">
                     <span className={`block text-sm font-medium tnum ${inflow ? 'text-good-ink' : ''}`}>{inflow ? '+' : ''}{money(amountOf(c))}{r.per}</span>

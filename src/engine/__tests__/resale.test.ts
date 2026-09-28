@@ -133,6 +133,11 @@ describe('resale flats', () => {
     expect(buildSchedule(s, P).obligations.find((o) => o.id === 'absd')).toMatchObject({ amount: 25000, ym: '2026-05' })
     expect(buildSchedule(resale(), P).obligations.find((o) => o.id === 'absd')).toBeUndefined()
   })
+  it('no request for value when paying all in cash', () => {
+    const s = resale((s) => { s.financing.ltv = 0; s.financing.cpfUsagePct = 0; s.partners.forEach((p) => { p.cash = 400000 }) })
+    expect(buildSchedule(s, P).obligations.some((o) => o.id === 'request-for-value')).toBe(false)
+    expect(ob(resale(), 'request-for-value')?.amount).toBe(120)
+  })
   it('runs end to end', () => {
     const r = runScenario(resale())
     expect(r.events.some((e) => e.kind === 'mortgage')).toBe(true)
