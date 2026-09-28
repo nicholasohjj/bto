@@ -25,6 +25,25 @@ export function legalFees(price: number, loanAmount: number, loanType: 'HDB' | '
   return round2(conveyancingFee(price, policy) + (loanAmount > 0 ? conveyancingFee(loanAmount, policy) : 0))
 }
 
+/** HDB's resale legal fee on an amount: per $100 or part, rounded up to the dollar, + GST, with a minimum. */
+function resaleFee(amount: number, min: number, policy: Policy): number {
+  if (amount <= 0) return 0
+  const r = policy.resale
+  const rounded = Math.ceil(amount / r.legalRoundTo - 1e-9) * r.legalRoundTo
+  return round2(Math.max(min, Math.ceil(tieredAmount(rounded, r.legalTiers) - 1e-9) * (1 + policy.fees.gst)))
+}
+
+/**
+ * Resale legal fees. HDB acting (HDB loan): transfer fee on the price plus mortgage fee on the loan.
+ * Bank loan: private lawyer estimate.
+ */
+export function resaleLegalFees(price: number, loanAmount: number, loanType: 'HDB' | 'bank', type: FlatType, policy: Policy): number {
+  if (loanType === 'bank') return policy.fees.bankLegalFee
+  const r = policy.resale
+  const mortgage = loanAmount > 0 ? resaleFee(loanAmount, type === '2R' ? r.mortgageLegalMinSmall : r.mortgageLegalMin, policy) : 0
+  return round2(resaleFee(price, r.legalMin, policy) + mortgage)
+}
+
 export function optionFee(type: FlatType, policy: Policy): number {
   return policy.optionFee[type]
 }

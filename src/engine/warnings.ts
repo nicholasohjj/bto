@@ -4,7 +4,7 @@ import { money } from './format'
 import { hdbMaxTenure, loanChangesOf, maxLtvFor, preKeysSwitch, weightedAge } from './payments'
 import { monthlyInstalment } from './loan'
 import { hfeMonth, householdIncome } from './eligibility'
-import { isCompleted, isSingle, isSinglesPurchase, leaseFactor } from './saleType'
+import { isBuilt, isCompleted, isResale, isSingle, isSinglesPurchase, leaseFactor } from './saleType'
 import { simulateCore, type CoreResult, type LoanStep } from './simulate'
 import type { Milestone, Scenario, Warning, When, YearMonth } from './types'
 
@@ -287,6 +287,15 @@ export function buildWarnings(core: CoreResult, extras: WarningExtras = {}): War
   }
   if (singles) {
     // Citizenship is covered by the singles check above.
+  } else if (el.bothSpr && isResale(s)) {
+    if (isHdb) {
+      warnings.push({
+        id: 'both-spr-resale', severity: 'error',
+        title: 'PR couples need a bank loan for a resale flat',
+        explanation: 'Two PRs can buy a resale flat, but not with an HDB loan or CPF housing grants (both need a Singapore Citizen).',
+        fixes: ['Choose a bank loan (Loan section).'],
+      })
+    }
   } else if (el.bothSpr) {
     warnings.push({
       id: 'both-spr', severity: 'error',
@@ -347,6 +356,36 @@ export function buildWarnings(core: CoreResult, extras: WarningExtras = {}): War
       explanation: `With a bank loan you can use CPF up to the flat’s value${s.financing.brsSetAside ? ` × ${core.policy.cpf.withdrawalLimitMultiple} (Withdrawal Limit)` : ''}: ${money(core.schedule.loan.cpfCap)}. After that, the mortgage has to be paid in cash.`,
       fixes: s.financing.brsSetAside ? [] : [`If you have at least the Basic Retirement Sum (${money(core.policy.cpf.basicRetirementSum)}) in CPF, tick “BRS set aside” to use up to ${Math.round(core.policy.cpf.withdrawalLimitMultiple * 100)}%.`],
     })
+  }
+
+  // --- Resale: exercising the option, completion, cash over valuation ---
+  if (isResale(s)) {
+    const d = s.flat.dates
+    if (monthsBetween(d.booking, d.afl) > 1) {
+      warnings.push({
+        id: 'otp-exercise', severity: 'warning', ym: d.afl,
+        title: 'The Option to Purchase must be exercised within 21 days',
+        explanation: `You exercise the option (and pay the exercise fee) within 21 days of getting it, so “Exercise option” should be in ${formatYm(d.booking)} or the month after.`,
+        fixes: ['Move “Exercise option” closer to the Option to Purchase (Flat section).'],
+      })
+    }
+    if (d.keys < d.afl) {
+      warnings.push({
+        id: 'resale-order', severity: 'error', ym: d.keys,
+        title: 'Completion is before you exercise the option',
+        explanation: 'Completion (keys) usually comes about 8 weeks after HDB accepts your resale application.',
+        fixes: ['Set completion after “Exercise option” (Flat section).'],
+      })
+    }
+    const cov = Math.max(0, s.flat.price - Math.min(s.flat.price, s.flat.valuation ?? s.flat.price))
+    if (cov > 0) {
+      warnings.push({
+        id: 'cov', severity: 'info', ym: d.keys,
+        title: `Cash over valuation: ${money(cov)} in cash`,
+        explanation: `You’re paying ${money(cov)} above HDB’s valuation (${money(s.flat.valuation!)}). That part can’t come from CPF or a loan, and the loan and CPF are worked out on the valuation.`,
+        fixes: [],
+      })
+    }
   }
 
   // --- SBF / open booking: completed flats, remaining lease ---
@@ -580,6 +619,15 @@ export function buildWarnings(core: CoreResult, extras: WarningExtras = {}): War
 
   // --- A grant you'd likely get but haven't added (plans made before the wizard included it) ---
   const ehg = core.schedule.eligibility.ehg
+  // Resale: the CPF Housing Grant for resale flats, if you qualify but it isn't in the plan.
+  if (isResale(s) && core.schedule.eligibility.familyGrant > 0 && !s.flat.grants.some((g) => g.auto === 'FamilyGrant' || /housing grant for resale|family grant/i.test(g.name))) {
+    warnings.push({
+      id: 'family-grant-missing', severity: 'warning', ym: s.flat.dates.keys,
+      title: `You may be missing a ${money(core.schedule.eligibility.familyGrant)} resale grant`,
+      explanation: `As ${core.schedule.eligibility.familyGrantReason.toLowerCase().replace(/\.$/, '')}, you look eligible for the CPF Housing Grant for resale flats, but this plan doesn’t include it.`,
+      fixes: ['In the Flat section, tap “+ Resale grant (auto)”.'],
+    })
+  }
   const hasEhg = s.flat.grants.some((g) => g.auto === 'EHG' || /enhanced/i.test(g.name))
   if (ehg > 0 && !hasEhg) {
     warnings.push({
@@ -593,7 +641,7 @@ export function buildWarnings(core: CoreResult, extras: WarningExtras = {}): War
   // --- Parenthood Provisional Housing Scheme (HDB rental while waiting) ---
   if (s.interim.mode === 'pphs') {
     const why: string[] = []
-    if (isCompleted(s)) why.push('it’s for flats still being built, and yours is completed')
+    if (isBuilt(s)) why.push(`it’s for flats still being built, and yours is ${isResale(s) ? 'a resale flat' : 'completed'}`)
     if (isSinglesPurchase(s)) why.push('it’s for couples, or divorced or widowed parents with children')
     else if ((s.flat.household ?? 'firstTimers') === 'secondTimers') why.push('at least one of you must be a first-timer')
     const income = core.schedule.eligibility.purchaseAvgIncome
@@ -731,7 +779,7 @@ export function buildWarnings(core: CoreResult, extras: WarningExtras = {}): War
   }
 
   // --- HDB re-checks your finances before keys (uncompleted flats; DIA already assesses then) ---
-  if (isHdb && !dia && !isCompleted(s) && !preKeysSwitch(s) && loan.loanAmount > 0) {
+  if (isHdb && !dia && !isBuilt(s) && !preKeysSwitch(s) && loan.loanAmount > 0) {
     const reviewAt = addMonths(s.flat.dates.keys, -core.policy.dia.assessmentMonthsBeforeKeys)
     const income = householdIncome(s, reviewAt)
     const ratio = income > 0 ? loan.stressInstalment / income : Infinity
@@ -850,7 +898,10 @@ export function buildWarnings(core: CoreResult, extras: WarningExtras = {}): War
       id: 'plus-prime', severity: 'info',
       title: `${s.flat.classification} flat: extra conditions not modelled`,
       explanation:
-        `${s.flat.classification} flats have a 10-year minimum occupation period (5 for Standard), you return a share of the resale price to HDB when you sell (${s.flat.classification === 'Prime' ? 'more than for Plus' : 'less than for Prime'}; the percentage is announced at launch), ` +
+        `${s.flat.classification} flats have a 10-year minimum occupation period (5 for Standard)` +
+        (isResale(s)
+          ? ' (no subsidy recovery when you sell a resale one), '
+          : `, you return a share of the resale price to HDB when you sell (${s.flat.classification === 'Prime' ? 'more than for Plus' : 'less than for Prime'}; the percentage is announced at launch), `) +
         'and you can’t rent out the whole flat (spare rooms are allowed for 3-room or bigger). None of this changes what you pay up to key collection, so this timeline isn’t affected.',
       fixes: [],
     })

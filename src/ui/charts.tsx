@@ -70,7 +70,7 @@ const Y_AXIS_WIDTH = 48
 const MARGIN_RIGHT = 8
 const LABEL_ROW = 13
 
-export function TimelineChart({ result, perPartner, names }: { result: SimResult; perPartner: boolean; names: [string, string] }) {
+export function TimelineChart({ result, perPartner, names, resale = false }: { result: SimResult; perPartner: boolean; names: [string, string]; resale?: boolean }) {
   const [boxRef, boxWidth] = useWidth<HTMLDivElement>()
   const data = result.months.map((m) => ({
     ym: m.ym,
@@ -107,10 +107,12 @@ export function TimelineChart({ result, perPartner, names }: { result: SimResult
   // Milestone labels: stack into rows when they'd overlap.
   // Same-month milestones share one line: open booking (apply = book), completed flats (AFL = keys).
   const ms = result.milestones
+  // Resale: booking = Option to Purchase, AFL = exercising it (often the same month), keys = completion.
   const milestones = (Object.entries(ms) as [Milestone, string][]).filter(([m, ym]) =>
-    inRange(ym) && !(m === 'application' && ym === ms.booking) && !(m === 'afl' && ym === ms.keys))
-  const labelText = (m: Milestone) =>
-    m === 'keys' && ms.afl === ms.keys ? 'AFL + Keys' : m === 'booking' && ms.application === ms.booking ? 'Book' : MILESTONE_LABEL[m]
+    inRange(ym) && !(m === 'application' && ym === ms.booking) && !(m === 'afl' && ym === ms.keys) && !(resale && m === 'afl' && ym === ms.booking))
+  const labelText = (m: Milestone) => resale
+    ? (m === 'booking' ? (ms.afl === ms.booking ? 'OTP + exercise' : 'OTP') : m === 'afl' ? 'Exercise' : m === 'keys' ? 'Completion' : MILESTONE_LABEL[m])
+    : m === 'keys' && ms.afl === ms.keys ? 'AFL + Keys' : m === 'booking' && ms.application === ms.booking ? 'Book' : MILESTONE_LABEL[m]
   const plotWidth = Math.max(1, boxWidth - Y_AXIS_WIDTH - MARGIN_RIGHT)
   const pxPerMonth = plotWidth / Math.max(1, data.length - 1)
   const { rows: labelRow, x: labelX, rowCount } = layoutLabels(

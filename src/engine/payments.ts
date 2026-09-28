@@ -1,12 +1,12 @@
 import type { Policy, Tranche } from '../config/policy'
 import { addMonths, indexToYm, ymToIndex } from './dates'
 import { monthlyInstalment } from './loan'
-import { buyersStampDuty, legalFees, optionFee, round2 } from './stampDuty'
+import { buyersStampDuty, legalFees, optionFee, resaleLegalFees, round2 } from './stampDuty'
 import { tieredAmount } from './tiers'
 import type { CostItem, CostKind, FundingRule, LoanInfo, Milestone, Payer, PartnerId, Scenario, When, YearMonth } from './types'
 import { ageInMonths, salaryAt } from './cpf'
 import { assessEligibility, type Eligibility } from './eligibility'
-import { isCompleted, leaseFactor, normalizeScenario } from './saleType'
+import { isCompleted, isResale, leaseFactor, normalizeScenario } from './saleType'
 
 /** One dated payment the simulation must make. */
 export interface Obligation {
@@ -141,6 +141,8 @@ export function grantSplitA(g: Scenario['flat']['grants'][number], s: Scenario):
 export function grantAmount(g: Scenario['flat']['grants'][number], elig: Eligibility): number {
   if (g.auto === 'EHG') return elig.ehg
   if (g.auto === 'StepUp') return elig.stepUp
+  if (g.auto === 'FamilyGrant') return elig.familyGrant
+  if (g.auto === 'PHG') return elig.phg
   return g.amount
 }
 
@@ -221,21 +223,32 @@ export function autoAmount(item: CostItem, scenario: Scenario, policy: Policy, l
   price ??= effectivePrice(scenario, policy)
   switch (item.kind) {
     case 'applicationFee':
-      return policy.fees.applicationFee
+      // Resale has no $10 flat application; its request-for-value and application fees are added separately.
+      return isResale(scenario) ? 0 : policy.fees.applicationFee
     case 'optionFee':
-      return optionFee(type, policy)
+      return isResale(scenario) ? policy.resale.optionFee : optionFee(type, policy)
     case 'bsd':
-      return buyersStampDuty(price, policy)
+      // Stamp duty is on the higher of price and market value (resale valuation).
+      return buyersStampDuty(isResale(scenario) ? Math.max(price, scenario.flat.valuation ?? price) : price, policy)
     case 'legal':
-      return legalFees(price, loanAmount, scenario.financing.loanType, policy)
+      return isResale(scenario)
+        ? resaleLegalFees(price, loanAmount, scenario.financing.loanType, type, policy)
+        : legalFees(price, loanAmount, scenario.financing.loanType, policy)
     case 'survey':
-      return policy.fees.surveyFee[type]
+      return isResale(scenario) ? 0 : policy.fees.surveyFee[type]
     case 'caveat':
       return policy.fees.caveatFee
     case 'keyFees': {
       // Mortgage stamp duty on any loan; HDB's two in-escrow registration fees when HDB is your lawyer (HDB loan).
       const f = policy.fees
       const duty = loanAmount > 0 ? Math.min(f.mortgageStampDutyMax, loanAmount * f.mortgageStampDutyPct) : 0
+      const hdbLoan = scenario.financing.loanType === 'HDB' && loanAmount > 0
+      if (isResale(scenario)) {
+        // Resale (SLA): title search and transfer; with an HDB loan, mortgage registration and the mortgagee's caveat.
+        const r = policy.resale
+        const sla = r.titleSearchFee + r.transferRegistrationFee + (hdbLoan ? r.mortgageRegistrationFee + r.mortgageeCaveatFee : 0)
+        return round2(duty + sla + (scenario.financing.loanType === 'HDB' ? r.miscFeeHdb : r.miscFeePrivate))
+      }
       const registration = scenario.financing.loanType === 'HDB' ? f.escrowRegistrationFee * (loanAmount > 0 ? 2 : 1) : 0
       return round2(duty + registration)
     }
@@ -257,11 +270,15 @@ export function resaleLevy(scenario: Scenario, policy: Policy): number {
   const f = scenario.flat
   if ((f.household ?? 'firstTimers') === 'firstTimers') return 0
   if (!f.firstSubsidisedFlat || f.firstSubsidisedFlat === 'none') return 0
+  // Buying a resale flat never triggers the levy (hdb.gov.sg "Resale levy": "If you… are buying a resale
+  // flat or private residential property, you need not pay the resale levy").
+  if (isResale(scenario)) return 0
   return policy.resaleLevy[f.firstSubsidisedFlat] * (f.halfResaleLevy ? 0.5 : 1)
 }
 
 /** Which downpayment table applies. DIA takes precedence over the staggered toggle. */
-export function downpaymentScheme(financing: Scenario['financing']): 'standard' | 'staggered' | 'dia' {
+export function downpaymentScheme(financing: Scenario['financing'], resale = false): 'standard' | 'staggered' | 'dia' | 'resale' {
+  if (resale) return 'resale'
   if (financing.deferredIncomeAssessment) return 'dia'
   return financing.staggered ? 'staggered' : 'standard'
 }
@@ -270,7 +287,7 @@ export function downpaymentScheme(financing: Scenario['financing']): 'standard' 
 export function downpaymentSchedule(raw: Scenario, policy: Policy): { afl: Tranche; keys: Tranche } {
   const scenario = normalizeScenario(raw)
   const f = scenario.financing
-  const sched = policy.downpayment[f.loanType === 'HDB' ? 'hdb' : 'bank'][downpaymentScheme(f)]
+  const sched = policy.downpayment[f.loanType === 'HDB' ? 'hdb' : 'bank'][downpaymentScheme(f, isResale(scenario))]
   return f.loanType === 'bank' && sched.reducedLtv && maxLtvFor(scenario, policy).reduced ? sched.reducedLtv : sched
 }
 
@@ -295,32 +312,45 @@ export function buildSchedule(raw: Scenario, policy: Policy): Schedule {
   const ltv = effectiveLtv(scenario, policy)
   const sched = downpaymentSchedule(scenario, policy)
 
+  const resale = isResale(scenario)
   const optionFeeItem = scenario.costs.find((c) => c.kind === 'optionFee')
   const optFee = optionFeeItem ? autoAmount(optionFeeItem, scenario, policy, 0, price) : 0
+  // Resale: the exercise fee tops the deposit up to $5,000 (with the option fee); both go to the seller.
+  const exerciseFee = resale ? Math.max(0, policy.resale.depositMax - optFee) : 0
+  const deposit = optFee + exerciseFee
 
-  // --- Downpayment tranches (price × (1 − LTV) in total) ---
-  const downpaymentTotal = price * (1 - ltv)
-  const aflGross = Math.min(downpaymentTotal, sched.afl.pct * price)
-  const keysGross = Math.max(0, downpaymentTotal - aflGross)
-  const aflDue = Math.max(0, aflGross - optFee) // option fee already counts towards it
-  const aflMinCash = Math.min(aflDue, Math.max(0, sched.afl.minCashPct * price - optFee))
+  // --- Downpayment tranches ---
+  // Resale: loan and CPF are capped at the lower of price and valuation; anything above is cash over valuation.
+  const loanBase = resale ? Math.min(price, flat.valuation ?? price) : price
+  const cov = resale ? Math.max(0, price - loanBase) : 0
+  const downpaymentTotal = loanBase * (1 - ltv)
+  const aflGross = Math.min(downpaymentTotal, sched.afl.pct * loanBase)
+  // The deposit counts towards the downpayment: first the AFL part, then what's due at keys/completion.
+  const depositLeft = Math.max(0, deposit - aflGross)
+  const keysGross = Math.max(0, downpaymentTotal - aflGross - depositLeft)
+  const aflDue = Math.max(0, aflGross - deposit)
+  const aflMinCash = Math.min(aflDue, Math.max(0, sched.afl.minCashPct * loanBase - deposit))
   // With a bank loan, the total cash across tranches must meet the minimum cash %.
   const bankMinTotal = financing.loanType === 'bank'
-    ? (ltvRule.reduced ? policy.bankLoan.reducedMinCashPct : policy.bankLoan.minCashPct) * price
+    ? (ltvRule.reduced ? policy.bankLoan.reducedMinCashPct : policy.bankLoan.minCashPct) * loanBase
     : 0
   const keysMinCash = Math.min(
     keysGross,
-    Math.max(sched.keys.minCashPct * price, bankMinTotal - optFee - aflMinCash),
+    Math.max(sched.keys.minCashPct * loanBase, bankMinTotal - deposit - aflMinCash),
   )
 
   // --- Grants: credited to OA, used for the next tranche(s); any excess reduces the loan ---
+  // Resale: the downpayment ("initial payment") is due about a month before completion, and grants are there by then.
+  const keysPayYm = resale
+    ? indexToYm(Math.max(ymToIndex(dates.afl), ymToIndex(dates.keys) - policy.resale.initialPaymentMonthsBeforeCompletion))
+    : dates.keys
   const grantCredits: GrantCredit[] = []
   let grantsTotal = 0
   for (const g of flat.grants) {
     const amount = grantAmount(g, eligibility)
     if (amount <= 0) continue
     let ym = resolveWhen(g.when, dates)
-    if (ymToIndex(ym) > ymToIndex(dates.keys)) ym = dates.keys
+    if (ymToIndex(ym) > ymToIndex(keysPayYm)) ym = keysPayYm
     const a = (amount * grantSplitA(g, scenario)) / 100
     grantCredits.push({ id: g.id, label: g.name, ym, amounts: { A: a, B: amount - a } })
     grantsTotal += amount
@@ -329,11 +359,11 @@ export function buildSchedule(raw: Scenario, policy: Policy): Schedule {
     grantCredits.filter((g) => ymToIndex(g.ym) <= ymToIndex(ym)).reduce((s, g) => s + g.amounts.A + g.amounts.B, 0)
 
   const grantForAfl = Math.min(aflDue, grantsAt(dates.afl))
-  const grantLeftForKeys = grantsTotal - grantForAfl
+  const grantLeftForKeys = Math.min(grantsTotal, grantsAt(keysPayYm)) - grantForAfl
   const grantForKeys = Math.min(keysGross, grantLeftForKeys)
   const grantExcess = Math.max(0, grantLeftForKeys - grantForKeys)
 
-  const loanBeforeGrants = price * ltv
+  const loanBeforeGrants = loanBase * ltv
   const loanAmount = Math.max(0, loanBeforeGrants - grantExcess)
 
   const obligations: Obligation[] = []
@@ -360,16 +390,32 @@ export function buildSchedule(raw: Scenario, policy: Policy): Schedule {
       ...common,
       id: 'dp-keys',
       sourceId: 'dp-keys',
-      label: (grantExcess > 0 ? 'Balance at key collection (incl. grant used to cut loan)' : 'Balance downpayment at key collection') +
+      label: (resale
+        ? (grantExcess > 0 ? 'Downpayment at completion (incl. grant used to cut loan)' : 'Downpayment at completion (less the deposit)')
+        : grantExcess > 0 ? 'Balance at key collection (incl. grant used to cut loan)' : 'Balance downpayment at key collection') +
         (switching ? ' — switching to bank loan' : ''),
       cashRuleTotal: switching ? round2(switchCashPct(scenario, policy) * price) : undefined,
       kind: 'downpayment',
-      ym: dates.keys,
+      ym: keysPayYm,
       amount: round2(keysAmount),
       minCash: round2(Math.min(keysGross - grantForKeys, keysMinCash)),
       grantFunded: round2(grantForKeys + grantExcess),
       milestone: 'keys',
     })
+  }
+
+  // --- Resale: deposit, cash over valuation and HDB's resale fees ---
+  if (resale) {
+    const cash = { payer: 'joint' as Payer, housing: true, downpayment: false, delayable: false, funding: 'cashOnly' as FundingRule, minCash: 0, grantFunded: 0 }
+    if (exerciseFee > 0) obligations.push({ ...cash, downpayment: true, id: 'exercise-fee', sourceId: 'exercise-fee', label: 'Exercise fee (rest of the deposit, to the seller)', kind: 'downpayment', ym: dates.afl, amount: round2(exerciseFee) })
+    obligations.push({ ...cash, housing: false, id: 'request-for-value', sourceId: 'request-for-value', label: 'Request for value (HDB valuation)', kind: 'custom', ym: dates.booking, amount: policy.resale.requestForValueFee })
+    obligations.push({ ...cash, housing: false, id: 'resale-application', sourceId: 'resale-application', label: 'Resale application fee', kind: 'custom', ym: dates.afl, amount: flat.type === '2R' ? policy.resale.applicationFeeSmall : policy.resale.applicationFee })
+    // PR-only households pay Additional Buyer's Stamp Duty on their first HDB resale flat, at completion (CPF allowed).
+    if (eligibility.bothSpr) {
+      const absd = policy.resale.absdSprPct * Math.max(price, flat.valuation ?? price)
+      obligations.push({ ...cash, funding: 'cpfAllowed', id: 'absd', sourceId: 'absd', label: 'Additional Buyer’s Stamp Duty (PR household)', kind: 'bsd', ym: dates.keys, amount: round2(absd) })
+    }
+    if (cov > 0) obligations.push({ ...cash, downpayment: true, id: 'cov', sourceId: 'cov', label: 'Cash over valuation (price above HDB’s valuation)', kind: 'downpayment', ym: dates.keys, amount: round2(cov), minCash: round2(cov), milestone: 'keys' })
   }
 
   // --- Other cost items ---
@@ -511,7 +557,10 @@ export function buildSchedule(raw: Scenario, policy: Policy): Schedule {
   const n = Math.round(tenure * 12)
   const maxLoanUnderMsr = maxInstalment <= 0 ? 0 : r === 0 ? maxInstalment * n : (maxInstalment * (1 - Math.pow(1 + r, -n))) / r
 
-  const cpfCap = cpfCapFor(financing.loanType, price, financing.brsSetAside, policy, leaseFactor(scenario, policy).factor)
+  // Resale: CPF is capped at the lower of price and valuation whatever the loan (more after setting aside the BRS).
+  const cpfCap = resale
+    ? loanBase * (financing.brsSetAside ? policy.cpf.withdrawalLimitMultiple : 1) * leaseFactor(scenario, policy).factor
+    : cpfCapFor(financing.loanType, price, financing.brsSetAside, policy, leaseFactor(scenario, policy).factor)
 
   const loan: LoanInfo = {
     price: flat.price,

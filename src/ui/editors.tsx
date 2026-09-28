@@ -3,7 +3,7 @@ import type { FlatType, Policy } from '../config/policy'
 import { ageInMonths, estimatedLivingCosts, prYear, ratesFor } from '../engine/cpf'
 import { assessmentMonth, autoAmount, downpaymentSchedule, effectiveLtv, grantAmount, grantSplitA, hdbMaxTenure, loanChangesOf, maxLtvFor, voluntaryList } from '../engine/payments'
 import { assessEligibility, hfeMonth } from '../engine/eligibility'
-import { isCompleted, isSingle, isSinglesPurchase, leaseFactor, normalizeScenario, typicalDates } from '../engine/saleType'
+import { isCompleted, isResale, isSingle, isSinglesPurchase, leaseFactor, normalizeScenario, typicalDates } from '../engine/saleType'
 import { addMonths, formatYm } from '../engine/dates'
 import { money } from '../engine/format'
 import type { CostItem, Milestone, Partner, Scenario, When } from '../engine/types'
@@ -303,22 +303,55 @@ export function FlatEditor({ scenario, update, policy, brief = false }: { scenar
   const saleType = f.saleType ?? 'BTO'
   const completed = isCompleted(scenario)
   const lf = leaseFactor(scenario, policy)
+  const resale = saleType === 'resale'
   const shownMilestones = MILESTONES.filter((m) =>
-    !(saleType === 'OBF' && m.value === 'application') && !(completed && m.value === 'afl'))
+    !((saleType === 'OBF' || resale) && m.value === 'application') && !(completed && m.value === 'afl'))
+  const milestoneLabel = (m: Milestone, fallback: string) => resale
+    ? { application: 'Application', booking: 'Option to Purchase', afl: 'Exercise option', keys: 'Completion (keys)' }[m]
+    : completed && m === 'keys' ? 'AFL + key collection' : m === 'booking' && saleType === 'OBF' ? 'Booking (you apply & book)' : fallback
   return (
     <div className="space-y-4">
       <Card>
         <Field label="How you’re buying" tip="saleType">
           <Segmented value={saleType} ariaLabel="Mode of sale"
-            onChange={(v) => update((d) => { d.flat.saleType = v; if (v === 'BTO') d.flat.completed = false; d.flat.dates = typicalDates(d.startMonth, v, !!d.flat.completed && v !== 'BTO') })}
-            options={[{ value: 'BTO', label: 'BTO' }, { value: 'SBF', label: 'SBF' }, { value: 'OBF', label: 'Open booking' }]} />
+            onChange={(v) => update((d) => {
+              d.flat.saleType = v
+              if (v === 'BTO' || v === 'resale') d.flat.completed = false
+              d.flat.dates = typicalDates(d.startMonth, v, !!d.flat.completed && v !== 'BTO', policy)
+              // Resale grants are added (worked out for you); they don't apply to new flats.
+              const auto = ['FamilyGrant', 'PHG'] as const
+              if (v === 'resale') {
+                d.flat.remainingLeaseYears ??= 70
+                for (const [a, name] of [['FamilyGrant', 'CPF Housing Grant (resale)'], ['PHG', 'Proximity Housing Grant']] as const) {
+                  if (!d.flat.grants.some((g) => g.auto === a)) d.flat.grants.push({ id: newId('g'), name, amount: 0, auto: a, splitA: 50, when: { milestone: 'keys' } })
+                }
+              } else {
+                d.flat.grants = d.flat.grants.filter((g) => !auto.includes(g.auto as typeof auto[number]))
+              }
+            })}
+            options={[{ value: 'BTO', label: 'BTO' }, { value: 'SBF', label: 'SBF' }, { value: 'OBF', label: 'Open booking' }, { value: 'resale', label: 'Resale' }]} />
         </Field>
         {saleType !== 'BTO' && (
           <div className="mt-3 grid grid-cols-1 gap-3 min-[360px]:grid-cols-2">
-            <div className="min-[360px]:col-span-2">
-              <Toggle label="The flat is already completed" tip="completed" checked={!!f.completed}
-                onChange={(v) => update((d) => { d.flat.completed = v; d.flat.dates = typicalDates(d.startMonth, saleType, v) })} />
-            </div>
+            {!resale && (
+              <div className="min-[360px]:col-span-2">
+                <Toggle label="The flat is already completed" tip="completed" checked={!!f.completed}
+                  onChange={(v) => update((d) => { d.flat.completed = v; d.flat.dates = typicalDates(d.startMonth, saleType, v, policy) })} />
+              </div>
+            )}
+            {resale && (
+              <>
+                <Field label="HDB valuation" tip="valuation"
+                  hint={(f.valuation ?? f.price) < f.price ? <span className="text-serious">{money(f.price - (f.valuation ?? f.price))} cash over valuation</span> : 'Loan and CPF are based on the lower of price and valuation'}>
+                  <MoneyInput value={f.valuation ?? f.price} onChange={(v) => update((d) => { d.flat.valuation = v })} ariaLabel="HDB valuation" />
+                </Field>
+                <Field label="Living with or near parents/child?" tip="proximity">
+                  <Select value={f.proximity ?? 'no'} ariaLabel="Proximity"
+                    onChange={(v) => update((d) => { if (v === 'no') delete d.flat.proximity; else d.flat.proximity = v })}
+                    options={[{ value: 'no', label: 'No' }, { value: 'with', label: `Living with them (+${money(policy.resale.phgWith)})` }, { value: 'near', label: `Within 4 km (+${money(policy.resale.phgNear)})` }] as { value: 'no' | 'with' | 'near'; label: string }[]} />
+                </Field>
+              </>
+            )}
             <Field label="Remaining lease" tip="remainingLease"
               hint={lf.factor < 1 ? <span className="text-critical">CPF use {saleType && scenario.financing.loanType === 'HDB' ? '& HDB loan ' : ''}limited to {Math.round(lf.factor * 100)}%</span> : 'Covers you to age 95'}>
               <NumberInput suffix="yrs" min={1} max={99} value={f.remainingLeaseYears ?? 99} onChange={(v) => update((d) => { d.flat.remainingLeaseYears = v })} ariaLabel="Remaining lease" />
@@ -327,8 +360,12 @@ export function FlatEditor({ scenario, update, policy, brief = false }: { scenar
         )}
         {saleType !== 'BTO' && (
           <p className="mt-2 text-[11px] text-muted">
-            {saleType === 'SBF' ? 'SBF runs alongside BTO launches, with a ballot. ' : 'Open booking: no ballot — first come, first served, and you can book as early as the next working day. '}
-            {completed ? 'For a completed flat you sign the AFL and collect keys together (within 9 months of booking) and pay the full downpayment then.' : 'Changing this resets the dates to typical ones — adjust them below.'}
+            {resale
+              ? 'Resale: you pay the option fee for an Option to Purchase, exercise it within 21 days (exercise fee, stamp duty, HDB fees), and pay the rest at completion about 8 weeks after HDB accepts the application. The option and exercise fees (up to $5,000 in total) count towards the downpayment.'
+              : <>
+                {saleType === 'SBF' ? 'SBF runs alongside BTO launches, with a ballot. ' : 'Open booking: no ballot — first come, first served, and you can book as early as the next working day. '}
+                {completed ? 'For a completed flat you sign the AFL and collect keys together (within 9 months of booking) and pay the full downpayment then.' : 'Changing this resets the dates to typical ones — adjust them below.'}
+              </>}
           </p>
         )}
       </Card>
@@ -383,24 +420,24 @@ export function FlatEditor({ scenario, update, policy, brief = false }: { scenar
                   ] as { value: FlatType | 'EC' | 'none' | 'unset'; label: string }[]} />
               </Field></div>
               <div className="col-span-2 flex items-end">
-                <Toggle label="Only half the levy (e.g. divorced, now buying with a first-timer)" checked={!!f.halfResaleLevy}
+                <Toggle label="Only half the levy (e.g. liable as a single, or divorced and buying with a first-timer)" checked={!!f.halfResaleLevy}
                   onChange={(v) => update((d) => { d.flat.halfResaleLevy = v })} />
               </div>
             </>
           )}
         </div>
-        <EligibilitySummary el={el} />
+        <EligibilitySummary el={el} resale={resale} />
       </Card>
       <Card>
         <div className="mb-2 text-sm font-semibold">Key dates</div>
         <div className={`grid grid-cols-1 gap-3 min-[360px]:grid-cols-2 ${shownMilestones.length === 4 ? 'md:grid-cols-4' : 'md:grid-cols-3'}`}>
           {shownMilestones.map((m) => (
-            <Field key={m.value} label={completed && m.value === 'keys' ? 'AFL + key collection' : m.value === 'booking' && saleType === 'OBF' ? 'Booking (you apply & book)' : m.label}
+            <Field key={m.value} label={milestoneLabel(m.value, m.label)}
               tip={m.value === 'application' ? 'application' : m.value === 'booking' ? 'booking' : m.value === 'afl' ? 'AFL' : 'keys'}>
               <MonthInput value={f.dates[m.value]} onChange={(v) => update((d) => {
                 d.flat.dates[m.value] = v
                 if (completed && m.value === 'keys') d.flat.dates.afl = v
-                if (saleType === 'OBF' && m.value === 'booking') d.flat.dates.application = v
+                if ((saleType === 'OBF' || resale) && m.value === 'booking') d.flat.dates.application = v
               })} ariaLabel={m.label} />
             </Field>
           ))}
@@ -425,7 +462,7 @@ export function FlatEditor({ scenario, update, policy, brief = false }: { scenar
         {f.grants.map((g, i) => (
           <div key={g.id} className="mb-3 grid grid-cols-2 gap-2 border-b border-line pb-3 last:border-0 md:grid-cols-[2fr_1fr_1fr_1fr_auto] md:items-end">
             <div className="col-span-2 md:col-span-1"><Field label="Name"><TextInput value={g.name} onChange={(v) => update((d) => { d.flat.grants[i].name = v })} ariaLabel="Grant name" /></Field></div>
-            <Field label={g.auto ? 'Amount (auto)' : 'Amount'} tipText={g.auto === 'EHG' ? el.ehgReason : g.auto === 'StepUp' ? el.stepUpReason : undefined}>
+            <Field label={g.auto ? 'Amount (auto)' : 'Amount'} tipText={g.auto === 'EHG' ? el.ehgReason : g.auto === 'StepUp' ? el.stepUpReason : g.auto === 'FamilyGrant' ? el.familyGrantReason : g.auto === 'PHG' ? el.phgReason : undefined}>
               {g.auto ? (
                 <div className="flex items-center gap-1">
                   <div className="min-w-0 flex-1 rounded-lg bg-surface-2 px-3 py-2 text-sm tnum">{money(grantAmount(g, el))}</div>
@@ -446,6 +483,12 @@ export function FlatEditor({ scenario, update, policy, brief = false }: { scenar
         ))}
         <div className="flex flex-wrap gap-2">
           <Button variant="ghost" onClick={() => update((d) => { d.flat.grants.push({ id: newId('g'), name: 'Enhanced CPF Housing Grant', amount: 0, auto: 'EHG', splitA: 50, when: { milestone: 'keys' } }) })}>+ Enhanced CPF Housing Grant (auto)</Button>
+          {resale && !f.grants.some((g) => g.auto === 'FamilyGrant') && (
+            <Button variant="ghost" onClick={() => update((d) => { d.flat.grants.push({ id: newId('g'), name: 'CPF Housing Grant (resale)', amount: 0, auto: 'FamilyGrant', splitA: 50, when: { milestone: 'keys' } }) })}>+ Resale grant (auto)</Button>
+          )}
+          {resale && !f.grants.some((g) => g.auto === 'PHG') && (
+            <Button variant="ghost" onClick={() => update((d) => { d.flat.grants.push({ id: newId('g'), name: 'Proximity Housing Grant', amount: 0, auto: 'PHG', splitA: 50, when: { milestone: 'keys' } }) })}>+ Proximity grant (auto)</Button>
+          )}
           {f.household === 'secondTimers' && (
             <Button variant="ghost" onClick={() => update((d) => { d.flat.grants.push({ id: newId('g'), name: 'Step-Up CPF Housing Grant', amount: 0, auto: 'StepUp', splitA: 50, when: { milestone: 'keys' } }) })}>+ Step-Up grant (auto)</Button>
           )}
@@ -456,7 +499,7 @@ export function FlatEditor({ scenario, update, policy, brief = false }: { scenar
   )
 }
 
-function EligibilitySummary({ el }: { el: ReturnType<typeof assessEligibility> }) {
+function EligibilitySummary({ el, resale = false }: { el: ReturnType<typeof assessEligibility>; resale?: boolean }) {
   const row = (label: string, value: string, bad = false) => (
     <div className="flex justify-between gap-3"><dt className="text-ink-2">{label}</dt><dd className={`tnum text-right ${bad ? 'text-critical' : 'text-ink'}`}>{value}</dd></div>
   )
@@ -472,9 +515,11 @@ function EligibilitySummary({ el }: { el: ReturnType<typeof assessEligibility> }
       ) : (
         <>
           {row(`Avg household income (months worked in the 12 to ${formatYm(el.windowEnd)})`, `${money(el.avgIncome)}/mth`)}
-          {row('Income ceiling for this flat', money(el.incomeCeiling), el.aboveCeiling)}
+          {row(resale ? 'Income ceiling for grants (none to buy)' : 'Income ceiling for this flat', money(el.incomeCeiling), el.aboveCeiling)}
         </>
       )}
+      {resale && row('CPF Housing Grant for resale flats (estimate)', money(el.familyGrant))}
+      {resale && el.phg > 0 && row('Proximity Housing Grant', money(el.phg))}
       {row('Enhanced CPF Housing Grant (estimate)', money(el.ehg))}
       {el.household === 'secondTimers' && row('Step-Up grant (estimate)', money(el.stepUp))}
       {el.premium > 0 && row('Citizen + PR premium', `+${money(el.premium)}`)}
@@ -526,7 +571,7 @@ export function FinancingEditor({ scenario, update, policy, brief = false }: { s
             <NumberInput suffix="yrs" min={1} max={35} value={fin.tenureYears} onChange={(v) => update((d) => { d.financing.tenureYears = v })} ariaLabel="Tenure" />
           </Field>
         </div>
-        {(!isHdb || loanChangesOf(fin, scenario.flat.dates.keys).some((c) => c.kind === 'refinance')) && (
+        {(!isHdb || scenario.flat.saleType === 'resale' || loanChangesOf(fin, scenario.flat.dates.keys).some((c) => c.kind === 'refinance')) && (
           <div className="mt-3 border-t border-line pt-3">
             <Toggle label={`We’ve set aside the Basic Retirement Sum (${money(policy.cpf.basicRetirementSum)})`} tip="cpfLimit" checked={!!fin.brsSetAside}
               onChange={(v) => update((d) => { d.financing.brsSetAside = v })} />
@@ -726,6 +771,22 @@ function DownpaymentPreview({ scenario: raw, policy }: { scenario: Scenario; pol
   const total = 1 - ltv
   const afl = Math.min(total, sched.afl.pct)
   const p = scenario.flat.price
+  if (isResale(scenario)) {
+    // Resale: all at completion, on the lower of price and valuation, less the option + exercise fees.
+    const base = Math.min(p, scenario.flat.valuation ?? p)
+    const cov = p - base
+    return (
+      <div className="mt-2 rounded-lg bg-surface-2 p-2 text-sm">
+        <div className="text-xs text-ink-2">About a month before completion (after endorsing HDB’s documents)</div>
+        <div className="tnum font-medium">{pctStr(total)} · {money(total * base)}</div>
+        <div className="text-[11px] text-muted">
+          Includes the {money(policy.resale.depositMax)} option and exercise fees you pay the seller earlier
+          {scenario.financing.loanType === 'bank' ? `; at least ${pctStr(maxLtvFor(scenario, policy).reduced ? policy.bankLoan.reducedMinCashPct : policy.bankLoan.minCashPct)} in cash` : ''}.
+          {cov > 0 && <> Plus <b className="text-ink">{money(cov)}</b> cash over valuation.</>}
+        </div>
+      </div>
+    )
+  }
   if (isCompleted(scenario)) {
     const minCash = sched.afl.minCashPct + sched.keys.minCashPct
     return (

@@ -279,7 +279,7 @@ export default function App() {
                     <div className="w-44"><Toggle label="Each person" checked={state.showPerPartner} onChange={(v) => setState((st) => ({ ...st, showPerPartner: v }))} /></div>
                   )}
                 </div>
-                <TimelineChart result={result} perPartner={state.showPerPartner && active.buyers !== 'single'} names={names} />
+                <TimelineChart result={result} perPartner={state.showPerPartner && active.buyers !== 'single'} names={names} resale={active.flat.saleType === 'resale'} />
                 <p className="mt-1 text-[11px] text-muted">Solid vertical lines mark milestones; dotted lines mark other payments over $1,000. Red shading = cash below zero. Tap the chart for details.</p>
               </Card>
               <div id="what-to-watch" className="scroll-mt-28 space-y-3">

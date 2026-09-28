@@ -3,7 +3,7 @@ import { isWorking, salaryAt } from './cpf'
 import { addMonths } from './dates'
 import type { Scenario, YearMonth } from './types'
 import { ageInMonths } from './cpf'
-import { isCompleted, isSingle, isSinglesPurchase, leaseFactor, normalizeScenario } from './saleType'
+import { isCompleted, isResale, isSingle, isSinglesPurchase, leaseFactor, normalizeScenario } from './saleType'
 
 export interface Eligibility {
   /** Month the HFE letter / income assessment is assumed (application, or DIA assessment). */
@@ -22,6 +22,11 @@ export interface Eligibility {
   ehgReason: string
   stepUp: number
   stepUpReason: string
+  /** Resale: CPF Housing Grant for resale flats (Families), and the Proximity Housing Grant. */
+  familyGrant: number
+  familyGrantReason: string
+  phg: number
+  phgReason: string
   /** One citizen + one PR. */
   scSpr: boolean
   /** Both PRs: can't buy a BTO flat. */
@@ -98,11 +103,13 @@ export function assessEligibility(raw: Scenario, policy: Policy): Eligibility {
     : avgIncome
 
   const singles = isSinglesPurchase(s)
+  const resale = isResale(s)
   const incomeCeiling = isSingle(s)
     ? el.incomeCeilingSingles
     : s.buyers === 'jointSingles'
       ? el.incomeCeilingJointSingles
-      : s.flat.type === '2R' ? el.incomeCeiling2RFlexi : s.flat.type === '3Gen' ? el.incomeCeilingExtended : el.incomeCeilingFamilies
+      // Resale: no ceiling to buy; the families' ceiling applies to grants and the HDB loan (2-room Flexi's lower one is for new flats).
+      : s.flat.type === '2R' && s.flat.saleType !== 'resale' ? el.incomeCeiling2RFlexi : s.flat.type === '3Gen' ? el.incomeCeilingExtended : el.incomeCeilingFamilies
   const household = s.flat.household ?? 'firstTimers'
 
   // Employment: someone worked every month of the 12-month window (no gaps) and is working at assessment.
@@ -123,8 +130,14 @@ export function assessEligibility(raw: Scenario, policy: Policy): Eligibility {
     const ages = people.map((p) => Math.floor(ageInMonths(p.birthYearMonth, s.flat.dates.application) / 12))
     if (ages.some((a) => a < el.singlesMinAge)) singlesIssues.push(`Singles must be ${el.singlesMinAge} or older when applying (${isSingle(s) ? `you’ll be ${ages[0]}` : `you’ll be ${ages.join(' and ')}`}).`)
     if (people.some((p) => (p.citizenship ?? 'SC') !== 'SC')) singlesIssues.push('Singles must be Singapore Citizens to buy an HDB flat.')
-    if (household !== 'firstTimers') singlesIssues.push('Singles who have owned a subsidised flat or had a housing grant before can’t buy a new flat from HDB.')
-    if (s.flat.type !== '2R') singlesIssues.push('Singles can only buy a 2-room Flexi when buying a new flat (BTO, SBF or open booking), in any location.')
+    if (resale) {
+      // Resale: any flat type except 3Gen; in Prime projects, 2-room only (hdb.gov.sg classification page).
+      if (s.flat.type === '3Gen') singlesIssues.push('Singles can’t buy a 3Gen flat.')
+      else if (s.flat.classification === 'Prime' && s.flat.type !== '2R') singlesIssues.push('Singles can only buy a 2-room resale flat in a Prime project.')
+    } else {
+      if (household !== 'firstTimers') singlesIssues.push('Singles who have owned a subsidised flat or had a housing grant before can’t buy a new flat from HDB.')
+      if (s.flat.type !== '2R') singlesIssues.push('Singles can only buy a 2-room Flexi when buying a new flat (BTO, SBF or open booking), in any location.')
+    }
   }
 
   let ehg = 0
@@ -165,6 +178,37 @@ export function assessEligibility(raw: Scenario, policy: Policy): Eligibility {
     stepUpReason = 'Eligible.'
   }
 
+  // --- Resale grants (hdb.gov.sg): CPF Housing Grant for resale flats (Families), Proximity Housing Grant ---
+  const big = s.flat.type === '5R' || s.flat.type === '3Gen' || s.flat.type === 'Exec' ? 1 : 0
+  const grantCeiling = s.flat.type === '3Gen' ? el.incomeCeilingExtended : el.incomeCeilingFamilies
+  let familyGrant = 0
+  let familyGrantReason: string
+  const r = policy.resale
+  if (!resale) familyGrantReason = 'Only for resale flats.'
+  else if (singles) familyGrantReason = 'Singles have a separate resale grant, not modelled here.'
+  else if (bothSpr) familyGrantReason = 'At least one of you must be a Singapore Citizen.'
+  else if (household === 'secondTimers') familyGrantReason = 'Only for first-timers (or a first-timer with a second-timer).'
+  else if (avgIncome > grantCeiling) familyGrantReason = `Household income is above $${grantCeiling.toLocaleString()}.`
+  else {
+    familyGrant = (household === 'firstAndSecond' ? r.familyGrantFtSt : scSpr ? r.familyGrantScSpr : r.familyGrantScSc)[big]
+    familyGrantReason = `${household === 'firstAndSecond' ? 'First-timer + second-timer couple' : scSpr ? 'Citizen + PR couple' : 'Two Singapore Citizens'}, ${big ? '5-room or bigger' : '2- to 4-room'} flat.`
+  }
+  // EHG on a resale flat needs the resale Family Grant first (hdb.gov.sg EHG page).
+  if (resale && !isSingle(s) && ehg > 0 && familyGrant === 0) {
+    ehg = 0
+    ehgReason = 'For a resale flat, you must first qualify for the CPF Housing Grant for resale flats.'
+  }
+  let phg = 0
+  let phgReason: string
+  if (!resale) phgReason = 'Only for resale flats.'
+  else if (singles) phgReason = 'Singles have a separate Proximity Housing Grant, not modelled here.'
+  else if (bothSpr) phgReason = 'At least one of you must be a Singapore Citizen.'
+  else if (!s.flat.proximity) phgReason = 'Only if you’ll live with, or within 4 km of, your parents or child.'
+  else {
+    phg = s.flat.proximity === 'with' ? r.phgWith : r.phgNear
+    phgReason = s.flat.proximity === 'with' ? 'Living with your parents or child.' : 'Living within 4 km of your parents or child.'
+  }
+
   const hdbLoanIncomeCeiling = isSingle(s)
     ? el.incomeCeilingSingles
     : s.buyers === 'jointSingles' ? el.incomeCeilingJointSingles
@@ -176,7 +220,8 @@ export function assessEligibility(raw: Scenario, policy: Policy): Eligibility {
     windowEnd,
     avgIncome,
     incomeCeiling,
-    aboveCeiling: purchaseAvgIncome > incomeCeiling,
+    // No income ceiling to buy a resale flat (only for grants and the HDB loan).
+    aboveCeiling: !resale && purchaseAvgIncome > incomeCeiling,
     purchaseAvgIncome,
     purchaseAssessedAt,
     hdbLoanIncomeCeiling,
@@ -187,9 +232,14 @@ export function assessEligibility(raw: Scenario, policy: Policy): Eligibility {
     ehgReason,
     stepUp,
     stepUpReason,
+    familyGrant,
+    familyGrantReason,
+    phg,
+    phgReason,
     scSpr,
     bothSpr,
-    premium: scSpr && household !== 'secondTimers' ? el.scSprPremium : 0,
+    // The citizen + PR premium is for new flats from HDB.
+    premium: !resale && scSpr && household !== 'secondTimers' ? el.scSprPremium : 0,
     singlesIssues,
   }
 }

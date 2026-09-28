@@ -5,7 +5,7 @@ import type { PaidEvent, Scenario, SimResult } from '../engine/types'
 import { Disclaimer } from './Disclaimer'
 import { FLAT_TYPES, MILESTONES } from './labels'
 
-const SALE_TYPE = { BTO: 'BTO', SBF: 'Sale of Balance Flats', OBF: 'Open booking' } as const
+const SALE_TYPE = { BTO: 'BTO', SBF: 'Sale of Balance Flats', OBF: 'Open booking', resale: 'Resale' } as const
 
 /**
  * One-page summary for an HDB or bank appointment. Hidden on screen; App hides
@@ -20,7 +20,8 @@ export function PrintSummary({ scenario, result }: { scenario: Scenario; result:
   const problems = result.warnings.filter((w) => w.severity !== 'info')
   const completed = isCompleted(scenario)
   const milestones = MILESTONES.filter((m) => !(completed && m.value === 'afl'))
-    .filter((m) => !(scenario.flat.saleType === 'OBF' && m.value === 'application'))
+    .filter((m) => !((scenario.flat.saleType === 'OBF' || scenario.flat.saleType === 'resale') && m.value === 'application'))
+  const resaleLabel: Record<string, string> = { booking: 'Option to Purchase', afl: 'Exercise option', keys: 'Completion (keys)' }
 
   return (
     <div className="print-summary hidden text-[11px] leading-snug text-black print:block">
@@ -42,7 +43,7 @@ export function PrintSummary({ scenario, result }: { scenario: Scenario; result:
           <h2 className="font-bold">Key dates</h2>
           {milestones.map((m) => (
             <div key={m.value}>
-              {completed && m.value === 'keys' ? 'AFL + key collection' : m.label}: {formatYm(result.milestones[m.value])}
+              {scenario.flat.saleType === 'resale' ? resaleLabel[m.value] : completed && m.value === 'keys' ? 'AFL + key collection' : m.label}: {formatYm(result.milestones[m.value])}
             </div>
           ))}
         </div>

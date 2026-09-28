@@ -135,6 +135,19 @@ export function GuidePage({ policy: p, scenario, result, onOpenPlan }: {
         ))}
       </ol>
       <Card>
+        <h2 className="text-base font-semibold">Buying a resale flat instead</h2>
+        <p className="mt-1 text-xs text-muted">No waiting years: the whole purchase takes about 2–3 months.</p>
+        <ul className="mt-2 space-y-1.5 text-sm text-ink-2">
+          <Li><b>HFE letter</b> first, as for a new flat. There’s <b>no income ceiling to buy</b> a resale flat; ceilings apply to grants and the HDB loan.</Li>
+          <Li><b>Option to Purchase</b>: pay the seller an option fee (up to {money(p.resale.optionFee)}). Request HDB’s valuation ({money(p.resale.requestForValueFee)}).</Li>
+          <Li><b>Exercise the option within 21 days</b>: the exercise fee brings the deposit to at most {money(p.resale.depositMax)}. Stamp duty (on the higher of price and valuation) is due within 14 days, plus the resale application fee ({money(p.resale.applicationFee)}).</Li>
+          <Li><b>Downpayment</b> ({pct(p.downpayment.hdb.resale.keys.pct)} of the lower of price and valuation, less the deposit; grants count) after you endorse HDB’s documents, about a month before completion. HDB’s legal and registration fees are paid then too.</Li>
+          <Li><b>Completion</b> about 8 weeks after HDB accepts the application: any <b>cash over valuation in cash</b>, the loan starts, and you get the keys. PR-only households also pay Additional Buyer’s Stamp Duty.</Li>
+          <Li><b>Grants</b>: the CPF Housing Grant for resale flats (up to {money(p.resale.familyGrantScSc[0])} for first-timer citizens), the Proximity Housing Grant ({money(p.resale.phgNear)}–{money(p.resale.phgWith)} to live near or with parents), and the EHG. Check the remaining lease: it limits CPF use and the loan if it doesn’t last the youngest of you to 95.</Li>
+        </ul>
+        <p className="mt-2 text-xs text-muted">Choose <b>Resale</b> under Edit plan → Flat to plan one.</p>
+      </Card>
+      <Card>
         <p className="text-sm text-ink-2">See every payment month by month, and whether your cash and CPF cover each one.</p>
         <Button variant="primary" className="mt-2" onClick={onOpenPlan}>Open my plan</Button>
       </Card>

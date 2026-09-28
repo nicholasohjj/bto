@@ -95,7 +95,13 @@ src/
     - AFL and key collection happen together, within 9 months of booking (warned if later).
     - The full downpayment, stamp duty and fees are paid then; the staggered scheme doesn't apply.
     - Under DIA, income is assessed at booking.
-  - **Remaining lease (age-95 rule):**
+  - **Resale flats** (Flat section → Resale):
+    - Dates: Option to Purchase (option fee, up to $1,000; request for value $120), exercising it within 21 days (exercise fee — deposit up to $5,000 in total —, stamp duty on the higher of price and valuation, resale application fee $80/$40, verified), completion ~3 months later (HDB: about 8 weeks after it accepts the resale application — verified) (downpayment, loan, grants, keys).
+    - Loan and CPF are capped at the lower of price and **HDB valuation**; anything above it (cash over valuation) is a cash payment at completion. The downpayment ("initial payment": 25% of that lower figure, 45% at 55% LTV, with a bank loan's cash minimum) is due about a month before completion, after endorsing HDB's documents, less the deposit; grants are credited by then. HDB's resale legal fees (13.5¢/10.8¢/9¢ per $100 on the price and on an HDB loan, + GST) and SLA charges (title search $32, transfer $38.30, mortgage $38.30 + mortgagee's caveat $64.45 with an HDB loan, misc $16.35/$5.45) are used instead of the new-flat ones. PR-only households pay 5% ABSD (rate secondary). The Enhanced Contra Facility (selling your HDB flat and buying resale at once) isn't modelled.
+    - Grants: CPF Housing Grant for resale flats ($80k / $70k / $50k / $40k, or $40k / $25k for first-timer + second-timer couples; income ≤ $16,000), Proximity Housing Grant ($30k with / $20k near parents), EHG (needs the resale grant first), Step-Up. Buying resale never triggers the resale levy (hdb.gov.sg).
+    - No income ceiling to buy, no citizen + PR premium, no staggered scheme or DIA; singles can buy any type except 3Gen (2-room only in Prime). PR couples can buy with a bank loan.
+    - Warnings for exercising the option late, cash over valuation, and a missing resale grant; PPHS and HDB's pre-completion check don't apply.
+- **Remaining lease (age-95 rule):**
     - If the lease won't last the youngest of you to 95, CPF use and the HDB loan limit are pro-rated (lease ÷ years to 95).
     - 20 years or less: no CPF and no HDB loan.
 - **Eligibility and grants** (`eligibility.ts`).
@@ -237,7 +243,7 @@ Users can override any figure for a single scenario under **Advanced settings**.
 | Bank loan LTV 55% if tenure > 25 yrs or past age 65; 10% cash | Secondary (MAS explainer snippet) |
 | Bank loan: stamp duty paid in cash first, reimbursed from CPF | Verified rule (cpf.gov.sg FAQ, checked 2026-09-26); the 2-month delay is an **estimate** and may be longer (up to legal completion for flats under construction) |
 | S&CC and property tax can't be paid from CPF; stamp duty, legal and lodgment fees can | Verified (cpf.gov.sg FAQ, checked 2026-09-26) |
-| Resale levy $15k / $30k / $40k / $45k / $50k / $55k (2-room … EC); cash only; half in some cases | Secondary (2026 guides agree; hdb.gov.sg not read). 3Gen assumed = 5-room: **not verified** |
+| Resale levy $15k / $30k / $40k / $45k (5-room and 3Gen) / $50k / $55k (2-room … EC), half as a single; cash or sale proceeds; only for a second subsidised flat from HDB (not resale) | Verified (hdb.gov.sg Conditions after buying, checked 2026-09-28) |
 | S&CC per month (Singapore Citizen owner-occupier) | Verified for one town council (Bishan-Toa Payoh, 1 Jul 2024); varies by town |
 | Owner-occupier property tax bands (0% to $12k AV, then 4%…) | Secondary (IRAS page needs JavaScript; rates from guides) |
 | Annual values of HDB flats by type | **Not verified** (guides disagree; may be low for 2026) |

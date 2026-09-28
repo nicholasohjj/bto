@@ -32,6 +32,7 @@ const TERMS: [Term, string][] = [
   ['scc', 'Service & conservancy charges (S&CC)'], ['staggered', 'Staggered Downpayment Scheme'], ['stepUp', 'Step-Up CPF Housing Grant'],
   ['stress', 'Stress-test rate'], ['TDSR', 'Total Debt Servicing Ratio (TDSR)'], ['voluntaryCpf', 'Voluntary CPF top-ups'],
   ['saleType', 'Ways of buying: BTO, SBF, open booking'], ['buyers', 'Who can buy'],
+  ['valuation', 'HDB valuation and cash over valuation (resale)'], ['proximity', 'Proximity Housing Grant (resale)'],
 ]
 /** Tips that start with their own name ("Agreement for Lease: …"); the title already says it. */
 const STRIP: Term[] = ['AFL', 'BSD', 'BTO', 'HFE', 'resaleLevy', 'scc', 'propertyTax', 'staggered', 'DIA', 'stepUp', 'LTV', 'MSR', 'TDSR', 'EHG', 'accrued', 'HPS', 'fire', 'keys']
@@ -74,6 +75,12 @@ export function GlossaryPage() {
 export function FaqPage({ policy: p }: { policy: Policy }) {
   const pct = (x: number) => `${Math.round(x * 1000) / 10}%`
   const qa: [string, ReactNode][] = [
+    ['New flat or resale?', <>
+      A <b>new flat</b> (BTO) is cheaper but you wait 3–5 years, with an income ceiling to apply. A <b>resale flat</b> takes about 2–3 months, has no income ceiling to buy,
+      and first-timers can get the resale grant (up to {money(p.resale.familyGrantScSc[0])}) and the Proximity grant (up to {money(p.resale.phgWith)}) on top of the EHG.
+      But anything above HDB’s valuation must be paid in cash, the lease is shorter (which can limit CPF and the loan), and there’s no staggered downpayment.
+      Plan both: duplicate your plan, switch one to <b>Resale</b>, and use Compare.
+    </>],
     ['HDB loan or bank loan?', <>
       An <b>HDB loan</b> charges the CPF OA rate + 0.1% ({pct(p.hdbLoan.interestRate)} now), needs no minimum cash, lets each of you keep {money(p.hdbLoan.oaRetainMax)} in OA,
       has no prepayment fees, and you can switch to a bank later. It runs up to {p.hdbLoan.maxTenureYears} years (less if 65 minus your average age is shorter).

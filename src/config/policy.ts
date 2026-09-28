@@ -113,8 +113,8 @@ export interface Policy {
   bsdTiers: Tier[]
   optionFee: Record<FlatType, number>
   downpayment: {
-    hdb: { standard: DownpaymentSchedule; staggered: DownpaymentSchedule; dia: DownpaymentSchedule }
-    bank: { standard: DownpaymentSchedule; staggered: DownpaymentSchedule; dia: DownpaymentSchedule }
+    hdb: { standard: DownpaymentSchedule; staggered: DownpaymentSchedule; dia: DownpaymentSchedule; resale: DownpaymentSchedule }
+    bank: { standard: DownpaymentSchedule; staggered: DownpaymentSchedule; dia: DownpaymentSchedule; resale: DownpaymentSchedule }
   }
   lease: {
     /** CPF use / HDB LTV are full only if the lease lasts the youngest buyer to this age. */
@@ -131,6 +131,44 @@ export interface Policy {
     rightSizerFlatTypes: FlatType[]
     /** Couples: 5-room or smaller. */
     flatTypes: FlatType[]
+  }
+  /** Buying a resale flat. */
+  resale: {
+    /** Option fee to the seller (up to $1,000) and the most the option + exercise fees can total. */
+    optionFee: number
+    depositMax: number
+    requestForValueFee: number
+    /** Resale application administrative fee: 1- and 2-room flats, and bigger. */
+    applicationFeeSmall: number
+    applicationFee: number
+    /** Typical months from exercising the option to completion (keys). */
+    completionMonths: number
+    /** CPF Housing Grant for resale flats (Families), first-timers: [2–4 room, 5-room or bigger]. */
+    familyGrantScSc: [number, number]
+    familyGrantScSpr: [number, number]
+    /** First-timer + second-timer couples. */
+    familyGrantFtSt: [number, number]
+    /** Proximity Housing Grant (Families): living with / within 4 km of parents or child. */
+    phgWith: number
+    phgNear: number
+    /** HDB legal fees on a resale (transfer on the price; mortgage on an HDB loan): per $ on each $100 or part, + GST. */
+    legalTiers: Tier[]
+    legalRoundTo: number
+    legalMin: number
+    /** Minimum HDB mortgage fee: 1-/2-room, and 3-room or bigger (incl. GST). */
+    mortgageLegalMinSmall: number
+    mortgageLegalMin: number
+    titleSearchFee: number
+    transferRegistrationFee: number
+    mortgageRegistrationFee: number
+    mortgageeCaveatFee: number
+    /** Miscellaneous fees: HDB acting for you / private solicitors (incl. GST). */
+    miscFeeHdb: number
+    miscFeePrivate: number
+    /** The downpayment ("initial payment") is due after endorsing HDB's documents, ~this many months before completion. */
+    initialPaymentMonthsBeforeCompletion: number
+    /** Additional Buyer's Stamp Duty for PR-only households buying their first (resale) HDB flat. */
+    absdSprPct: number
   }
   /** Parenthood Provisional Housing Scheme: HDB rental while waiting for a flat you've booked. */
   pphs: {
@@ -374,6 +412,9 @@ export const DEFAULT_POLICY: Policy = {
       // 2.5% at AFL, 22.5% at keys.
       // Source: hdb.gov.sg "Staggered Downpayment Scheme" page, DIA table. VERIFIED 2026-09-26.
       dia: { afl: { pct: 0.025, minCashPct: 0 }, keys: { pct: 0.225, minCashPct: 0 } },
+      // Resale: the downpayment (on the lower of price and valuation) is paid at completion; the option and
+      // exercise fees count towards it. SECONDARY (2026 guides; LTV rule VERIFIED on hdb.gov.sg).
+      resale: { afl: { pct: 0, minCashPct: 0 }, keys: { pct: 0.25, minCashPct: 0 } },
     },
     bank: {
       // Bank loan: 20% at AFL (of which 5% cash), remaining 5% at keys.
@@ -396,6 +437,11 @@ export const DEFAULT_POLICY: Policy = {
       dia: {
         afl: { pct: 0.025, minCashPct: 0.025 }, keys: { pct: 0.225, minCashPct: 0.025 },
         reducedLtv: { afl: { pct: 0.025, minCashPct: 0.025 }, keys: { pct: 0.425, minCashPct: 0.075 } },
+      },
+      // Resale with a bank loan: all at completion; at least 5% cash (10% at 55% LTV) via the bank cash rule.
+      resale: {
+        afl: { pct: 0, minCashPct: 0 }, keys: { pct: 0.25, minCashPct: 0 },
+        reducedLtv: { afl: { pct: 0, minCashPct: 0 }, keys: { pct: 0.45, minCashPct: 0 } },
       },
     },
   },
@@ -435,6 +481,48 @@ export const DEFAULT_POLICY: Policy = {
   // to a month after documents are in (longer around a sales exercise); valid 9 months from issue.
   // So the default HFE month is 1 month before the flat application (you can change it).
   // Source: hdb.gov.sg HFE letter pages (text supplied by the user). VERIFIED 2026-09-26.
+  // Resale flats. Grant amounts and the Proximity Housing Grant: hdb.gov.sg grant pages (text supplied by the
+  // user; VERIFIED 2026-09-26). Loan and CPF capped at the lower of price and valuation; cash over valuation
+  // in cash (hdb.gov.sg loan pages, VERIFIED). Option fee ≤ $1,000 with option + exercise ≤ $5,000; request
+  // for value $120: 2026 guides (ohmyhome, propkaki, propseller), SECONDARY 2026-09-28. Resale application
+  // fee $80 ($40 for 1-/2-room) incl. GST; both parties submit within 7 days of exercising the option; HDB
+  // accepts within 28 working days; completion about 8 weeks after acceptance — so roughly 2½–3½ months
+  // after exercising (default 3). Source: hdb.gov.sg resale application and completion pages. VERIFIED 2026-09-28.
+  resale: {
+    optionFee: 1000,
+    depositMax: 5000,
+    requestForValueFee: 120,
+    applicationFeeSmall: 40,
+    applicationFee: 80,
+    completionMonths: 3,
+    familyGrantScSc: [80000, 50000],
+    familyGrantScSpr: [70000, 40000],
+    familyGrantFtSt: [40000, 25000],
+    phgWith: 30000,
+    phgNear: 20000,
+    // HDB legal fees and SLA charges for a resale, and the initial payment (25% of the lower of price and value,
+    // 45% at 55% LTV; paid after endorsing HDB's documents ~3 weeks after acceptance, i.e. ~a month before
+    // completion). Source: hdb.gov.sg "Acceptance and approval" (text supplied by the user). VERIFIED 2026-09-28.
+    legalTiers: [
+      { width: 30000, rate: 0.00135 },
+      { width: 30000, rate: 0.00108 },
+      { width: Infinity, rate: 0.0009 },
+    ],
+    legalRoundTo: 100,
+    legalMin: 21.8,
+    mortgageLegalMinSmall: 21.8,
+    mortgageLegalMin: 43.6,
+    titleSearchFee: 32,
+    transferRegistrationFee: 38.3,
+    mortgageRegistrationFee: 38.3,
+    mortgageeCaveatFee: 64.45,
+    miscFeeHdb: 16.35,
+    miscFeePrivate: 5.45,
+    initialPaymentMonthsBeforeCompletion: 1,
+    // PR-only households pay ABSD on their first HDB resale flat (hdb.gov.sg, VERIFIED); the 5% rate for a PR's
+    // first residential property is from IRAS (not read this session). SECONDARY 2026-09-28.
+    absdSprPct: 0.05,
+  },
   // PPHS: rent an HDB flat after booking an uncompleted flat, until keys. Married/engaged couples (first-timers
   // or FT + ST) or divorced/widowed parents with children; SC + SC/SPR; no one owns an HDB flat; household
   // income ≤ $8,000 (from the flat application). Rents aren't published on this page, so you enter yours.
@@ -518,11 +606,10 @@ export const DEFAULT_POLICY: Policy = {
     // Flexi only (any location). Source: HDB via guides (search snippets). SECONDARY 2026-09-25.
     singlesMinAge: 35,
   },
-  // Resale levy (first subsidised flat sold on/after 3 Mar 2006): fixed by its flat type.
-  // Cash only (or deducted from the sale proceeds); no CPF or housing loan. Half in some cases
-  // (e.g. divorced second-timer buying with a first-timer; singles).
-  // Source: HDB figures via nexdoor.sg and several 2026 guides (all agree). SECONDARY 2026-09-26.
-  // 3Gen isn't listed anywhere; assumed same as 5-room. UNVERIFIED.
+  // Resale levy (first subsidised flat sold on/after 3 Mar 2006): fixed by its flat type, paid when buying a
+  // second subsidised flat from HDB (not a resale flat). Cash or the sale proceeds; not a housing loan. As a
+  // single, half. Source: hdb.gov.sg "Conditions after buying: Resale levy" (text supplied by the user).
+  // VERIFIED 2026-09-28.
   resaleLevy: { '2R': 15000, '3R': 30000, '4R': 40000, '5R': 45000, '3Gen': 45000, Exec: 50000, EC: 55000 },
   runningCosts: {
     // Reduced S&CC for Singapore Citizen owner-occupiers, per month incl. GST. Varies by town
@@ -624,11 +711,12 @@ export const POLICY_META: Record<string, PolicyMeta> = {
   'downpayment.bank.standard': { label: 'Bank loan downpayment (standard)', unit: 'pct', status: 'secondary', source: 'HDB Annex C + secondary' },
   'downpayment.bank.staggered': { label: 'Bank loan downpayment (staggered)', unit: 'pct', status: 'verified', source: 'hdb.gov.sg Staggered Downpayment Scheme page (Sep 2026)' },
   'downpayment.hdb.dia': { label: 'HDB loan downpayment (Deferred Income Assessment)', unit: 'pct', status: 'verified', source: 'HDB DIA Annex A (2024)' },
+  'resale': { label: 'Resale flats: fees, grants and timing', unit: 'sgd', status: 'secondary', source: 'Grants and caps: hdb.gov.sg (verified); fees and timing: 2026 guides' },
   'downpayment.bank.dia': { label: 'Bank loan downpayment (Deferred Income Assessment)', unit: 'pct', status: 'verified', source: 'hdb.gov.sg Staggered Downpayment Scheme page (Sep 2026)' },
   'lease.coverToAge': { label: 'Lease must cover youngest buyer to age', unit: 'years', status: 'secondary', source: 'MND 2019 CPF/HDB loan rules (snippet)' },
   'lease.minYearsForCpf': { label: 'No CPF / HDB loan if remaining lease ≤', unit: 'years', status: 'secondary', source: 'MND 2019 CPF/HDB loan rules (snippet)' },
   'lease.completedKeysWithinMonths': { label: 'Completed flats: keys within (months of booking)', unit: 'months', status: 'secondary', source: 'hdb.gov.sg Key Collection (snippet)' },
-  'resaleLevy': { label: 'Resale levy by first subsidised flat', unit: 'sgd', status: 'secondary', source: 'HDB figures via 2026 guides' },
+  'resaleLevy': { label: 'Resale levy by first subsidised flat (half as a single)', unit: 'sgd', status: 'verified', source: 'hdb.gov.sg Conditions after buying: Resale levy (Sep 2026)' },
   'runningCosts.sccMonthly': { label: 'Service & conservancy charges per month', unit: 'sgd', status: 'verified', source: 'Bishan-Toa Payoh TC (varies by town council)' },
   'runningCosts.annualValue': { label: 'Annual value estimate (for property tax)', unit: 'sgd', status: 'unverified', source: '2026 guides; IRAS sets yours after completion' },
   'runningCosts.propertyTaxTiers': { label: 'Owner-occupier property tax bands', unit: 'sgd', status: 'secondary', source: 'IRAS rates from 1 Jan 2025, via guides' },

@@ -90,7 +90,7 @@ export interface Grant {
   splitA: number
   when: When
   /** Amount computed from income and household (EHG / Step-Up) instead of typed in. */
-  auto?: 'EHG' | 'StepUp'
+  auto?: 'EHG' | 'StepUp' | 'FamilyGrant' | 'PHG'
 }
 
 export interface Flat {
@@ -103,8 +103,15 @@ export interface Flat {
   household?: 'firstTimers' | 'firstAndSecond' | 'secondTimers'
   /** Step-Up grant: now in public rental, or owning a 2-room or 3-room flat (Standard, or in a non-mature estate). */
   fromRentalOr2Room?: boolean
-  /** How you're buying: BTO (default), Sale of Balance Flats, or Open Booking of Flats. */
-  saleType?: 'BTO' | 'SBF' | 'OBF'
+  /** How you're buying: BTO (default), Sale of Balance Flats, Open Booking of Flats, or a resale flat. */
+  saleType?: 'BTO' | 'SBF' | 'OBF' | 'resale'
+  /**
+   * Resale: HDB's valuation of the flat (default: the price). The loan and CPF are capped at the lower
+   * of price and valuation; anything above the valuation (cash over valuation) is paid in cash.
+   */
+  valuation?: number
+  /** Resale: living with (or within 4 km of) parents/child, for the Proximity Housing Grant. */
+  proximity?: 'with' | 'near'
   /** SBF/OBF: the flat is already built — AFL and key collection happen together. */
   completed?: boolean
   /** First-timer + second-timer couples: who the second-timer is (default B). The EHG goes to the first-timer. */
