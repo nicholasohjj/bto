@@ -216,6 +216,7 @@ button{cursor:pointer}
       <option value="p3">3-room flat, generic layout</option>
       <option value="p5">5-room flat, generic layout</option>
       <optgroup label="From HDB brochures" id="tplBro"></optgroup>
+      <option value="mirror">Mirror this layout (left ↔ right)</option>
       <option value="blank">Blank flat…</option>
       <option value="empty">Empty, to trace a plan</option>
     </select>
@@ -1271,7 +1272,7 @@ function renderRight(){try{fillViews();}catch(e){}
       <label class="chk"><input type="checkbox" data-act="skirt"${S.skirt?' checked':''}> Skirting boards</label>${S.skirt?sw('skirtcol',['#f4f2ee','#d9d3c5','#8a6f55','#3a3d3f'],S.skirtCol||'#f4f2ee'):''}</div>
       <div class="sec"><h3>Summary</h3><div class="kv"><span>Floor area</span><b>${tot.toFixed(1)} m²</b></div><div class="kv"><span>Rooms</span><b>${S.rooms.length}</b></div>
       <div class="kv"><span>Doors / windows</span><b>${S.openings.filter(o=>o.kind==='door').length} / ${S.openings.filter(o=>o.kind==='window').length}</b></div><div class="kv"><span>Furniture items</span><b>${S.items.length}</b></div>
-      <p class="note">Click anything on the plan or in 3D to edit it. Hacking or moving a wall in an HDB flat needs an HDB permit and a registered renovation contractor. This tool does not know which walls are structural.</p></div>`;
+      <p class="note">Click anything on the plan or in 3D to edit it. Hacking or moving a wall in an HDB flat needs an HDB permit and a registered renovation contractor. ${S.walls.some(w=>w.str)?'Walls with red dashes are marked structural (from the brochure plan, or by you). Check your unit\'s plan too.':'This tool does not know which walls are structural. Mark them in a wall\'s settings.'}</p></div>`;
   }else if(sel.t==='item'){
     const k=CAT[e.type];
     h=`<div class="sec"><h3>${esc(k.n)}</h3>${row('Width (m)',num('w',e.w))}${row('Depth (m)',num('d',e.d))}${k.m?row('Height (m)',num('h',e.h||k.h)):''}${row('Rotation °',num('rot',e.rot,15,0,359).replace('.00',''))}
@@ -1476,9 +1477,19 @@ $('#dcard').addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.tagName=
 /** Unit layouts redrawn from HDB brochures (layouts.js). Keeps the budget cap; the layout becomes the "original" for the Checks tab. */
 const BRO=window.BROCHURE_LAYOUTS||{};
 {const g=$('#tplBro');const ks=Object.keys(BRO);if(ks.length)g.innerHTML=ks.map(k=>`<option value="b:${esc(k)}">${esc(BRO[k].label)}</option>`).join('');else g.remove();}
+/** Flip the whole design left to right (many HDB units are the mirror image of the brochure's layout). Undoable. */
+function mirrorDesign(){const xs=S.walls.flatMap(w=>[w.x1,w.x2]).concat(S.rooms.flatMap(r=>[r.x,r.x+r.w]));if(!xs.length){toast('Nothing to mirror yet.');return;}
+  const M=Math.min(...xs)+Math.max(...xs),X=x=>+(M-x).toFixed(3);
+  mut(()=>{S.walls.forEach(w=>{w.x1=X(w.x1);w.x2=X(w.x2);});
+    S.rooms.forEach(r=>{if(r.pts){r.pts=r.pts.map(q=>[X(q[0]),q[1]]).reverse();syncBox(r);}else r.x=X(r.x+r.w);});
+    S.openings.forEach(o=>{if(o.axis==='h')o.p=X(o.p);else{o.c=X(o.c);o.flip=-(o.flip||-1);}});
+    S.items.forEach(i=>{i.x=X(i.x);i.rot=(360-i.rot)%360;});
+    S.dims.forEach(d=>{d.x1=X(d.x1);d.x2=X(d.x2);d.o=-d.o;});
+    if(S.base){S.base.walls.forEach(w=>{w.x1=X(w.x1);w.x2=X(w.x2);});S.base.wet.forEach(w=>{w.x=X(w.x);});S.base.ops.forEach(o=>{if(o.axis==='h')o.p=X(o.p);else o.c=X(o.c);});}});
+  fit();toast('Mirrored. Undo to switch back.');}
 function loadBrochure(k){const L=BRO[k];if(!L)return false;const cap=S&&S.budget;newDesign(JSON.parse(JSON.stringify(L.design)));S.base=snapBase();if(cap)S.budget=cap;changed();
   toast(`${L.label}: ${L.area}. Redrawn from HDB's brochure, so check it against your unit's plan.`,5200);return true;}
-$('#tpl').addEventListener('change',e=>{const v=e.target.value;e.target.value='';if(v.startsWith('b:')){loadBrochure(v.slice(2));return;}if(v==='p3'||v==='p5'){newDesign(hdbPreset(v==='p3'?3:5));toast('Generic layout, not a real HDB plan. Redraw it to match yours.',4200);return;}
+$('#tpl').addEventListener('change',e=>{const v=e.target.value;e.target.value='';if(v.startsWith('b:')){loadBrochure(v.slice(2));return;}if(v==='mirror'){mirrorDesign();return;}if(v==='p3'||v==='p5'){newDesign(hdbPreset(v==='p3'?3:5));toast('Generic layout, not a real HDB plan. Redraw it to match yours.',4200);return;}
   if(v==='empty')newDesign(emptyDesign());
   if(v==='s4')newDesign(sample());
   else if(v==='blank')dialog(`<h2>Blank flat</h2><p class="note" style="margin:0 0 12px">Enter the outer size from your floor plan. It starts as one room with four outer walls and a front door. Draw the rest yourself.</p>
@@ -1700,8 +1711,9 @@ function budgetLines(){const L=[],cnt={};S.items.forEach(i=>{if(i.pr>0)return;cn
   const d=S.openings.filter(o=>o.kind==='door').length,w=S.openings.filter(o=>o.kind==='window').length;if(d)L.push({key:'door',name:'Doors',qty:d,unit:'each'});if(w)L.push({key:'window',name:'Windows',qty:w,unit:'each'});
   const wf={};S.walls.forEach(x=>{const f=x.fin||'paint';if(f!=='paint')wf[f]=(wf[f]||0)+Math.hypot(x.x2-x.x1,x.y2-x.y1)*S.H;});Object.keys(wf).forEach(f=>L.push({key:'w:'+f,name:'Wall finish: '+FINS[f]+' (one face)',qty:+wf[f].toFixed(2),unit:'m²'}));
   return L;}
-/** Read by the BTO money plan (same site): furniture = priced items; renovation = floors, wall finishes, doors, windows and other costs. */
-function budgetSummary(){let furniture=0,reno=0;for(const l of budgetLines()){const v=l.qty*(l.fixed??(S.prices[l.key]||0));if(l.key.startsWith('i:')||l.key.startsWith('p:'))furniture+=v;else reno+=v;}for(const x of S.extras)reno+=+x.amt||0;return {name:S.name,furniture:Math.round(furniture),reno:Math.round(reno),cap:S.budget||0,at:Date.now()};}
+/** Read by the BTO money plan (same site): renovation = floors, wall finishes, doors, windows, built-in carpentry, bathroom fittings and other costs; furniture = everything else you place. */
+const RENO_ITEMS=new Set(['ward','wardS','shoe','tvwall','cab','sink','hob','over','oventw','corner','island','pantry','wc','vanity','dvanity','shower','bathtub','heater']);
+function budgetSummary(){let furniture=0,reno=0;for(const l of budgetLines()){const v=l.qty*(l.fixed??(S.prices[l.key]||0));const it=l.key.startsWith('p:')?S.items.find(i=>i.id===l.key.slice(2)):null,t=it?it.type:l.key.startsWith('i:')?l.key.slice(2):null;if(t&&!RENO_ITEMS.has(t))furniture+=v;else reno+=v;}for(const x of S.extras)reno+=+x.amt||0;return {name:S.name,furniture:Math.round(furniture),reno:Math.round(reno),cap:S.budget||0,at:Date.now()};}
 function budgetTotal(){let t=0;for(const l of budgetLines())t+=l.qty*(l.fixed??(S.prices[l.key]||0));for(const x of S.extras)t+=+x.amt||0;return t;}
 function budgetHtml(){const L=budgetLines(),tot=budgetTotal(),cap=S.budget||0,diff=cap-tot;
   return `<div class="sec"><h3>Budget</h3><p class="note" style="margin-top:0">Enter your own unit prices from quotes. Nothing is pre-filled.</p>${row('Budget cap ($)',`<input type="number" data-bcap="1" value="${cap||''}" min="0" step="any" inputmode="decimal" placeholder="optional">`)}
@@ -1936,6 +1948,7 @@ $('#dcard').addEventListener('click',e=>{const b=e.target.closest('[data-ph]');i
   requestAnimationFrame(()=>{fit();resize3D();resetOrbit();if(camera)updateOrbit();changed();
     // ?layout= from the money plan: open that brochure unit, keeping any other design as a saved version first.
     const L=ql&&BRO[ql];if(L&&S.name!==L.design.name){if(S.walls.length){const v=vers();v.unshift({id:'v'+Date.now().toString(36),name:('Before '+L.label).slice(0,40),t:Date.now(),json:JSON.stringify(S)});vstore(v);}loadBrochure(ql);}
+    if(innerWidth<760){try{if(!localStorage.getItem('flatstudio.phoneTip')){localStorage.setItem('flatstudio.phoneTip','1');setTimeout(()=>toast('Flat Studio is easier on a computer or a tablet in landscape. On a phone, use the tabs at the bottom.',6000),1200);}}catch(e){}}
     requestAnimationFrame(frame);});
 })();
 })();

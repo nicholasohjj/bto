@@ -35,3 +35,15 @@ describe('Brochure layouts', () => {
     for (const list of Object.values(BROCHURE_LAYOUTS)) for (const l of list) expect(data[l.key], l.key).toBeDefined()
   })
 })
+
+describe('Export with a Flat Studio design', () => {
+  it('adds the design when there is one, and still imports', async () => {
+    const { exportJson, importJson } = await import('../../state/storage')
+    const s = seedScenario()
+    const design = { name: 'Home', walls: [{ x1: 0, y1: 0, x2: 1, y2: 0 }] }
+    const text = exportJson([s], design)
+    expect(JSON.parse(text).studio).toEqual(design)
+    expect(importJson(text, [])).toHaveLength(1)
+    expect(JSON.parse(exportJson([s])).studio).toBeUndefined()
+  })
+})

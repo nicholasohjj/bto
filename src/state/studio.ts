@@ -15,6 +15,42 @@ export interface StudioSummary {
 }
 
 const KEY = 'flatstudio.summary'
+const DESIGN_KEY = 'flatstudio.v1'
+const VERSIONS_KEY = 'flatstudio.versions'
+
+const isDesign = (o: unknown): o is { name?: string; walls: unknown[] } =>
+  !!o && typeof o === 'object' && Array.isArray((o as { walls?: unknown }).walls)
+
+/** The Flat Studio design saved in this browser (for the JSON export), or undefined if there's none. */
+export function readStudioDesign(): unknown {
+  try {
+    const o = JSON.parse(localStorage.getItem(DESIGN_KEY) ?? 'null')
+    return isDesign(o) && o.walls.length ? o : undefined
+  } catch { return undefined }
+}
+
+/**
+ * Put an exported design back into Flat Studio. A different design already there is kept as a
+ * Flat Studio version first. Returns false if the file has no design or it couldn't be saved.
+ */
+export function restoreStudioDesign(design: unknown): boolean {
+  if (!isDesign(design)) return false
+  try {
+    const current = localStorage.getItem(DESIGN_KEY)
+    const next = JSON.stringify(design)
+    if (current === next) return true
+    if (current && isDesign(JSON.parse(current))) {
+      const versions = JSON.parse(localStorage.getItem(VERSIONS_KEY) ?? '[]')
+      const list = Array.isArray(versions) ? versions : []
+      list.unshift({ id: 'v' + Date.now().toString(36), name: 'Before import', t: Date.now(), json: current })
+      localStorage.setItem(VERSIONS_KEY, JSON.stringify(list.slice(0, 30)))
+    }
+    localStorage.setItem(DESIGN_KEY, next)
+    // The budget summary is rewritten when Flat Studio next opens; until then it would describe the old design.
+    localStorage.removeItem(KEY)
+    return true
+  } catch { return false }
+}
 
 const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : 0)
 

@@ -64,10 +64,12 @@ export interface ExportFile {
   schemaVersion: 1
   exportedAt: string
   scenarios: Scenario[]
+  /** The Flat Studio design saved in this browser, if any (see state/studio.ts). */
+  studio?: unknown
 }
 
-export function exportJson(scenarios: Scenario[]): string {
-  const file: ExportFile = { app: 'bto-money-timeline', schemaVersion: 1, exportedAt: new Date().toISOString(), scenarios }
+export function exportJson(scenarios: Scenario[], studio?: unknown): string {
+  const file: ExportFile = { app: 'bto-money-timeline', schemaVersion: 1, exportedAt: new Date().toISOString(), scenarios, ...(studio ? { studio } : {}) }
   return JSON.stringify(file, null, 2)
 }
 

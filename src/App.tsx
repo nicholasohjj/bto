@@ -7,6 +7,7 @@ import { money } from './engine/format'
 import { newId } from './state/defaults'
 import { exportJson, importJson, loadState, saveState, type AppState } from './state/storage'
 import { decodeScenario, sharedCode, shareUrl } from './state/share'
+import { readStudioDesign, restoreStudioDesign } from './state/studio'
 import { AdvancedSettings } from './ui/AdvancedSettings'
 import { TimelineChart } from './ui/lazyCharts'
 import { Button, Card, Segmented, Toggle } from './ui/controls'
@@ -150,7 +151,7 @@ export default function App() {
   }
   const download = (all: boolean) => {
     const list = all ? state.scenarios : [active]
-    const blob = new Blob([exportJson(list)], { type: 'application/json' })
+    const blob = new Blob([exportJson(list, readStudioDesign())], { type: 'application/json' })
     const a = document.createElement('a')
     a.href = URL.createObjectURL(blob)
     a.download = all ? 'bto-scenarios.json' : `bto-${slug(active.name)}.json`
@@ -159,9 +160,11 @@ export default function App() {
   }
   const onImport = async (file: File) => {
     try {
-      const imported = importJson(await file.text(), state.scenarios)
+      const text = await file.text()
+      const imported = importJson(text, state.scenarios)
       setState((st) => ({ ...st, scenarios: [...st.scenarios, ...imported], activeId: imported[0].id, wizardDone: true }))
-      setMessage(`Imported ${imported.length} scenario${imported.length > 1 ? 's' : ''}.`)
+      const studio = restoreStudioDesign(JSON.parse(text)?.studio)
+      setMessage(`Imported ${imported.length} scenario${imported.length > 1 ? 's' : ''}${studio ? ' and your Flat Studio design' : ''}.`)
     } catch (e) {
       setMessage(`Couldn’t import: ${(e as Error).message}`)
     }

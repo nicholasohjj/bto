@@ -2,8 +2,9 @@ import { useEffect, useState } from 'react'
 import type { CostItem, Scenario } from '../engine/types'
 import { money } from '../engine/format'
 import { newId } from '../state/defaults'
+import { mergeRenoStages, splitRenoIntoStages, spreadTotal } from '../state/reno'
 import { brochureLayouts, readStudioSummary, studioUrl, type StudioSummary } from '../state/studio'
-import { Button, Card } from './controls'
+import { Button, Card, MoneyInput, NumberInput } from './controls'
 import type { Update } from './editors'
 
 type Kind = 'reno' | 'furniture'
@@ -23,8 +24,8 @@ export function RenoView({ scenario, update, onEditCosts, onMessage }: {
     update((d) => {
       const items = d.costs.filter((c) => c.kind === k)
       if (items.length) {
-        // Put the studio's figure on the first item and clear any others of the same kind, so it isn't counted twice.
-        items.forEach((c, i) => { c.amount = i === 0 ? amount : 0 })
+        // Keep each item's share, so staged payments stay staged.
+        spreadTotal(items, amount)
       } else {
         const item: CostItem = { id: newId('cost'), label: LABEL[k], kind: k, amount, auto: false, when: { milestone: 'keys', offsetMonths: k === 'reno' ? 1 : 2 }, funding: 'cashOnly', payer: 'joint', delayable: true }
         d.costs.push(item)
@@ -66,7 +67,7 @@ export function RenoView({ scenario, update, onEditCosts, onMessage }: {
         )}
         <p className="mt-2 text-[11px] text-muted">
           Flat Studio opens with your plan’s renovation + furniture budget ({money(budget)}) as its budget cap.
-          Designs are saved in this browser only. Flat Studio works best on a computer.
+          Designs are saved in this browser. Export (JSON) in the ⋯ menu includes your design, so keep a copy. Flat Studio works best on a computer.
         </p>
       </Card>
 
@@ -88,7 +89,7 @@ export function RenoView({ scenario, update, onEditCosts, onMessage }: {
           ) : (
             <>
               <dl className="mt-2 space-y-1 text-sm">
-                <Row label="Renovation (floors, finishes, doors, windows, other)" value={money(studio.reno)} />
+                <Row label="Renovation (finishes, built-ins, bathroom fittings, other)" value={money(studio.reno)} />
                 <Row label="Furniture & appliances" value={money(studio.furniture)} />
                 <Row label="Total" value={money(studioTotal)} strong />
               </dl>
@@ -105,16 +106,58 @@ export function RenoView({ scenario, update, onEditCosts, onMessage }: {
         </Card>
       </div>
 
+      <RenoStages scenario={scenario} update={update} />
+
       <Card>
         <h3 className="text-sm font-semibold">Before you renovate</h3>
         <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-ink-2">
           <li>Read HDB’s renovation guidelines for your flat. Some works need a permit, and structural walls can’t be hacked.</li>
           <li>Use a contractor on HDB’s Directory of Renovation Contractors (DRC) for works that need one.</li>
+          {/* UNVERIFIED: from renovation guides quoting HDB's guidelines; not yet checked against hdb.gov.sg. */}
+          <li>In a new flat, the bathroom floor and wall tiles can’t be hacked or replaced for the first 3 years after the block is completed. This protects the waterproofing. Ask your contractor what you can do instead.</li>
+          <li>Full-height and three-quarter-height windows (W1 and W2 on brochure plans) can’t be replaced. Changing any other window needs HDB’s approval.</li>
           <li>Get quotes from more than one contractor and put their unit prices into Flat Studio’s Budget tab.</li>
           <li>Keep some cash aside after key collection for the mortgage and for renovation surprises.</li>
         </ul>
       </Card>
     </div>
+  )
+}
+
+/** When renovation is paid: one payment, or stages (deposit, progress, final) at months after key collection. */
+function RenoStages({ scenario, update }: { scenario: Scenario; update: Update }) {
+  const reno = scenario.costs.filter((c) => c.kind === 'reno')
+  const total = reno.reduce((t, c) => t + c.amount, 0)
+  const set = (id: string, fn: (c: CostItem) => void) => update((d) => { const c = d.costs.find((x) => x.id === id); if (c) fn(c) })
+  return (
+    <Card>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="text-sm font-semibold">When you pay for the renovation</h3>
+        {reno.length > 1
+          ? <Button variant="ghost" className="text-xs" onClick={() => update((d) => { d.costs = mergeRenoStages(d.costs) })}>Pay in one go</Button>
+          : <Button variant="secondary" className="text-xs" onClick={() => update((d) => { d.costs = splitRenoIntoStages(d.costs) })}>Pay in stages</Button>}
+      </div>
+      <p className="mt-1 text-xs text-ink-2">
+        {reno.length > 1
+          ? 'Set each payment to match your contractor’s payment terms. They usually ask for a deposit when you sign, then progress payments, then the rest when the work is done.'
+          : 'Contractors usually take a deposit, then progress payments, then the rest at the end. Splitting it shows how that spreads your cash.'}
+      </p>
+      {reno.length === 0 ? <p className="mt-2 text-sm text-ink-2">No renovation cost in this plan.</p> : (
+        <div className="mt-3 space-y-2">
+          {reno.map((c) => (
+            <div key={c.id} className="grid grid-cols-[1fr_8rem] items-center gap-2 sm:grid-cols-[1fr_9rem_9rem]">
+              <span className="col-span-2 text-sm sm:col-span-1">{c.label}</span>
+              <MoneyInput value={c.amount} onChange={(v) => set(c.id, (x) => { x.amount = v })} ariaLabel={`${c.label} amount`} />
+              {'milestone' in c.when && c.when.milestone === 'keys'
+                ? <NumberInput value={c.when.offsetMonths ?? 0} min={-12} max={36} suffix="mo" onChange={(v) => set(c.id, (x) => { x.when = { milestone: 'keys', offsetMonths: Math.round(v) } })} ariaLabel={`${c.label}: months after key collection`} />
+                : <span className="text-xs text-muted">Set in Edit costs</span>}
+            </div>
+          ))}
+          {reno.length > 1 && <p className="tnum text-right text-xs text-ink-2">Total {money(total)}</p>}
+          <p className="text-[11px] text-muted">Months are counted from key collection (−1 = a month before). Your own costs rise with the inflation setting.</p>
+        </div>
+      )}
+    </Card>
   )
 }
 
