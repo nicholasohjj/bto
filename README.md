@@ -34,6 +34,7 @@ Shared links show a preview card (title, description and `public/og.png`) from t
 ```
 src/
   config/policy.ts      ALL policy figures, each with source + last-verified date
+  config/launches.ts    BTO launches and projects (from prices, classification, waiting times), each with source
   engine/               Pure TypeScript — no React. Unit-tested.
     types.ts            Data model (Scenario, SimResult, …)
     dates.ts            "YYYY-MM" month maths
@@ -50,6 +51,7 @@ src/
     eligibility.ts      Household income, income ceiling, EHG / Step-Up grant amounts, citizen/PR rules
     accruedInterest.ts  CPF accrued interest at 5/10/15 years after keys
     compare.ts          Key-number rows for scenario comparison
+    launch.ts           Fills the flat from a picked launch project (price, classification, dates)
     policyOverrides.ts  Applies per-scenario "Advanced settings" overrides to the policy
     __tests__/          Vitest tests
   state/                Seed scenarios, localStorage, JSON export/import

@@ -1,8 +1,10 @@
 import { useState, type ReactNode } from 'react'
 import type { FlatType, Policy } from '../config/policy'
+import { LAUNCHES, TYPICAL_WAIT_MONTHS } from '../config/launches'
 import { ageInMonths, estimatedLivingCosts, prYear, ratesFor } from '../engine/cpf'
 import { assessmentMonth, autoAmount, downpaymentSchedule, effectiveLtv, grantAmount, grantSplitA, hdbMaxTenure, loanChangesOf, maxLtvFor, voluntaryList } from '../engine/payments'
 import { assessEligibility, hfeMonth } from '../engine/eligibility'
+import { applyProject, offeredTypes, pickedProject } from '../engine/launch'
 import { isCompleted, isResale, isSingle, isSinglesPurchase, leaseFactor, normalizeScenario, typicalDates } from '../engine/saleType'
 import { addMonths, formatYm } from '../engine/dates'
 import { money } from '../engine/format'
@@ -296,6 +298,51 @@ function IncomeChanges({ partner: p, startMonth, years, onChange }: {
 
 // ---------------- Flat ----------------
 
+/** Pick a project from a BTO launch to fill in price, classification and dates. */
+function ProjectPicker({ scenario, update }: { scenario: Scenario; update: Update }) {
+  const picked = pickedProject(scenario)
+  const value = picked ? `${picked.launch.id}/${picked.project.id}` : ''
+  const options = [
+    { value: '', label: 'None — I’ll enter the details' },
+    ...LAUNCHES.flatMap((l) => l.projects.map((p) => ({
+      value: `${l.id}/${p.id}`,
+      label: `${l.name}${l.applicationMonth < scenario.startMonth ? ' (closed)' : ''} · ${p.name}, ${p.town} · ${p.classification}`,
+    }))),
+  ]
+  const p = picked?.project
+  const from = p?.fromPrices[scenario.flat.type]
+  return (
+    <Card>
+      <Field label="BTO project (optional)" tipText="Fills in the flat price, classification and dates from HDB’s launch announcement. You can change any of them afterwards.">
+        <Select value={value} ariaLabel="BTO project" options={options}
+          onChange={(v) => update((d) => {
+            const [launchId, projectId] = v.split('/')
+            const l = LAUNCHES.find((x) => x.id === launchId)
+            const proj = l?.projects.find((x) => x.id === projectId)
+            if (l && proj) applyProject(d, l, proj)
+            else delete d.flat.project
+          })} />
+      </Field>
+      {picked && p && (
+        <div className="mt-2 space-y-1 text-[11px] text-muted">
+          <p>
+            Flat types: {offeredTypes(p).map((t) => `${FLAT_TYPES.find((x) => x.value === t)!.label} from ${money(p.fromPrices[t]!)}`).join(' · ')}.
+            {from !== undefined && <> The price is the cheapest {FLAT_TYPES.find((x) => x.value === scenario.flat.type)!.label} before grants; most units cost more, so put in your unit’s price once you’ve chosen one.</>}
+            {p.fittingsIncluded && ' Prices include floor finishes, internal doors and sanitary fittings.'}
+          </p>
+          <p>
+            Key collection: {p.waitMonths !== undefined
+              ? <>{p.waitText ?? `${p.waitMonths} months`} after the launch (set to {formatYm(addMonths(picked.launch.applicationMonth, p.waitMonths))}).</>
+              : <>HDB didn’t give a waiting time, so it’s set to a typical {Math.round(TYPICAL_WAIT_MONTHS / 12 * 10) / 10} years ({formatYm(addMonths(picked.launch.applicationMonth, TYPICAL_WAIT_MONTHS))}). The brochure has the estimated completion date.</>}
+            {p.subsidyRecoveryPct !== undefined && <> Subsidy recovery on resale: {p.subsidyRecoveryPct}%.</>}
+          </p>
+          <p>Source: {picked.launch.source}.</p>
+        </div>
+      )}
+    </Card>
+  )
+}
+
 export function FlatEditor({ scenario, update, policy, brief = false }: { scenario: Scenario; update: Update; policy: Policy; brief?: boolean }) {
   const f = scenario.flat
   const [more, setMore] = useState(!brief)
@@ -304,6 +351,7 @@ export function FlatEditor({ scenario, update, policy, brief = false }: { scenar
   const completed = isCompleted(scenario)
   const lf = leaseFactor(scenario, policy)
   const resale = saleType === 'resale'
+  const picked = saleType === 'BTO' ? pickedProject(scenario) : null
   const shownMilestones = MILESTONES.filter((m) =>
     !((saleType === 'OBF' || resale) && m.value === 'application') && !(completed && m.value === 'afl'))
   const milestoneLabel = (m: Milestone, fallback: string) => resale
@@ -316,6 +364,7 @@ export function FlatEditor({ scenario, update, policy, brief = false }: { scenar
           <Segmented value={saleType} ariaLabel="Mode of sale"
             onChange={(v) => update((d) => {
               d.flat.saleType = v
+              if (v !== 'BTO') delete d.flat.project
               if (v === 'BTO' || v === 'resale') d.flat.completed = false
               d.flat.dates = typicalDates(d.startMonth, v, !!d.flat.completed && v !== 'BTO', policy)
               // Resale grants are added (worked out for you); they don't apply to new flats.
@@ -369,13 +418,19 @@ export function FlatEditor({ scenario, update, policy, brief = false }: { scenar
           </p>
         )}
       </Card>
+      {saleType === 'BTO' && <ProjectPicker scenario={scenario} update={update} />}
       <Card>
         <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
           <Field label={<>Flat price{isExample(scenario, 'flat.price') && <ExampleTag />}</>} tipText="If you pick Optional Component Scheme items at booking (flooring, internal doors, bathroom fittings), their cost is added to the flat price, so include it here.">
             <MoneyInput value={f.price} onChange={(v) => update((d) => { d.flat.price = v; touchExample(d, 'flat.price') })} ariaLabel="Flat price" />
           </Field>
-          <Field label="Flat type">
-            <Select value={f.type} onChange={(v) => update((d) => { d.flat.type = v })} options={FLAT_TYPES} ariaLabel="Flat type" />
+          <Field label="Flat type" hint={picked && !offeredTypes(picked.project).includes(f.type) ? <span className="text-serious">Not offered at {picked.project.name}</span> : undefined}>
+            <Select value={f.type} ariaLabel="Flat type" options={FLAT_TYPES}
+              onChange={(v) => update((d) => {
+                d.flat.type = v
+                const from = picked?.project.fromPrices[v]
+                if (from) { d.flat.price = from; touchExample(d, 'flat.price') }
+              })} />
           </Field>
           {more && (
             <Field label="Classification" tip="classification">

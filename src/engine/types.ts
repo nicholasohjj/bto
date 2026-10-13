@@ -103,6 +103,8 @@ export interface Flat {
   household?: 'firstTimers' | 'firstAndSecond' | 'secondTimers'
   /** Step-Up grant: now in public rental, or owning a 2-room or 3-room flat (Standard, or in a non-mature estate). */
   fromRentalOr2Room?: boolean
+  /** BTO project picked from a launch (config/launches.ts); its figures were copied in when picked. */
+  project?: { launch: string; id: string }
   /** How you're buying: BTO (default), Sale of Balance Flats, Open Booking of Flats, or a resale flat. */
   saleType?: 'BTO' | 'SBF' | 'OBF' | 'resale'
   /**

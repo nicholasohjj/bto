@@ -23,3 +23,6 @@ dist-ssr
 *.sln
 *.sw?
 .vercel
+
+# HDB brochures and launch material (source data for config/launches.ts; not ours to publish)
+brochures/

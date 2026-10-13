@@ -4,6 +4,7 @@ import { money } from './format'
 import { hdbMaxTenure, loanChangesOf, maxLtvFor, preKeysSwitch, weightedAge } from './payments'
 import { monthlyInstalment } from './loan'
 import { hfeMonth, householdIncome } from './eligibility'
+import { pickedProject } from './launch'
 import { isBuilt, isCompleted, isResale, isSingle, isSinglesPurchase, leaseFactor } from './saleType'
 import { simulateCore, type CoreResult, type LoanStep } from './simulate'
 import type { Milestone, Scenario, Warning, When, YearMonth } from './types'
@@ -894,6 +895,8 @@ export function buildWarnings(core: CoreResult, extras: WarningExtras = {}): War
     })
   }
   if (s.flat.classification !== 'Standard') {
+    const picked = pickedProject(s)
+    const recoveryPct = picked?.project.classification === s.flat.classification ? picked.project.subsidyRecoveryPct : undefined
     warnings.push({
       id: 'plus-prime', severity: 'info',
       title: `${s.flat.classification} flat: extra conditions not modelled`,
@@ -901,7 +904,9 @@ export function buildWarnings(core: CoreResult, extras: WarningExtras = {}): War
         `${s.flat.classification} flats have a 10-year minimum occupation period (5 for Standard)` +
         (isResale(s)
           ? ' (no subsidy recovery when you sell a resale one), '
-          : `, you return a share of the resale price to HDB when you sell (${s.flat.classification === 'Prime' ? 'more than for Plus' : 'less than for Prime'}; the percentage is announced at launch), `) +
+          : recoveryPct !== undefined
+            ? `, you pay HDB ${recoveryPct}% of the resale price (or valuation, if higher) when you sell (${picked!.project.name}’s subsidy recovery rate), `
+            : `, you return a share of the resale price to HDB when you sell (${s.flat.classification === 'Prime' ? 'more than for Plus' : 'less than for Prime'}; the percentage is announced at launch), `) +
         'and you can’t rent out the whole flat (spare rooms are allowed for 3-room or bigger). None of this changes what you pay up to key collection, so this timeline isn’t affected.',
       fixes: [],
     })
