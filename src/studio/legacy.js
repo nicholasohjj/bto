@@ -6,11 +6,13 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js'
 import LAYOUTS from './layouts.json'
 import { CATALOG, GROUPS, FLOORS, WALLS, SW, WTYPES, DTYPES, FINS } from './catalog'
+import { importBrochure } from './importer'
 import { zipStore, pdfBuild, dxfBuild as dxfBuildOf } from './files'
 import { money, budgetLines as budgetLinesOf, budgetSummary as budgetSummaryOf, budgetTotal as budgetTotalOf, budgetText as budgetTextOf } from './budget'
 import { runChecks as runChecksOf, lightPlan as lightPlanOf, lightSpots, checksText as checksTextOf } from './checks'
 /** Extra checks from feature modules (ceiling, electrical). */
 const CHECKS=[];
+import { detectRoom as detectRoomOf } from './model'
 import { uid, clamp, sn, loadState as loadDesign, wallInfo as wallInfoOf, bounds as boundsOf, rpts, rarea, syncBox, rcent, pip, dpSimp, pruneOps as pruneOpsOf, wallCover, itemPoly, polyOverlap, snapBase as snapBaseOf, mirrorDesign as mirrorOf } from './model'
 
 // Keep the look the design had on three.js r128: no colour management, and light intensities
@@ -226,37 +228,7 @@ function nearestWall(p,w){
 }
 const area=r=>rarea(r);
 const pruneOps=()=>pruneOpsOf(S);
-/* flood-fill room detection: returns polygon points (metres) or null */
-function detectRoom(p){
-  if(!S.walls.length)return null;const b=bounds(),g=.05,ox=b.x0-1,oy=b.y0-1,nx=Math.ceil((b.w+2)/g)+1,ny=Math.ceil((b.h+2)/g)+1;if(nx*ny>2.5e6)return null;
-  const wl=new Uint8Array(nx*ny);
-  for(const w of S.walls){const x0=Math.max(0,Math.floor((Math.min(w.x1,w.x2)-.06-ox)/g)),x1=Math.min(nx-1,Math.ceil((Math.max(w.x1,w.x2)+.06-ox)/g)),y0=Math.max(0,Math.floor((Math.min(w.y1,w.y2)-.06-oy)/g)),y1=Math.min(ny-1,Math.ceil((Math.max(w.y1,w.y2)+.06-oy)/g));
-    const dx=w.x2-w.x1,dy=w.y2-w.y1,L2=dx*dx+dy*dy||1;
-    for(let j=y0;j<=y1;j++)for(let i=x0;i<=x1;i++){const px=ox+(i+.5)*g,py=oy+(j+.5)*g;let t=((px-w.x1)*dx+(py-w.y1)*dy)/L2;t=t<0?0:t>1?1:t;const qx=w.x1+t*dx-px,qy=w.y1+t*dy-py;if(qx*qx+qy*qy<=.002)wl[j*nx+i]=1;}}
-  const si=Math.floor((p.x-ox)/g),sj=Math.floor((p.y-oy)/g);if(si<0||sj<0||si>=nx||sj>=ny||wl[sj*nx+si])return null;
-  const reg=new Uint8Array(nx*ny),st=[sj*nx+si];reg[st[0]]=1;let n=0;
-  while(st.length){const c=st.pop();n++;const i=c%nx,j=(c-i)/nx;if(i===0||j===0||i===nx-1||j===ny-1)return null;
-    for(const d of [c-1,c+1,c-nx,c+nx])if(!wl[d]&&!reg[d]){reg[d]=1;st.push(d);}}
-  if(n*g*g<.5)return null;
-  const E=[],byS=new Map(),W1=nx+1,key=(i,j)=>j*W1+i,add=(a,b,c,d)=>{const k=key(a,b);E.push([a,b,c,d,0]);(byS.get(k)||byS.set(k,[]).get(k)).push(E.length-1);};
-  for(let j=0;j<ny;j++)for(let i=0;i<nx;i++){if(!reg[j*nx+i])continue;
-    if(!reg[(j-1)*nx+i])add(i,j,i+1,j);if(!reg[j*nx+i+1])add(i+1,j,i+1,j+1);if(!reg[(j+1)*nx+i])add(i+1,j+1,i,j+1);if(!reg[j*nx+i-1])add(i,j+1,i,j);}
-  let best=null,ba=0;
-  for(let e0=0;e0<E.length;e0++){if(E[e0][4])continue;const loop=[];let e=e0;
-    while(e!==undefined&&!E[e][4]){E[e][4]=1;loop.push([E[e][0],E[e][1]]);const nk=key(E[e][2],E[e][3]);const cand=byS.get(nk)||[];e=cand.find(q=>!E[q][4]);}
-    let a=0;for(let i=0;i<loop.length;i++){const q=loop[(i+1)%loop.length];a+=loop[i][0]*q[1]-q[0]*loop[i][1];}a=Math.abs(a);if(a>ba){ba=a;best=loop;}}
-  if(!best||best.length<4)return null;
-  let pts=best.filter((q,i)=>{const a=best[(i+best.length-1)%best.length],c=best[(i+1)%best.length];return (q[0]-a[0])*(c[1]-q[1])-(q[1]-a[1])*(c[0]-q[0])!==0;});
-  let far=0,fd=-1;pts.forEach((q,i)=>{const d=Math.hypot(q[0]-pts[0][0],q[1]-pts[0][1]);if(d>fd){fd=d;far=i;}});
-  const A=pts.slice(0,far+1),B=pts.slice(far).concat([pts[0]]);let sp=dpSimp(A,1.2).slice(0,-1).concat(dpSimp(B,1.2).slice(0,-1));
-  sp=sp.filter((q,i)=>{const a=sp[(i+sp.length-1)%sp.length],c=sp[(i+1)%sp.length];const cr=(q[0]-a[0])*(c[1]-q[1])-(q[1]-a[1])*(c[0]-q[0]);const l=Math.hypot(q[0]-a[0],q[1]-a[1])*Math.hypot(c[0]-q[0],c[1]-q[1])||1;return Math.abs(cr/l)>.05;});
-  if(sp.length<3)return null;
-  const xs=[],ys=[];S.walls.forEach(w=>{xs.push(w.x1,w.x2);ys.push(w.y1,w.y2);});
-  const snp=(v,arr)=>{let bv=null,bd=.11;for(const c of arr){const d=Math.abs(c-v);if(d<bd){bd=d;bv=c;}}return bv!==null?bv:+(Math.round(v/.05)*.05).toFixed(3);};
-  let out=sp.map(q=>[snp(ox+q[0]*g,xs),snp(oy+q[1]*g,ys)]);
-  out=out.filter((q,i)=>{const a=out[(i+out.length-1)%out.length];return q[0]!==a[0]||q[1]!==a[1];});
-  return out.length>=3?out:null;
-}
+const detectRoom=p=>detectRoomOf(S.walls,p);
 function addRoomFromPts(pts){
   const r={id:uid(),name:'Room',floor:'oak'};
   const xs=[...new Set(pts.map(q=>q[0]))],ys=[...new Set(pts.map(q=>q[1]))];
@@ -780,7 +752,7 @@ $('#left').addEventListener('click',e=>{const o=e.target.closest('[data-opt]');i
 $('#left').addEventListener('change',e=>{const k=e.target.dataset&&e.target.dataset.lay;if(!k)return;S.layers[k]=e.target.checked?1:0;changed({ui:false});});
 function renderTrace(){
   const el=$('#trace');if(!el)return;
-  if(!under){el.innerHTML=`<h3>Trace a paper plan</h3><p class="note" style="margin:0 0 10px">Load a photo or scan of your floor plan, set its scale, then draw walls over it.</p><button class="btn primary" data-tr="load" style="width:100%">Load plan image</button>`;return;}
+  if(!under){el.innerHTML=`<h3>Trace a paper plan</h3><p class="note" style="margin:0 0 10px">Load a photo, scan or HDB brochure PDF of your floor plan. Brochures are read automatically; for images, set the scale, then draw walls over it.</p><button class="btn primary" data-tr="load" style="width:100%">Load plan image</button>`;return;}
   el.innerHTML=`<h3>Trace a paper plan</h3><div class="tools"><button class="tool" data-tool="calib" aria-pressed="${tool==='calib'}">Set scale</button><button class="tool" data-tool="imove" aria-pressed="${tool==='imove'}">Move</button><button class="tool" data-tr="toggle" aria-pressed="${!under.show}">${under.show?'Hide':'Show'}</button></div>
     <div style="height:10px"></div><label class="row"><span>Opacity</span><input type="range" id="uop" min="10" max="100" value="${Math.round(under.op*100)}"></label>
     <label class="row"><span>Rotate °</span><input type="number" id="urot" step="0.1" min="-180" max="180" value="${(under.rot||0).toFixed(1)}" inputmode="decimal"></label>
@@ -1029,7 +1001,7 @@ function copyText(txt,btn){
 /* image underlay loading */
 $('#imgIn').addEventListener('change',e=>{
   const f=e.target.files&&e.target.files[0];e.target.value='';if(!f)return;
-  if(f.type==='application/pdf'||/\.pdf$/i.test(f.name)){dialog(`<h2>PDF not supported here</h2><p class="note">Export the floor plan page as a PNG or JPG, or take a screenshot of it, then load that image.</p><div class="acts"><button class="btn" data-d="close">OK</button></div>`);return;}
+  if(f.type==='application/pdf'||/\.pdf$/i.test(f.name)){runImport(f);return;}
   const fr=new FileReader();
   fr.onerror=()=>dialog(`<h2>Could not read that file</h2><p class="note">Try a JPG or PNG photo or scan.</p><div class="acts"><button class="btn" data-d="close">OK</button></div>`);
   fr.onload=()=>{const im=new Image();
@@ -1043,6 +1015,15 @@ $('#imgIn').addEventListener('change',e=>{
   fr.readAsDataURL(f);
 });
 
+/* brochure PDF import: walls, doors, windows and rooms from an HDB block floor plan, with the drawing underneath */
+async function runImport(f){
+  let r;try{r=await importBrochure(f,{card:$('#dcard'),open:()=>$('#dlg').classList.add('on'),close:closeDlg});}catch(e){dialog(`<h2>Could not import that brochure</h2><p class="note">${esc(e&&e.message||String(e))}</p><div class="acts"><button class="btn" data-d="close">OK</button></div>`);return;}
+  if(!r)return;const x=r.result,cap=S&&S.budget;
+  newDesign({name:r.name,H:2.6,wallColor:WALLS[0],walls:x.walls,rooms:x.rooms,openings:x.openings,items:[],dims:[],layers:{furn:1,labels:1,dims:1,grid:1}});
+  S.base=snapBase();if(cap)S.budget=cap;
+  under={src:r.image,x:0,y:0,w:x.w,h:x.h,rot:0,op:.5,show:true};underSrc='';saveUnder();renderTrace();changed();fit();
+  dialog(`<h2>Imported ${esc(r.name)}</h2><p class="note" style="margin:0 0 10px">Found ${x.stats.structural} structural walls, ${x.stats.partitions} other walls, ${x.stats.doors} doors, ${x.stats.windows} windows and ${x.stats.rooms} rooms. The brochure drawing is underneath, to scale.</p>
+    <p class="note">This is a first draft read from the drawing, so check it: fix or add walls where they differ, and use the Room tool (click inside a space) for rooms it missed. Solid walls in the brochure are marked structural, and the layout is saved as the original for the Checks tab.</p><div class="acts"><button class="btn primary" data-d="close">Start checking</button></div>`);}
 /* ───────── dialogs / header ───────── */
 function dialog(html){$('#dcard').innerHTML=html;$('#dlg').classList.add('on');const f=$('#dcard input,#dcard textarea');if(f)f.focus();}
 function closeDlg(){$('#dlg').classList.remove('on');}
@@ -1073,7 +1054,8 @@ const BRO=LAYOUTS;
 function mirrorDesign(){if(!S.walls.length&&!S.rooms.length){toast('Nothing to mirror yet.');return;}mut(()=>{mirrorOf(S);});fit();toast('Mirrored. Undo to switch back.');}
 function loadBrochure(k){const L=BRO[k];if(!L)return false;const cap=S&&S.budget;newDesign(JSON.parse(JSON.stringify(L.design)));S.base=snapBase();if(cap)S.budget=cap;changed();
   toast(`${L.label}: ${L.area}. Redrawn from HDB's brochure, so check it against your unit's plan.`,5200);return true;}
-$('#tpl').addEventListener('change',e=>{const v=e.target.value;e.target.value='';if(v.startsWith('b:')){loadBrochure(v.slice(2));return;}if(v==='mirror'){mirrorDesign();return;}if(v==='p3'||v==='p5'){newDesign(hdbPreset(v==='p3'?3:5));toast('Generic layout, not a real HDB plan. Redraw it to match yours.',4200);return;}
+$('#pdfIn').addEventListener('change',e=>{const f=e.target.files&&e.target.files[0];e.target.value='';if(f)runImport(f);});
+$('#tpl').addEventListener('change',e=>{const v=e.target.value;e.target.value='';if(v==='pdf'){$('#pdfIn').click();return;}if(v.startsWith('b:')){loadBrochure(v.slice(2));return;}if(v==='mirror'){mirrorDesign();return;}if(v==='p3'||v==='p5'){newDesign(hdbPreset(v==='p3'?3:5));toast('Generic layout, not a real HDB plan. Redraw it to match yours.',4200);return;}
   if(v==='empty')newDesign(emptyDesign());
   if(v==='s4')newDesign(sample());
   else if(v==='blank')dialog(`<h2>Blank flat</h2><p class="note" style="margin:0 0 12px">Enter the outer size from your floor plan. It starts as one room with four outer walls and a front door. Draw the rest yourself.</p>

@@ -252,3 +252,84 @@ export function mirrorDesign(S: Design): boolean {
   }
   return true
 }
+
+/**
+ * Flood-fill the space around `p` bounded by walls; returns the room outline, or null if it's not
+ * enclosed. By default walls count as thin lines and the outline snaps to wall centrelines; with
+ * `faces`, walls count at their real thickness and the outline snaps to their faces.
+ */
+export function detectRoom(walls: Wall[], p: { x: number; y: number }, faces = false): Pt[] | null {
+  if (!walls.length) return null
+  const b = bounds({ walls, rooms: [] }), g = 0.05, ox = b.x0 - 1, oy = b.y0 - 1, nx = Math.ceil((b.w + 2) / g) + 1, ny = Math.ceil((b.h + 2) / g) + 1
+  if (nx * ny > 2.5e6) return null
+  const wl = new Uint8Array(nx * ny)
+  for (const w of walls) {
+    const rad = faces ? Math.max(0.045, (w.th || DEFAULT_TH) / 2) : 0.045, r2 = rad * rad, pad = rad + 0.02
+    const x0 = Math.max(0, Math.floor((Math.min(w.x1, w.x2) - pad - ox) / g)), x1 = Math.min(nx - 1, Math.ceil((Math.max(w.x1, w.x2) + pad - ox) / g))
+    const y0 = Math.max(0, Math.floor((Math.min(w.y1, w.y2) - pad - oy) / g)), y1 = Math.min(ny - 1, Math.ceil((Math.max(w.y1, w.y2) + pad - oy) / g))
+    const dx = w.x2 - w.x1, dy = w.y2 - w.y1, L2 = dx * dx + dy * dy || 1
+    for (let j = y0; j <= y1; j++) for (let i = x0; i <= x1; i++) {
+      const px = ox + (i + 0.5) * g, py = oy + (j + 0.5) * g
+      let t = ((px - w.x1) * dx + (py - w.y1) * dy) / L2
+      t = t < 0 ? 0 : t > 1 ? 1 : t
+      const qx = w.x1 + t * dx - px, qy = w.y1 + t * dy - py
+      if (qx * qx + qy * qy <= Math.max(r2, 0.002)) wl[j * nx + i] = 1
+    }
+  }
+  const si = Math.floor((p.x - ox) / g), sj = Math.floor((p.y - oy) / g)
+  if (si < 0 || sj < 0 || si >= nx || sj >= ny || wl[sj * nx + si]) return null
+  const reg = new Uint8Array(nx * ny), st = [sj * nx + si]
+  reg[st[0]] = 1
+  let n = 0
+  while (st.length) {
+    const c = st.pop()!
+    n++
+    const i = c % nx, j = (c - i) / nx
+    if (i === 0 || j === 0 || i === nx - 1 || j === ny - 1) return null
+    for (const d of [c - 1, c + 1, c - nx, c + nx]) if (!wl[d] && !reg[d]) { reg[d] = 1; st.push(d) }
+  }
+  if (n * g * g < 0.5) return null
+  const E: [number, number, number, number, number][] = [], byS = new Map<number, number[]>(), W1 = nx + 1, key = (i: number, j: number) => j * W1 + i
+  const add = (a: number, b2: number, c: number, d: number) => { const k = key(a, b2); E.push([a, b2, c, d, 0]); (byS.get(k) || byS.set(k, []).get(k)!).push(E.length - 1) }
+  for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+    if (!reg[j * nx + i]) continue
+    if (!reg[(j - 1) * nx + i]) add(i, j, i + 1, j)
+    if (!reg[j * nx + i + 1]) add(i + 1, j, i + 1, j + 1)
+    if (!reg[(j + 1) * nx + i]) add(i + 1, j + 1, i, j + 1)
+    if (!reg[j * nx + i - 1]) add(i, j + 1, i, j)
+  }
+  let best: Pt[] | null = null, ba = 0
+  for (let e0 = 0; e0 < E.length; e0++) {
+    if (E[e0][4]) continue
+    const loop: Pt[] = []
+    let e: number | undefined = e0
+    while (e !== undefined && !E[e][4]) {
+      E[e][4] = 1
+      loop.push([E[e][0], E[e][1]])
+      const cand: number[] = byS.get(key(E[e][2], E[e][3])) || []
+      e = cand.find((q: number) => !E[q][4])
+    }
+    let a = 0
+    for (let i = 0; i < loop.length; i++) { const q = loop[(i + 1) % loop.length]; a += loop[i][0] * q[1] - q[0] * loop[i][1] }
+    a = Math.abs(a)
+    if (a > ba) { ba = a; best = loop }
+  }
+  if (!best || best.length < 4) return null
+  const bb = best
+  const pts = bb.filter((q, i) => { const a = bb[(i + bb.length - 1) % bb.length], c = bb[(i + 1) % bb.length]; return (q[0] - a[0]) * (c[1] - q[1]) - (q[1] - a[1]) * (c[0] - q[0]) !== 0 })
+  let far = 0, fd = -1
+  pts.forEach((q, i) => { const d = Math.hypot(q[0] - pts[0][0], q[1] - pts[0][1]); if (d > fd) { fd = d; far = i } })
+  const A = pts.slice(0, far + 1), B = pts.slice(far).concat([pts[0]])
+  let sp = dpSimp(A, 1.2).slice(0, -1).concat(dpSimp(B, 1.2).slice(0, -1))
+  sp = sp.filter((q, i) => { const a = sp[(i + sp.length - 1) % sp.length], c = sp[(i + 1) % sp.length]; const cr = (q[0] - a[0]) * (c[1] - q[1]) - (q[1] - a[1]) * (c[0] - q[0]); const l = Math.hypot(q[0] - a[0], q[1] - a[1]) * Math.hypot(c[0] - q[0], c[1] - q[1]) || 1; return Math.abs(cr / l) > 0.05 })
+  if (sp.length < 3) return null
+  const xs: number[] = [], ys: number[] = []
+  for (const w of walls) {
+    if (faces && w.x1 === w.x2) { const h = (w.th || DEFAULT_TH) / 2; xs.push(w.x1 - h, w.x1 + h) } else xs.push(w.x1, w.x2)
+    if (faces && w.y1 === w.y2) { const h = (w.th || DEFAULT_TH) / 2; ys.push(w.y1 - h, w.y1 + h) } else ys.push(w.y1, w.y2)
+  }
+  const snp = (v: number, arr: number[]) => { let bv: number | null = null, bd = 0.11; for (const c of arr) { const d = Math.abs(c - v); if (d < bd) { bd = d; bv = c } } return bv !== null ? +bv.toFixed(3) : +(Math.round(v / 0.05) * 0.05).toFixed(3) }
+  let out: Pt[] = sp.map((q) => [snp(ox + q[0] * g, xs), snp(oy + q[1] * g, ys)])
+  out = out.filter((q, i) => { const a = out[(i + out.length - 1) % out.length]; return q[0] !== a[0] || q[1] !== a[1] })
+  return out.length >= 3 ? out : null
+}

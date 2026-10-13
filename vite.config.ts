@@ -14,8 +14,21 @@ function swAssets(): Plugin {
     name: 'sw-assets',
     apply: 'build',
     configResolved(config) { outDir = config.build.outDir },
-    // Flat Studio's files are cached when it's first opened, so money-plan visitors don't download them.
-    generateBundle(_, bundle) { assets = Object.keys(bundle).filter((f) => f.startsWith('assets/') && !f.startsWith('assets/studio-')).map((f) => `/${f}`).sort() },
+    // Only the money plan's files (its entry, imports, lazy chunks and CSS). Flat Studio's files,
+    // including the PDF reader, are cached when it's first opened.
+    generateBundle(_, bundle) {
+      const keep = new Set<string>()
+      const walk = (f: string) => {
+        const c = bundle[f]
+        if (!c || keep.has(f)) return
+        keep.add(f)
+        if (c.type !== 'chunk') return
+        for (const css of (c as { viteMetadata?: { importedCss?: Set<string> } }).viteMetadata?.importedCss ?? []) keep.add(css)
+        for (const i of [...c.imports, ...c.dynamicImports]) walk(i)
+      }
+      for (const [f, c] of Object.entries(bundle)) if (c.type === 'chunk' && c.isEntry && c.name === 'main') walk(f)
+      assets = [...keep].filter((f) => f.startsWith('assets/')).map((f) => `/${f}`).sort()
+    },
     closeBundle() {
       const file = join(outDir, 'sw.js')
       const hash = createHash('sha256').update(assets.join('\n')).digest('hex').slice(0, 10)

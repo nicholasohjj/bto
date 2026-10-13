@@ -28,6 +28,7 @@
       <option value="s4">4-room sample</option>
       <option value="p3">3-room flat, generic layout</option>
       <option value="p5">5-room flat, generic layout</option>
+      <option value="pdf">Import from an HDB brochure (PDF)…</option>
       <optgroup label="From HDB brochures" id="tplBro"></optgroup>
       <option value="mirror">Mirror this layout (left ↔ right)</option>
       <option value="blank">Blank flat…</option>
@@ -101,7 +102,8 @@
   </nav>
 </div>
 
-<input type="file" id="imgIn" accept="image/*" hidden>
+<input type="file" id="imgIn" accept="image/*,application/pdf,.pdf" hidden>
+<input type="file" id="pdfIn" accept="application/pdf,.pdf" hidden>
 <div id="dlg" role="dialog" aria-modal="true"><div class="card" id="dcard"></div></div>
 <script type="module" src="/src/studio/legacy.js"></script>
 </body>
