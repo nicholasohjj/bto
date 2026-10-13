@@ -101,6 +101,11 @@ the unit's main windows, direct sun on that facade through the day and year (and
 3 pm), distances to roads, nearby amenities with walking estimates, and a side-by-side comparison of
 up to 3 units.
 
+The unit picked here is saved in the browser (`bto.chosenUnit`, `state/unit.ts`), so the three pages share it:
+**Plan this unit in Flat Studio** opens that unit type's brochure layout, and in the money plan, a plan for the
+same project shows the unit in its project details and Renovation tab (with links back, Flat Studio opening
+on its layout, and a note if the plan is for a different flat type).
+
 ```
 surroundings/index.html      the page (a third Vite entry)
 src/surroundings/

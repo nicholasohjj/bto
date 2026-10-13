@@ -3,6 +3,7 @@ import { KEY_DAYS, obstacles, roadDistances, sunDay, unitPos, view, yearSun, typ
 import { createMap, KIND } from './map'
 import { createScene } from './scene'
 import berlayar from './sites/berlayar-rise.json'
+import { saveChosenUnit, studioUnitUrl, unitLabel } from '../state/unit'
 import { buildGraph, estateStarts, fromStarts, hull, routeTo, type Graph, type Route } from './walk'
 
 const SITES: Record<string, Site> = { 'berlayar-rise': berlayar as unknown as Site }
@@ -124,6 +125,11 @@ function update() {
     scene?.labelText((a) => walkLabel(u, a))
   }
   $('#timeLbl').textContent = `${clock(time)} ${dayText(d)}`
+  // The money plan and Flat Studio pick this unit up from here.
+  saveChosenUnit({ site: siteId, block: u.block.id, unit: u.unit.no, storey: u.storey, type: u.unit.type, facing: u.facing })
+  const studio = studioUnitUrl({ site: siteId, type: u.unit.type }), toStudio = $<HTMLAnchorElement>('#toStudio')
+  toStudio.hidden = !studio
+  if (studio) { toStudio.href = studio; toStudio.title = `Open the ${TYPE[u.unit.type] ?? u.unit.type} layout, redrawn from HDB's brochure, for ${unitLabel({ block: u.block.id, unit: u.unit.no, storey: u.storey })}` }
   $('#unitNote').textContent = `Unit #${String(u.storey).padStart(2, '0')}-${u.unit.no} is about ${Math.round(u.floorZ)} m above ground; its main windows face ${u.facing}.`
   renderResults(u, obs)
 }

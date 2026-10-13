@@ -1,4 +1,6 @@
-import { SURROUNDINGS, surroundingsUrl } from '../state/studio'
+import { studioUrl, SURROUNDINGS, surroundingsUrl } from '../state/studio'
+import { CHOSEN_UNIT_KEY, readChosenUnit, surroundingsUnitUrl, unitFlatType, unitLabel, unitLayout } from '../state/unit'
+import { useStored } from './useStored'
 import { useState, type ReactNode } from 'react'
 import type { FlatType, Policy } from '../config/policy'
 import { LAUNCHES, TYPICAL_WAIT_MONTHS, type Launch } from '../config/launches'
@@ -306,6 +308,10 @@ function ProjectPicker({ scenario, update }: { scenario: Scenario; update: Updat
   const value = launch ? `${launch.id}/${picked?.project.id ?? ''}` : ''
   const closed = (l: Launch) => l.applicationMonth < scenario.startMonth
   const p = picked?.project
+  const chosen = useStored(CHOSEN_UNIT_KEY, readChosenUnit)
+  const mine = p && chosen?.site === p.id ? chosen : null
+  const myLayout = mine && unitLayout(mine)
+  const typeLabel = (t: FlatType) => FLAT_TYPES.find((x) => x.value === t)?.label ?? t
   const years = (m: number) => `${Math.round(m / 12 * 10) / 10} years`
   const onPick = (v: string) => update((d) => {
     const [launchId, projectId] = v.split('/')
@@ -344,7 +350,14 @@ function ProjectPicker({ scenario, update }: { scenario: Scenario; update: Updat
                 : <>About {formatYm(addMonths(launch.applicationMonth, TYPICAL_WAIT_MONTHS))} <span className="text-muted">(a typical {years(TYPICAL_WAIT_MONTHS)}: HDB gave no waiting time; the Flat Portal project page usually does)</span></>)}
               {p.subsidyRecoveryPct !== undefined && row('On resale', `${p.subsidyRecoveryPct}% of the price goes back to HDB (subsidy recovery)`)}
               {p.fittingsIncluded && row('Included', 'Floor finishes, internal doors, sanitary fittings')}
-              {SURROUNDINGS.has(p.id) && row('Surroundings', <a className="text-accent underline" href={surroundingsUrl(p.id)}>See the view, sun, roads and amenities for each unit</a>)}
+              {mine ? row('Your unit', <>
+                <b className="font-medium text-ink">{unitLabel(mine)}</b>{myLayout && `, ${myLayout.label}`}{mine.facing && `, facing ${mine.facing}`}
+                {unitFlatType(mine) !== scenario.flat.type && <span className="text-serious"> · this plan is for a {typeLabel(scenario.flat.type)} flat</span>}
+                <br /><a className="text-accent underline" href={surroundingsUnitUrl(mine)}>View and sun</a>
+                {myLayout && <> · <a className="text-accent underline" href={studioUrl(scenario, myLayout.key)}>Plan it in Flat Studio</a></>}
+                <span className="text-muted"> · picked in Surroundings</span>
+              </>)
+                : SURROUNDINGS.has(p.id) && row('Surroundings', <a className="text-accent underline" href={surroundingsUrl(p.id)}>See the view, sun, roads and amenities for each unit, and pick yours</a>)}
             </>
           ) : (
             <>

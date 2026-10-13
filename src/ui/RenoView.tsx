@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react'
 import type { CostItem, Scenario } from '../engine/types'
 import { money } from '../engine/format'
 import { newId } from '../state/defaults'
 import { mergeRenoStages, splitRenoIntoStages, spreadTotal } from '../state/reno'
 import { brochureLayouts, readStudioSummary, studioUrl, SURROUNDINGS, surroundingsUrl, type StudioSummary } from '../state/studio'
+import { readChosenUnit, surroundingsUnitUrl, unitLabel, unitLayout, CHOSEN_UNIT_KEY } from '../state/unit'
 import { Button, Card, MoneyInput, NumberInput } from './controls'
+import { useStored } from './useStored'
 import type { Update } from './editors'
 
 type Kind = 'reno' | 'furniture'
@@ -19,6 +20,10 @@ export function RenoView({ scenario, update, onEditCosts, onMessage }: {
   const budget = planned('reno') + planned('furniture')
   const studioTotal = studio ? studio.reno + studio.furniture : 0
   const layouts = brochureLayouts(scenario)
+  const chosen = useStored(CHOSEN_UNIT_KEY, readChosenUnit)
+  // The unit picked in Surroundings, if it's in this plan's project: Flat Studio opens on its layout.
+  const mine = chosen && chosen.site === scenario.flat.project?.id ? chosen : null
+  const myLayout = mine ? unitLayout(mine)?.key : undefined
 
   const use = (k: Kind, amount: number) => {
     update((d) => {
@@ -43,7 +48,7 @@ export function RenoView({ scenario, update, onEditCosts, onMessage }: {
           Then bring the total back here so your money plan uses it. Renovation and furniture are paid in cash, not CPF.
         </p>
         <div className="mt-3 flex flex-wrap gap-2">
-          <a href={studioUrl(scenario)} className="inline-flex items-center justify-center rounded-lg bg-accent px-3 py-2 text-sm font-medium text-white hover:opacity-90">
+          <a href={studioUrl(scenario, myLayout)} className="inline-flex items-center justify-center rounded-lg bg-accent px-3 py-2 text-sm font-medium text-white hover:opacity-90">
             Open Flat Studio
           </a>
           <Button variant="secondary" onClick={onEditCosts}>Edit costs</Button>
@@ -54,12 +59,14 @@ export function RenoView({ scenario, update, onEditCosts, onMessage }: {
             <div className="mt-1.5 flex flex-wrap gap-2">
               {layouts.map((l) => (
                 <a key={l.key} href={studioUrl(scenario, l.key)}
-                  className={`rounded-lg border px-3 py-1.5 text-xs ${l.type === scenario.flat.type ? 'border-accent font-medium text-ink' : 'border-line text-ink-2 hover:text-ink'}`}>
-                  {l.label}
+                  className={`rounded-lg border px-3 py-1.5 text-xs ${(myLayout ? l.key === myLayout : l.type === scenario.flat.type) ? 'border-accent font-medium text-ink' : 'border-line text-ink-2 hover:text-ink'}`}>
+                  {l.label}{l.key === myLayout && ' · your unit'}
                 </a>
               ))}
             </div>
-            {scenario.flat.project?.id && SURROUNDINGS.has(scenario.flat.project.id) && (
+            {mine ? (
+              <p className="mt-1.5 text-xs text-ink-2">Your unit: <b className="font-medium text-ink">{unitLabel(mine)}</b>{mine.facing && `, facing ${mine.facing}`}. <a className="text-accent underline" href={surroundingsUnitUrl(mine)}>See its view and sun, or pick another</a></p>
+            ) : scenario.flat.project?.id && SURROUNDINGS.has(scenario.flat.project.id) && (
               <p className="mt-1.5 text-xs"><a className="text-accent underline" href={surroundingsUrl(scenario.flat.project.id)}>Picking a unit? See each unit’s view, sun and distance to roads</a></p>
             )}
             <p className="mt-1.5 text-[11px] text-muted">
@@ -175,18 +182,5 @@ function Row({ label, value, strong }: { label: string; value: string; strong?: 
 
 /** Re-reads the studio's budget when you come back to this tab (e.g. after editing in Flat Studio). */
 function useStudioSummary(): StudioSummary | null {
-  const [summary, setSummary] = useState(readStudioSummary)
-  useEffect(() => {
-    const refresh = () => { if (document.visibilityState === 'visible') setSummary(readStudioSummary()) }
-    const onStorage = (e: StorageEvent) => { if (e.key === 'flatstudio.summary') setSummary(readStudioSummary()) }
-    document.addEventListener('visibilitychange', refresh)
-    window.addEventListener('focus', refresh)
-    window.addEventListener('storage', onStorage)
-    return () => {
-      document.removeEventListener('visibilitychange', refresh)
-      window.removeEventListener('focus', refresh)
-      window.removeEventListener('storage', onStorage)
-    }
-  }, [])
-  return summary
+  return useStored('flatstudio.summary', readStudioSummary)
 }
