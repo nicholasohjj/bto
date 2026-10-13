@@ -27,13 +27,15 @@ self.addEventListener('fetch', (event) => {
   const req = event.request
   if (req.method !== 'GET' || new URL(req.url).origin !== self.location.origin) return
   if (req.mode === 'navigate') {
+    // Flat Studio (/studio/) is its own page; everything else is the app at '/'.
+    const page = new URL(req.url).pathname.startsWith('/studio') ? '/studio/' : '/'
     event.respondWith((async () => {
       try {
         const res = await fetch(req)
-        if (res.ok) (await caches.open(CACHE)).put('/', res.clone())
+        if (res.ok) (await caches.open(CACHE)).put(page, res.clone())
         return res
       } catch {
-        return (await caches.match('/', { ignoreVary: true })) ?? Response.error()
+        return (await caches.match(page, { ignoreVary: true })) ?? Response.error()
       }
     })())
     return

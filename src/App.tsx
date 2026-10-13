@@ -18,14 +18,16 @@ import { GuidePage } from './ui/GuidePage'
 import { FaqPage, GlossaryPage, LearnNav, RulesPage } from './ui/LearnPages'
 import { FLAT_TYPES, LEARN_PATHS, type LearnPage } from './ui/labels'
 import { PrintSummary } from './ui/PrintSummary'
+import { RenoView } from './ui/RenoView'
 import { Wizard } from './ui/Wizard'
 
-type Tab = 'overview' | 'schedule' | 'cpf' | 'edit' | 'compare' | 'advanced' | 'guide'
+type Tab = 'overview' | 'schedule' | 'cpf' | 'edit' | 'reno' | 'compare' | 'advanced' | 'guide'
 const TABS: { id: Tab; label: string }[] = [
   { id: 'overview', label: 'Overview' },
   { id: 'schedule', label: 'Payments' },
   { id: 'cpf', label: 'CPF interest' },
   { id: 'edit', label: 'Edit plan' },
+  { id: 'reno', label: 'Renovation' },
   { id: 'compare', label: 'Compare' },
   { id: 'advanced', label: 'Advanced settings' },
   { id: 'guide', label: 'Guide' },
@@ -272,7 +274,7 @@ export default function App() {
 
       <main className="mx-auto max-w-6xl space-y-4 px-4 py-4">
         <ErrorBoundary key={`${active.id}-${tab}`} onUndo={undoLastEdit}>
-        {!result && tab !== 'guide' && (
+        {!result && tab !== 'guide' && tab !== 'reno' && (
           <Card>
             <p className="text-sm text-critical">This plan can’t be simulated. {scenarioProblem(active) ?? 'Check the dates (key collection must be after today).'}</p>
             {tab !== 'edit' && <Button variant="secondary" className="mt-2 text-xs" onClick={() => setTab('edit')}>Edit plan</Button>}
@@ -329,6 +331,8 @@ export default function App() {
           </div>
         )}
 
+        {tab === 'reno' && <RenoView scenario={active} update={update} onMessage={setMessage}
+          onEditCosts={() => { setEditSection('costs'); setTab('edit') }} />}
         {tab === 'compare' && <CompareView scenarios={state.scenarios} results={results} compareIds={state.compareIds} onToggle={toggleCompare} />}
         {tab === 'advanced' && <AdvancedSettings scenario={active} update={update} />}
         {tab === 'guide' && (
