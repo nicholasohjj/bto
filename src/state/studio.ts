@@ -78,6 +78,11 @@ export const BROCHURE_LAYOUTS: Record<string, { key: string; label: string; type
     { key: 'berlayar-rise/3R', label: '3-room', type: '3R' },
     { key: 'berlayar-rise/4R', label: '4-room', type: '4R' },
   ],
+  'kebun-baru-breeze': [
+    { key: 'kebun-baru-breeze/2R-1', label: '2-room Flexi (Type 1)', type: '2R' },
+    { key: 'kebun-baru-breeze/2R-2', label: '2-room Flexi (Type 2)', type: '2R' },
+    { key: 'kebun-baru-breeze/4R', label: '4-room', type: '4R' },
+  ],
 }
 
 /** Projects with a Surroundings page (view, sun, roads and amenities per unit). */

@@ -28,10 +28,12 @@ describe('budget', () => {
 })
 
 describe('checks', () => {
-  it('finds nothing structural to flag in an untouched brochure layout', () => {
-    const S = unit('berlayar-rise/3R')
-    S.base = snapBase(S, (t) => !!CATALOG[t]?.wet)
-    expect(runChecks(S, CATALOG).filter((c) => c.cat === 'walls' || c.cat === 'wet')).toEqual([])
+  it('finds nothing to warn about in any untouched brochure layout', () => {
+    for (const k of Object.keys(layouts)) {
+      const S = unit(k)
+      S.base = snapBase(S, (t) => !!CATALOG[t]?.wet)
+      expect(runChecks(S, CATALOG).filter((c) => c.lvl === 'warn' || c.cat === 'walls' || c.cat === 'wet').map((c) => c.msg), k).toEqual([])
+    }
   })
   it('flags a removed structural wall and a moved toilet', () => {
     const S = unit('berlayar-rise/2R-2')
