@@ -69,7 +69,13 @@ renovation budget, and reads its priced budget back (localStorage `flatstudio.su
 
 ```
 src/studio/
-  legacy.js       UI, 2D plan and 3D view (three.js). Older, dense code; new logic goes in the modules below.
+  legacy.js       2D plan, 3D view (three.js), keyboard, exports and start-up. Older, dense code;
+                  new logic goes in the modules below.
+  ui.ts           The App interface the panels use to reach the core (state, undo, dialogs)
+  leftPanel.ts    Tools, options and layers, traced image controls, catalogue and search
+  inspector.ts    Right panel: selection settings, schedule, budget and quotes, checks;
+                  selection operations (delete, copy, paste, rotate, align, group)
+  dom.ts          Small DOM helpers
   catalog.ts      Furniture and fittings, floor/wall finishes, window and door types
   model.ts        Design types, loading with validation, geometry, room flood fill, mirror
   budget.ts       Priced lines from the design's quantities; the summary the money plan reads

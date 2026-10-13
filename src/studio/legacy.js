@@ -5,22 +5,24 @@ import * as THREE from 'three'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js'
 import LAYOUTS from './layouts.json'
-import { CATALOG, GROUPS, FLOORS, WALLS, SW, WTYPES, DTYPES, FINS } from './catalog'
+import { CATALOG, FLOORS, WALLS, WTYPES } from './catalog'
 import { importBrochure } from './importer'
-import { paintFloor, PRESETS, applyPreset } from './materials'
+import { copyText } from './dom'
+import { initLeftPanel, buildLeft, renderTrace, HINTS } from './leftPanel'
+import { initInspector, renderRight, delSel, curList, entsOf, cloneEnts, setSelQuiet, multiAct, scheduleText } from './inspector'
+import { paintFloor } from './materials'
 import { renderPanorama } from './pano'
 import { designLink, sharedDesignCode, readSharedDesign } from './share'
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js'
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js'
 import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js'
-import { buildCarp, carpHtml, setCfg } from './carpentry'
-import { ceilHtml, setCeil, ceilOf, inset, ceilingSvg, ceilingChecks } from './ceiling'
+import { buildCarp } from './carpentry'
+import { ceilOf, inset, ceilingSvg, ceilingChecks } from './ceiling'
 import { electricalSvg, electricalChecks, electricalCounts } from './electrical'
-import { quotesHtml, quoteDialogHtml, parseQuote } from './quotes'
 import { zipStore, pdfBuild, dxfBuild as dxfBuildOf } from './files'
-import { money, budgetLines as budgetLinesOf, budgetSummary as budgetSummaryOf, budgetTotal as budgetTotalOf, budgetText as budgetTextOf } from './budget'
-import { runChecks as runChecksOf, lightPlan as lightPlanOf, lightSpots, checksText as checksTextOf } from './checks'
+import { money, budgetSummary as budgetSummaryOf, budgetText as budgetTextOf } from './budget'
+import { checksText as checksTextOf } from './checks'
 /** Extra checks from feature modules (ceiling, electrical). */
 const CHECKS=[ceilingChecks,electricalChecks];
 import { detectRoom as detectRoomOf } from './model'
@@ -115,7 +117,7 @@ const B={
   cot(g,w,d,c){bx(g,w,.04,d,0,.35,0,'#f3f1ec',.95);for(const sx of[-1,1])for(let i=0;i<9;i++)bx(g,.015,.55,.015,sx*(w/2-.01),.65,-d/2+.06+i*(d-.12)/8,c,.7);for(const sz of[-1,1])for(let i=0;i<6;i++)bx(g,.015,.55,.015,-w/2+.06+i*(w-.12)/5,.65,sz*(d/2-.01),c,.7);legs(g,w,d,.34,.04,c,.02);},
   wardS(g,w,d,c){bx(g,w,2.4,d,0,1.2,0,c,.6);const n=Math.max(2,Math.round(w/.9));for(let i=0;i<n;i++){bx(g,w/n-.02,2.3,.02,-w/2+w*(i+.5)/n,1.2,d/2+.01+(i%2?.02:0),shade(c,i%2?.92:1.04),.5);}
     for(let i=1;i<n;i++)bx(g,.02,.5,.03,-w/2+w*i/n,1.1,d/2+.05,'#6b6e70',.4,.6);},
-  dress(g,w,d,c){bx(g,w,.04,d,0,.75,0,c,.55);legs(g,w,d,.73,.05,shade(c,.7));bx(g,w*.5,.3,d-.04,-w*.22,.6,0,shade(c,.9),.6);bx(g,.5,.9,.03,0,1.25,-d/2+.015,'#cfe0e6',.1,.8);bx(g,.4,.4,.4,w*.0,.2,d*.6,'#e8dcc4',.9);},
+  dress(g,w,d,c){bx(g,w,.04,d,0,.75,0,c,.55);legs(g,w,d,.73,.05,shade(c,.7));bx(g,w*.5,.3,d-.04,-w*.22,.6,0,shade(c,.9),.6);bx(g,.5,.9,.03,0,1.25,-d/2+.015,'#cfe0e6',.1,.8);bx(g,.4,.4,.4,0,.2,d*.6,'#e8dcc4',.9);},
   bookc(g,w,d,c){bx(g,w,2.0,d,0,1,0,c,.6);for(let k=0;k<6;k++)bx(g,w-.06,.025,d-.03,0,.2+k*.33,.01,shade(c,1.08),.6);const cols=['#8a9a7b','#c89a82','#8aa0ad','#d9d3c5','#7a5a43'];
     for(let k=0;k<5;k++){let x=-w/2+.06;for(let j=0;j<Math.floor((w-.12)/.07);j++){const bw=.035+((j*7+k*3)%4)*.01;bx(g,bw,.22+((j+k)%3)*.04,d*.7,x+bw/2,.22+k*.33+.12,.02,cols[(j+k)%5],.8);x+=bw+.01;}}},
   lsofa(g,w,d,c){const a=.16,sd=.9;bx(g,w,.22,d,0,.11,0,shade(c,.6),.9);bx(g,w-sd,.16,sd-.22,-sd/2,.30,d/2-sd/2+.11-.11,c,.95);bx(g,sd-.22,.16,d-.22,w/2-sd/2,.30,.11-.0,c,.95);
@@ -359,7 +361,7 @@ function planMarkup(ex){
 function dimSvg(d,on,ghost){
   const dx=d.x2-d.x1,dy=d.y2-d.y1,L=Math.hypot(dx,dy),ux=dx/L,uy=dy/L,nx=-uy*d.o,ny=ux*d.o,ax=d.x1+nx,ay=d.y1+ny,bx=d.x2+nx,by=d.y2+ny;
   let ang=Math.atan2(dy,dx)*180/Math.PI;if(ang>90||ang<-90)ang+=180;
-  return `<g ${ghost?'style="pointer-events:none"':`data-t="dim" data-id="${d.id}"`}><path class="dim${on?' on':''}" d="M${d.x1} ${d.y1}L${ax+ux*.05*0} ${ay}M${d.x2} ${d.y2}L${bx} ${by}M${ax} ${ay}L${bx} ${by}M${ax-uy*.08-ux*.08} ${ay+ux*.08-uy*.08}L${ax+uy*.08+ux*.08} ${ay-ux*.08+uy*.08}M${bx-uy*.08-ux*.08} ${by+ux*.08-uy*.08}L${bx+uy*.08+ux*.08} ${by-ux*.08+uy*.08}"/><line class="hit" x1="${ax}" y1="${ay}" x2="${bx}" y2="${by}" style="stroke-width:.25px;vector-effect:none"/><text class="dimt" transform="translate(${(ax+bx)/2} ${(ay+by)/2-.06}) rotate(${ang})">${L.toFixed(2)} m</text></g>`;}
+  return `<g ${ghost?'style="pointer-events:none"':`data-t="dim" data-id="${d.id}"`}><path class="dim${on?' on':''}" d="M${d.x1} ${d.y1}L${ax} ${ay}M${d.x2} ${d.y2}L${bx} ${by}M${ax} ${ay}L${bx} ${by}M${ax-uy*.08-ux*.08} ${ay+ux*.08-uy*.08}L${ax+uy*.08+ux*.08} ${ay-ux*.08+uy*.08}M${bx-uy*.08-ux*.08} ${by+ux*.08-uy*.08}L${bx+uy*.08+ux*.08} ${by-ux*.08+uy*.08}"/><line class="hit" x1="${ax}" y1="${ay}" x2="${bx}" y2="${by}" style="stroke-width:.25px;vector-effect:none"/><text class="dimt" transform="translate(${(ax+bx)/2} ${(ay+by)/2-.06}) rotate(${ang})">${L.toFixed(2)} m</text></g>`;}
 function renderUnder(){
   const u=$('#planUnder');u.setAttribute('viewBox',svg.getAttribute('viewBox')||'0 0 1 1');
   svg.style.setProperty('--room-op',under&&under.show?'.14':'');
@@ -435,7 +437,7 @@ function wallJoins(w,wi){const J=[];if(wi.axis==='a')return J;
     for(const [ex,ey] of [[w.x1,w.y1],[w.x2,w.y2]]){if(Math.hypot(o.x1-ex,o.y1-ey)<.02)J.push({w:o,e:1});else if(Math.hypot(o.x2-ex,o.y2-ey)<.02)J.push({w:o,e:2});}}
   return J;}
 svg.addEventListener('pointerdown',e=>{
-  svg.setPointerCapture(e.pointerId);ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  try{svg.setPointerCapture(e.pointerId);}catch(x){/* pointer already gone */}ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
   if(ptrs.size===2){const [a,b]=[...ptrs.values()];const r=svg.getBoundingClientRect(),mx=(a.x+b.x)/2,my=(a.y+b.y)/2;pinch={d:Math.hypot(a.x-b.x,a.y-b.y)||1,s:view.s,wx:view.cx+(mx-r.left-r.width/2)/view.s,wy:view.cy+(my-r.top-r.height/2)/view.s};drag=null;draft=null;marq=null;return;}
   const p=toM(e),hit=e.target.closest?e.target.closest('[data-t]'):null,t=hit?hit.dataset.t:null,id=hit?hit.dataset.id:null;
   const pan={k:'pan',sx:e.clientX,sy:e.clientY,cx:view.cx,cy:view.cy,moved:false};
@@ -730,7 +732,7 @@ function frame(t){
 const gl=$('#gl'),gp=new Map();let g3=null;
 gl.addEventListener('contextmenu',e=>e.preventDefault());
 gl.addEventListener('wheel',e=>{if(mode!=='orbit')return;e.preventDefault();orb.dist=clamp(orb.dist*Math.exp(e.deltaY*.001),3,45);updateOrbit();},{passive:false});
-gl.addEventListener('pointerdown',e=>{gl.setPointerCapture(e.pointerId);gp.set(e.pointerId,{x:e.clientX,y:e.clientY});
+gl.addEventListener('pointerdown',e=>{try{gl.setPointerCapture(e.pointerId);}catch(x){/* pointer already gone */}gp.set(e.pointerId,{x:e.clientX,y:e.clientY});
   if(gp.size===2){const [a,b]=[...gp.values()];g3={pinch:Math.hypot(a.x-b.x,a.y-b.y)||1,dist:orb.dist};return;}
   g3={sx:e.clientX,sy:e.clientY,lx:e.clientX,ly:e.clientY,pan:e.button===2||e.shiftKey,moved:0};});
 gl.addEventListener('pointermove',e=>{if(!gp.has(e.pointerId)||!g3)return;gp.set(e.pointerId,{x:e.clientX,y:e.clientY});
@@ -754,49 +756,8 @@ function pick(e){
 $$('#pad button').forEach(b=>{const k=b.dataset.k;b.addEventListener('pointerdown',e=>{e.preventDefault();b.setPointerCapture(e.pointerId);keys.add(k);});['pointerup','pointercancel','lostpointercapture'].forEach(n=>b.addEventListener(n,()=>keys.delete(k)));});
 
 /* ───────── left panel ───────── */
-const TOOLS=[['select','Select'],['wall','Wall'],['room','Room'],['poly','Polygon'],['dim','Dimension'],['door','Door'],['window','Window']];
-const HINTS={select:'Click to select. Shift-click adds to the selection, Shift-drag draws a box. Drag handles to reshape; drag furniture to move it. Hold Alt to skip wall snapping.',wall:'Drag to draw a wall, and type a length such as 3.2 then Enter to set it exactly. Locks to 90 degrees unless Free angle is on.',poly:'Click each corner of the room. Click the first point or double-click to finish.',dim:'Drag between two points to add a dimension line.',room:'Click inside a closed set of walls to fill a room, or drag a rectangle.',calib:'Click two points on the image whose real distance you know, such as the ends of a printed dimension. Zoom in first for accuracy.',imove:'Drag to move the image. Pick Select when it sits where you want it.',door:'Click on a wall to place a door.',window:'Click on a wall to place a window.'};
-$('#left').addEventListener('input',e=>{if(e.target.id==='catq'){const q=e.target.value.trim().toLowerCase();$$('#left .cg').forEach(sec=>{let any=false;sec.querySelectorAll('.ci').forEach(b=>{const on=!q||b.textContent.toLowerCase().includes(q);b.hidden=!on;any=any||on;});sec.hidden=!any;});return;}if(e.target.id==='uop'&&under){under.op=e.target.value/100;renderUnder();saveUnder();}});
-$('#left').addEventListener('change',e=>{if(e.target.id==='urot'&&under){const v=parseFloat(e.target.value);if(isFinite(v)){under.rot=clamp(v,-180,180);renderUnder();saveUnder();}}});
-function buildLeft(){
-  let h='<div class="sec"><h3>Draw</h3><div class="tools">'+TOOLS.map(([k,n])=>`<button class="tool" data-tool="${k}" aria-pressed="${k===tool}">${n}</button>`).join('')+'</div></div><div class="sec" id="opts"></div><div class="sec" id="trace"></div>';
-  h+='<div class="sec" style="padding-bottom:8px"><input id="catq" type="search" placeholder="Search furniture and fittings" aria-label="Search the catalogue" style="width:100%;background:var(--field);border:1px solid var(--line);border-radius:6px;padding:6px 8px"></div>';
-  for(const g of GROUPS){h+=`<div class="sec cg"><h3>${g}</h3><div class="cat">`+Object.entries(CAT).filter(([,v])=>v.g===g).map(([k,v])=>`<button class="ci" data-add="${k}"><span>${v.n}</span><em>${Math.round(v.w*1000)}×${Math.round(v.d*1000)}</em></button>`).join('')+'</div></div>';}
-  const mods=Object.entries(CAT).filter(([,v])=>v.g==='My models'&&!v.missing);
-  h+=`<div class="sec"><h3>My models</h3>${mods.length?'<div class="cat">'+mods.map(([k,v])=>`<button class="ci" data-add="${k}"><span>${esc(v.n)}</span><em>${Math.round(v.w*1000)}×${Math.round(v.d*1000)}</em></button>`).join('')+'</div>':''}
-    <p class="note" style="margin:8px 0 10px">Import a GLB, GLTF or OBJ file. It is scaled to real size and kept in this browser.</p><button class="btn" data-model="load" style="width:100%">Import 3D model</button>${mods.length?'<button class="btn" data-model="manage" style="width:100%;margin-top:8px">Remove a model…</button>':''}</div>`;
-  $('#left').innerHTML=h;renderTrace();renderOpts();
-}
-function renderOpts(){const el=$('#opts');if(!el)return;
-  el.innerHTML=`<h3>Options</h3><div class="tools"><button class="tool" data-opt="free" aria-pressed="${freeAng}">Free angle</button><button class="tool" data-opt="flush" aria-pressed="${flush}">Flush snap</button></div><div style="height:8px"></div><div class="lays">${LAYERS.map(([k,n])=>`<label><input type="checkbox" data-lay="${k}"${S.layers[k]?' checked':''}> ${n}</label>`).join('')}</div>`;}
-$('#left').addEventListener('click',e=>{const o=e.target.closest('[data-opt]');if(!o)return;if(o.dataset.opt==='free')freeAng=!freeAng;else flush=!flush;renderOpts();});
-$('#left').addEventListener('change',e=>{const k=e.target.dataset&&e.target.dataset.lay;if(!k)return;S.layers[k]=e.target.checked?1:0;changed({ui:false});});
-function renderTrace(){
-  const el=$('#trace');if(!el)return;
-  if(!under){el.innerHTML=`<h3>Trace a paper plan</h3><p class="note" style="margin:0 0 10px">Load a photo, scan or HDB brochure PDF of your floor plan. Brochures are read automatically; for images, set the scale, then draw walls over it.</p><button class="btn primary" data-tr="load" style="width:100%">Load plan image</button>`;return;}
-  el.innerHTML=`<h3>Trace a paper plan</h3><div class="tools"><button class="tool" data-tool="calib" aria-pressed="${tool==='calib'}">Set scale</button><button class="tool" data-tool="imove" aria-pressed="${tool==='imove'}">Move</button><button class="tool" data-tr="toggle" aria-pressed="${!under.show}">${under.show?'Hide':'Show'}</button></div>
-    <div style="height:10px"></div><label class="row"><span>Opacity</span><input type="range" id="uop" min="10" max="100" value="${Math.round(under.op*100)}"></label>
-    <label class="row"><span>Rotate °</span><input type="number" id="urot" step="0.1" min="-180" max="180" value="${(under.rot||0).toFixed(1)}" inputmode="decimal"></label>
-    <div class="kv"><span>Image width</span><b>${under.w.toFixed(2)} m</b></div>
-    <p class="note">1. Rotate until printed walls run level. 2. Set scale from one known dimension. 3. Draw walls over it, then click inside each space with the Room tool.</p>
-    <div class="acts"><button class="btn" data-tr="load">Replace</button><button class="btn danger" data-tr="remove">Remove</button></div>`;
-}
 function startTrace(){fitImage();setTool('calib');renderTrace();}
 function setTool(t){tool=t;ghost=null;draft=null;calib=null;polyDraft=null;marq=null;$$('.tool').forEach(b=>b.setAttribute('aria-pressed',b.dataset.tool===t));$('#hint').textContent=HINTS[t];svg.style.cursor=t==='select'?'default':t==='imove'?'move':'crosshair';render2D();}
-$('#left').addEventListener('click',e=>{
-  const tr=e.target.closest('[data-tr]');
-  if(tr){const a=tr.dataset.tr;
-    if(a==='load')$('#imgIn').click();
-    else if(a==='toggle'){under.show=!under.show;renderUnder();renderTrace();saveUnder();}
-    else if(a==='remove'){under=null;underSrc='';calib=null;if(tool==='calib'||tool==='imove')setTool('select');saveUnder();renderUnder();renderTrace();render2D();}
-    return;}
-  const t=e.target.closest('[data-tool]');if(t){if((t.dataset.tool==='calib'||t.dataset.tool==='imove')&&!under)return;setTool(t.dataset.tool);renderTrace();return;}
-  const a=e.target.closest('[data-add]');if(!a)return;
-  const k=CAT[a.dataset.add],r=sel&&sel.t==='room'&&getE('room',sel.id);
-  const cx=r?r.x+r.w/2:view.cx,cy=r?r.y+r.h/2:view.cy;
-  checkpoint();const it={id:uid(),type:a.dataset.add,x:sn(cx,.05),y:sn(cy,.05),rot:0,w:k.w,d:k.d,color:k.c};S.items.push(it);sel={t:'item',id:it.id};
-  setTool('select');changed();setTab('plan');
-});
 
 /* ───────── 3D model import ───────── */
 let modelRev=0,modelDB=null;const MODELS={};
@@ -832,205 +793,8 @@ $('#modelIn').addEventListener('change',async e=>{const f=e.target.files&&e.targ
 async function loadSavedModels(){try{const all=await idbDo('readonly',st=>st.getAll());
   for(const m of all||[]){try{const r=await parseModel(m.name+'.'+m.ext,m.buf);registerModel(m.id,m.name,r.proto,r);}catch(e){}}
   if(all&&all.length){buildLeft();itemMap.forEach(v=>{itemsG.remove(v.g);});itemMap.clear();dirty3=true;dirty=true;render2D();renderRight();}}catch(e){}}
-$('#left').addEventListener('click',e=>{const m=e.target.closest('[data-model]');if(!m)return;
-  if(m.dataset.model==='load')$('#modelIn').click();
-  else{const mods=Object.entries(CAT).filter(([,v])=>v.g==='My models'&&!v.missing);
-    dialog(`<h2>Remove a model</h2><p class="note" style="margin:0 0 10px">Items using it stay in your design as grey placeholders.</p>${mods.map(([k,v])=>`<div class="kv"><span>${esc(v.n)}</span><button class="btn danger" data-d="rmmodel" data-id="${k.slice(2)}">Remove</button></div>`).join('')}<div class="acts"><button class="btn" data-d="close">Close</button></div>`);}});
-/* ───────── inspector ───────── */
-const num=(k,v,step=.05,min=.1,max=60)=>`<input type="number" data-k="${k}" value="${(+v).toFixed(2)}" step="${step}" min="${min}" max="${max}" inputmode="decimal">`;
-const row=(l,h)=>`<label class="row"><span>${l}</span>${h}</label>`;
-const sw=(act,cols,cur)=>`<div class="sw">${cols.map(c=>`<button data-act="${act}" data-v="${c}" style="background:${c}" aria-label="Colour ${c}" aria-pressed="${c.toLowerCase()===String(cur).toLowerCase()}"></button>`).join('')}</div>`;
-function renderRight(){try{fillViews();}catch(e){}
-
-  $$('.tabs [data-rt]').forEach(b=>b.setAttribute('aria-selected',b.dataset.rt===rtab));
-  const el=$('#rbody');if(!S)return;let h='';
-  if(rtab==='schedule'){el.innerHTML=scheduleHtml();return;}
-  if(rtab==='budget'){el.innerHTML=budgetHtml();return;}
-  if(rtab==='checks'){el.innerHTML=typeof checksHtml==='function'?checksHtml():'';return;}
-  if(ms.length){el.innerHTML=multiHtml();return;}
-  const e=sel&&getE(sel.t,sel.id);
-  if(!e){
-    const tot=S.rooms.reduce((a,r)=>a+area(r),0);
-    h=`<div class="sec"><h3>Flat</h3>${row('Name',`<input type="text" data-k="name" value="${esc(S.name)}" maxlength="60">`)}${row('Ceiling (m)',num('H',S.H,.05,2.2,3.2))}
-      <div style="margin-bottom:6px;color:var(--ink2)">Wall paint (all walls)</div>${sw('wallcol',WALLS,S.wallColor)}
-      <div style="margin:12px 0 6px;color:var(--ink2)">Ceiling colour</div>${sw('ceilcol',['#f8f7f4','#ece8df','#dfe6ea','#f1e6df'],S.ceilCol||'#f8f7f4')}
-      <label class="chk"><input type="checkbox" data-act="skirt"${S.skirt?' checked':''}> Skirting boards</label>
-      <div style="height:10px"></div>${row('Style preset',`<select data-preset="1"><option value="">Choose a style…</option>${Object.entries(PRESETS).map(([k,p])=>`<option value="${k}">${p.n}</option>`).join('')}</select>`)}<p class="note" style="margin-top:0">Sets walls, floors, carpentry laminate and soft furnishings together. Undo to go back.</p>${S.skirt?sw('skirtcol',['#f4f2ee','#d9d3c5','#8a6f55','#3a3d3f'],S.skirtCol||'#f4f2ee'):''}</div>
-      <div class="sec"><h3>Summary</h3><div class="kv"><span>Floor area</span><b>${tot.toFixed(1)} m²</b></div><div class="kv"><span>Rooms</span><b>${S.rooms.length}</b></div>
-      <div class="kv"><span>Doors / windows</span><b>${S.openings.filter(o=>o.kind==='door').length} / ${S.openings.filter(o=>o.kind==='window').length}</b></div><div class="kv"><span>Furniture items</span><b>${S.items.length}</b></div>
-      <p class="note">Click anything on the plan or in 3D to edit it. Hacking or moving a wall in an HDB flat needs an HDB permit and a registered renovation contractor. ${S.walls.some(w=>w.str)?'Walls with red dashes are marked structural (from the brochure plan, or by you). Check your unit\'s plan too.':'This tool does not know which walls are structural. Mark them in a wall\'s settings.'}</p></div>`;
-  }else if(sel.t==='item'){
-    const k=CAT[e.type];
-    h=`<div class="sec"><h3>${esc(k.n)}</h3>${row('Width (m)',num('w',e.w))}${row('Depth (m)',num('d',e.d))}${k.m?row('Height (m)',num('h',e.h||k.h)):''}${row('Rotation °',num('rot',e.rot,15,0,359).replace('.00',''))}
-      ${k.carp?carpHtml(e,S.H):k.m?'':`<div style="margin-bottom:6px;color:var(--ink2)">Colour</div>${sw('col',SW,e.color)}${row('Material',`<select data-k="mt"><option value="">Plain</option>${[['wood','Timber grain'],['fabric','Fabric'],['leather','Leather'],['metal','Metal'],['gloss','Gloss']].map(([v,n])=>`<option value="${v}"${e.mt===v?' selected':''}>${n}</option>`).join('')}</select>`)}`}
-      ${row('Product name',`<input type="text" data-k="nm" value="${esc(e.nm||'')}" maxlength="40" placeholder="optional">`)}${row('Your price ($)',`<input type="number" data-k="pr" value="${e.pr||''}" min="0" step="any" inputmode="decimal" placeholder="overrides unit price">`)}
-      <div class="acts"><button class="btn" data-act="rot90">Rotate 90°</button><button class="btn" data-act="dup">Duplicate</button><button class="btn danger" data-act="del">Delete</button></div>
-      <p class="note">Front of the item is marked by the small triangle on the plan.${k.k?' Counts as carpentry in the schedule.':''}</p></div>`;
-  }else if(sel.t==='room'){
-    h=`<div class="sec"><h3>Room</h3>${row('Name',`<input type="text" data-k="name" value="${esc(e.name)}" maxlength="40">`)}
-      ${e.pts?`<div class="kv"><span>Shape</span><b>Polygon, ${e.pts.length} corners</b></div>`:`<div class="pair">${row('X (m)',num('x',e.x,.1,-50,80))}${row('Y (m)',num('y',e.y,.1,-50,80))}</div><div class="pair">${row('Width',num('w',e.w,.1,.6))}${row('Depth',num('h',e.h,.1,.6))}</div>`}
-      <div class="kv"><span>Area</span><b>${area(e).toFixed(2)} m²</b></div>
-      <div style="margin:12px 0 6px;color:var(--ink2)">Floor finish</div><div class="floors">${Object.entries(FLOORS).map(([k,f])=>`<button data-act="floor" data-v="${k}" aria-pressed="${e.floor===k}"><i style="background:${f.c}"></i>${f.n}</button>`).join('')}</div>${ceilHtml(e)}
-      <div class="acts">${e.pts?'<button class="btn" data-act="torect">Use bounding box</button>':'<button class="btn" data-act="topoly">Edit corners</button>'}<button class="btn danger" data-act="del">Delete room</button></div><p class="note">${e.pts?'Drag the corner dots. Drag the faint dots on edges to add a corner. Shift-click a corner to remove it. ':''}Deleting a room removes its floor only. Walls and furniture stay.</p></div>`;
-  }else if(sel.t==='wall'){
-    const wi=wallInfo(e),len=wi.b-wi.a,ang=wi.axis==='a';
-    h=`<div class="sec"><h3>Wall</h3><div class="kv"><span>Direction</span><b>${ang?(wi.ang*180/Math.PI).toFixed(1)+'°':wi.axis==='h'?'East–west':'North–south'}</b></div><div class="kv"><span>Length</span><b>${len.toFixed(2)} m</b></div>${row('Thickness (mm)',`<input type="number" data-k="th" value="${Math.round(wi.th*1000)}" min="60" max="400" step="10" inputmode="numeric">`)}
-      <div style="height:10px"></div>${ang?`<div class="pair">${row('X1',num('x1',e.x1,.1,-50,80))}${row('Y1',num('y1',e.y1,.1,-50,80))}</div><div class="pair">${row('X2',num('x2',e.x2,.1,-50,80))}${row('Y2',num('y2',e.y2,.1,-50,80))}</div>`:`${row('Position (m)',num('c',wi.c,.1,-50,80))}<div class="pair">${row('From',num('a',wi.a,.1,-50,80))}${row('To',num('b',wi.b,.1,-50,80))}</div>`}
-      <div style="margin:12px 0 6px;color:var(--ink2)">Finish</div><div class="floors">${Object.entries(FINS).map(([k,n])=>`<button data-act="fin" data-v="${k}" aria-pressed="${(e.fin||'paint')===k}">${n}</button>`).join('')}</div>
-      ${(e.fin||'paint')==='paint'?`<div style="margin:12px 0 6px;color:var(--ink2)">Paint for this wall</div>${sw('wcol',WALLS,e.col||S.wallColor)}<div class="acts"><button class="btn" data-act="wcolclear">Same as flat</button></div>`:''}
-      <label class="chk" style="margin-top:12px"><input type="checkbox" data-act="str"${e.str?' checked':''}> Structural wall (do not alter)</label>
-      <div class="acts" style="align-items:center"><input type="number" id="wpar" value="1.00" step="0.05" style="width:70px" aria-label="Distance for a parallel copy (m)"><button class="btn" data-act="wpar">Copy parallel (m)</button><button class="btn danger" data-act="del">Delete wall</button></div><p class="note">A positive distance copies right or down the plan. Mark walls you know are structural. This tool cannot tell which are. Removing or moving a real wall needs an HDB permit.</p></div>`;
-  }else if(sel.t==='dim'){
-    h=`<div class="sec"><h3>Dimension</h3><div class="kv"><span>Length</span><b>${Math.hypot(e.x2-e.x1,e.y2-e.y1).toFixed(3)} m</b></div>${row('Line offset (m)',num('o',e.o,.1,-5,5))}<div class="acts"><button class="btn" data-act="flipdim">Flip side</button><button class="btn danger" data-act="del">Delete</button></div></div>`;
-  }else if(sel.t==='open'){
-    h=`<div class="sec"><h3>${e.kind==='door'?'Door':'Window'}</h3>${row('Width (m)',num('w',e.w,.05,.4,4))}${row('Position (m)',num('p',e.p,.05,-50,80))}`;
-    if(e.kind==='window')h+=row('Type',`<select data-k="wt">${Object.entries(WTYPES).map(([k,v])=>`<option value="${k}"${e.wt===k?' selected':''}>${v.n}</option>`).join('')}</select>`);
-    else h+=row('Type',`<select data-k="dt">${Object.entries(DTYPES).map(([k,v])=>`<option value="${k}"${(e.dt||'single')===k?' selected':''}>${v}</option>`).join('')}</select>`);
-    h+=`<div class="acts">${e.kind==='door'||e.wt==='bay'||e.dt==='slide'?`<button class="btn" data-act="flip">${e.kind==='door'?'Flip side':'Flip outward'}</button>`:''}<button class="btn danger" data-act="del">Delete</button></div>
-      <p class="note">${e.kind==='door'?'Drag the door along its wall on the plan. Doors swing to the side shown by the arc.':'Drag the window along its wall on the plan.'}</p></div>`;
-  }
-  el.innerHTML=h;
-}
-$('#rbody').addEventListener('change',ev=>{
-  const el=ev.target,k=el.dataset.k;if(!k||!S)return;let v=el.type==='number'?parseFloat(el.value):el.value;if(el.type==='number'&&!isFinite(v)){if(k==='pr'){v=0;}else{renderRight();return;}}
-  mut(()=>{
-    if(!sel){if(k==='name')S.name=String(v).slice(0,60);if(k==='H')S.H=clamp(v,2.2,3.2);$('#pname').value=S.name;return;}
-    const e=getE(sel.t,sel.id);if(!e)return;
-    if(sel.t==='item'){if(k==='rot')e.rot=((v%360)+360)%360;else if(k==='mt')e.mt=v;else if(k==='nm')e.nm=String(v).slice(0,40);else if(k==='pr')e.pr=(isFinite(v)&&v>0)?Math.min(v,1e7):0;else e[k]=clamp(v,.1,8);}
-    else if(sel.t==='room'){if(k==='name')e.name=String(v).slice(0,40);else e[k]=k==='w'||k==='h'?Math.max(.6,v):v;}
-    else if(sel.t==='dim'){e.o=clamp(v,-5,5);}
-    else if(sel.t==='open'){if(k==='wt')e.wt=v;else if(k==='dt')e.dt=v;else e[k]=v;}
-    else if(sel.t==='wall'){const wi=wallInfo(e),hz=wi.axis==='h';
-      if(k==='th'){e.th=clamp(Math.round(v)/1000,.06,.4);return;}
-      if(wi.axis==='a'){if(['x1','y1','x2','y2'].includes(k)){const o=Object.assign({},e);e[k]=v;if(Math.hypot(e.x2-e.x1,e.y2-e.y1)<.3)e[k]=o[k];}return;}
-      if(k==='c'){S.openings.filter(o=>wi.ops.includes(o)).forEach(o=>o.c=v);if(hz)e.y1=e.y2=v;else e.x1=e.x2=v;}
-      else{const a=k==='a'?v:wi.a,b=k==='b'?v:wi.b;if(b-a<.3)return;if(hz){e.x1=a;e.x2=b;}else{e.y1=a;e.y2=b;}}}
-  });
-});
-$('#rbody').addEventListener('click',ev=>{
-  const b=ev.target.closest('[data-act]');if(!b||!S)return;const act=b.dataset.act,v=b.dataset.v,e=sel&&getE(sel.t,sel.id);
-  if(act==='copy'){copyText($('#schedTxt').textContent,b);return;}
-  if(act.startsWith('m_')){multiAct(act);return;}
-  mut(()=>{
-    if(act==='wallcol'){S.wallColor=v;S.walls.forEach(w=>{w.col='';});}
-    else if(act==='ceilcol')S.ceilCol=v;
-    else if(act==='skirt')S.skirt=b.checked;
-    else if(act==='skirtcol')S.skirtCol=v;
-    else if(!e)return;
-    else if(act==='fin')e.fin=v;
-    else if(act==='wcol')e.col=v;
-    else if(act==='wcolclear')e.col='';
-    else if(act==='str')e.str=b.checked;
-    else if(act==='col')e.color=v;
-    else if(act==='floor')e.floor=v;
-    else if(act==='rot90')e.rot=(e.rot+90)%360;
-    else if(act==='flip')e.flip=-(e.flip||-1);
-    else if(act==='flipdim')e.o=-e.o;
-    else if(act==='topoly'){e.pts=rpts(e).map(q=>[q[0],q[1]]);}
-    else if(act==='torect'){syncBox(e);delete e.pts;}
-    else if(act==='wpar'){const dd=parseFloat($('#wpar').value);if(!isFinite(dd)||!dd)return;const L=Math.hypot(e.x2-e.x1,e.y2-e.y1)||1,nx=-(e.y2-e.y1)/L,ny=(e.x2-e.x1)/L,sg=(Math.abs(nx)>Math.abs(ny)?Math.sign(nx):Math.sign(ny))||1,ox=nx*dd*sg,oy=ny*dd*sg;const c={...e,id:uid(),x1:+(e.x1+ox).toFixed(3),y1:+(e.y1+oy).toFixed(3),x2:+(e.x2+ox).toFixed(3),y2:+(e.y2+oy).toFixed(3),str:false};S.walls.push(c);sel={t:'wall',id:c.id};}
-    else if(act==='dup'){const c=Object.assign({},e,{id:uid(),x:e.x+.3,y:e.y+.3});S.items.push(c);sel={t:'item',id:c.id};}
-    else if(act==='del')delSel();
-  });
-});
-function delSel(){if(ms.length){for(const m of ms){const k={item:'items',room:'rooms',wall:'walls',open:'openings',dim:'dims'}[m.t];S[k]=S[k].filter(x=>x.id!==m.id);}ms=[];pruneOps();return;}
-  if(!sel)return;const k={item:'items',room:'rooms',wall:'walls',open:'openings',dim:'dims'}[sel.t];S[k]=S[k].filter(x=>x.id!==sel.id);if(sel.t==='wall')pruneOps();sel=null;}
-let pasteN=0;
-const curList=()=>ms.length?ms:(sel?[sel]:[]);
-function entsOf(list){const o={items:[],walls:[],rooms:[],dims:[],ops:[]},seen=new Set();
-  for(const m of list){const e=getE(m.t,m.id);if(!e)continue;
-    if(m.t==='item')o.items.push(deep(e));else if(m.t==='room')o.rooms.push(deep(e));else if(m.t==='dim')o.dims.push(deep(e));
-    else if(m.t==='wall'){o.walls.push(deep(e));for(const p of wallInfo(e).ops)if(!seen.has(p.id)){seen.add(p.id);o.ops.push(deep(p));}}}
-  return o;}
-function cloneEnts(o,dx,dy){const out=[],gm={};
-  for(const e of o.items){const n=Object.assign(deep(e),{id:uid(),x:sn(e.x+dx,.05),y:sn(e.y+dy,.05)});if(e.g){gm[e.g]=gm[e.g]||('g'+uid());n.g=gm[e.g];}S.items.push(n);out.push({t:'item',id:n.id});}
-  for(const e of o.walls){const n=Object.assign(deep(e),{id:uid(),x1:e.x1+dx,y1:e.y1+dy,x2:e.x2+dx,y2:e.y2+dy});S.walls.push(n);out.push({t:'wall',id:n.id});}
-  for(const e of o.ops){const n=deep(e);n.id=uid();if(e.axis==='h'){n.p+=dx;n.c+=dy;}else{n.c+=dx;n.p+=dy;}S.openings.push(n);}
-  for(const e of o.rooms){const n=deep(e);n.id=uid();n.x+=dx;n.y+=dy;if(n.pts)n.pts=n.pts.map(q=>[q[0]+dx,q[1]+dy]);S.rooms.push(n);out.push({t:'room',id:n.id});}
-  for(const e of o.dims){const n=Object.assign(deep(e),{id:uid(),x1:e.x1+dx,y1:e.y1+dy,x2:e.x2+dx,y2:e.y2+dy});S.dims.push(n);out.push({t:'dim',id:n.id});}
-  return out;}
-function setSelQuiet(out){if(out.length>1){ms=out;sel=null;}else{ms=[];sel=out[0]||null;}}
-function extentsOf(list){let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;const add=(x,y)=>{x0=Math.min(x0,x);y0=Math.min(y0,y);x1=Math.max(x1,x);y1=Math.max(y1,y);};
-  for(const m of list){const e=getE(m.t,m.id);if(!e)continue;if(m.t==='item')add(e.x,e.y);else if(m.t==='room')rpts(e).forEach(q=>add(q[0],q[1]));else{add(e.x1,e.y1);add(e.x2,e.y2);}}
-  return {x0,y0,x1,y1,cx:(x0+x1)/2,cy:(y0+y1)/2};}
-function multiAct(act){
-  const list=ms.slice();
-  mut(()=>{
-    if(act==='m_del')delSel();
-    else if(act==='m_dup'){setSelQuiet(cloneEnts(entsOf(list),.4,.4));}
-    else if(act==='m_group'){const g='g'+uid();list.forEach(m=>{if(m.t==='item')getE('item',m.id).g=g;});}
-    else if(act==='m_ungroup'){list.forEach(m=>{if(m.t==='item')getE('item',m.id).g=0;});}
-    else if(act==='m_rot'){const X=extentsOf(list),cx=X.cx,cy=X.cy,R=(x,y)=>[cx-(y-cy),cy+(x-cx)],ops=[];
-      list.forEach(m=>{if(m.t==='wall'){const w=getE('wall',m.id);if(w)wallInfo(w).ops.forEach(o=>{if(!ops.includes(o))ops.push(o);});}});
-      for(const m of list){const e=getE(m.t,m.id);if(!e)continue;
-        if(m.t==='item'){const q=R(e.x,e.y);e.x=sn(q[0],.05);e.y=sn(q[1],.05);e.rot=(e.rot+90)%360;}
-        else if(m.t==='room'){if(e.pts){e.pts=e.pts.map(q=>R(q[0],q[1]));syncBox(e);}else{const a=R(e.x,e.y),b=R(e.x+e.w,e.y+e.h);e.x=Math.min(a[0],b[0]);e.y=Math.min(a[1],b[1]);e.w=Math.abs(b[0]-a[0]);e.h=Math.abs(b[1]-a[1]);}}
-        else{const a=R(e.x1,e.y1),b=R(e.x2,e.y2);e.x1=a[0];e.y1=a[1];e.x2=b[0];e.y2=b[1];}}
-      for(const o of ops){if(o.axis==='h'){const c=o.c,p=o.p;o.axis='v';o.c=cx-(c-cy);o.p=cy+(p-cx);if(o.flip)o.flip=-o.flip;}else{const c=o.c,p=o.p;o.axis='h';o.c=cy+(c-cx);o.p=cx-(p-cy);}}
-    }
-    else if(act.startsWith('m_al_')){const its=list.filter(m=>m.t==='item').map(m=>getE('item',m.id));if(its.length<2)return;
-      const ext=i=>{const a=i.rot*Math.PI/180;return [(Math.abs(i.w*Math.cos(a))+Math.abs(i.d*Math.sin(a)))/2,(Math.abs(i.w*Math.sin(a))+Math.abs(i.d*Math.cos(a)))/2];};
-      const k=act.slice(5);
-      if(k==='l'){const v=Math.min(...its.map(i=>i.x-ext(i)[0]));its.forEach(i=>i.x=sn(v+ext(i)[0],.05));}
-      else if(k==='r'){const v=Math.max(...its.map(i=>i.x+ext(i)[0]));its.forEach(i=>i.x=sn(v-ext(i)[0],.05));}
-      else if(k==='t'){const v=Math.min(...its.map(i=>i.y-ext(i)[1]));its.forEach(i=>i.y=sn(v+ext(i)[1],.05));}
-      else if(k==='b'){const v=Math.max(...its.map(i=>i.y+ext(i)[1]));its.forEach(i=>i.y=sn(v-ext(i)[1],.05));}
-      else if(k==='ch'){const v=its.reduce((a,i)=>a+i.x,0)/its.length;its.forEach(i=>i.x=sn(v,.05));}
-      else if(k==='cv'){const v=its.reduce((a,i)=>a+i.y,0)/its.length;its.forEach(i=>i.y=sn(v,.05));}}
-  });
-}
-function multiHtml(){
-  const c={};ms.forEach(m=>c[m.t]=(c[m.t]||0)+1);const nm={item:'furniture',room:'rooms',wall:'walls',dim:'dimensions'};
-  const grouped=ms.some(m=>m.t==='item'&&getE('item',m.id).g),hasItems=c.item>1;
-  return `<div class="sec"><h3>${ms.length} selected</h3><p class="note" style="margin-top:0">${Object.entries(c).map(([k,v])=>v+' '+nm[k]).join(', ')}</p>
-    <div class="acts"><button class="btn" data-act="m_rot">Rotate 90°</button><button class="btn" data-act="m_dup">Duplicate</button><button class="btn danger" data-act="m_del">Delete</button></div>
-    ${hasItems?`<h3 style="margin-top:16px">Align</h3><div class="tools"><button class="tool" data-act="m_al_l">Left</button><button class="tool" data-act="m_al_ch">Centre H</button><button class="tool" data-act="m_al_r">Right</button><button class="tool" data-act="m_al_t">Top</button><button class="tool" data-act="m_al_cv">Centre V</button><button class="tool" data-act="m_al_b">Bottom</button></div>
-    <div class="acts" style="margin-top:12px"><button class="btn" data-act="m_group">Group</button>${grouped?'<button class="btn" data-act="m_ungroup">Ungroup</button>':''}</div>`:''}
-    <p class="note">Drag any selected item to move them all. Ctrl or Cmd with C and V copies and pastes.</p></div>`;}
-$('#rbody').addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.tagName==='INPUT')e.target.blur();});
-/* style presets */
-$('#rbody').addEventListener('change',ev=>{const t=ev.target;if(!t.dataset||!t.dataset.preset||!t.value)return;const k=t.value;
-  mut(()=>{applyPreset(S,k,new Set(Object.keys(CAT).filter(x=>CAT[x].carp)));});toast(PRESETS[k].n+' style applied');});
-/* false ceiling settings */
-$('#rbody').addEventListener('change',ev=>{const t=ev.target,k=t.dataset&&(t.dataset.ceil||t.dataset.ceilck);if(!k||!sel||sel.t!=='room')return;const r=getE('room',sel.id);if(!r)return;
-  mut(()=>{setCeil(r,k,t.dataset.ceilck?String(t.checked):t.value);if(ceilOf(r).type!=='none')S.layers.ceil=1;});renderOpts();});
-/* carpentry settings */
-$('#rbody').addEventListener('change',ev=>{const t=ev.target,k=t.dataset&&(t.dataset.cfg||t.dataset.cfgck);if(!k||!sel||sel.t!=='item')return;const it=getE('item',sel.id);if(!it)return;
-  mut(()=>{setCfg(it,k,t.dataset.cfgck?String(t.checked):t.value,S.H);});});
-$('#rbody').addEventListener('click',ev=>{const b=ev.target.closest('[data-cfgsw]');if(!b||!sel||sel.t!=='item')return;const it=getE('item',sel.id);if(!it)return;
-  mut(()=>{if(b.dataset.cfgsw==='color')it.color=b.dataset.v;else setCfg(it,b.dataset.cfgsw,b.dataset.v,S.H);});});
-$$('.tabs [data-rt]').forEach(b=>b.addEventListener('click',()=>{rtab=b.dataset.rt;renderRight();}));
-
-function scheduleData(){
-  const rooms=S.rooms.map(r=>({n:r.name,a:area(r),f:FLOORS[r.floor].n}));
-  const grp={};for(const it of S.items){const k=CAT[it.type],key=it.type+'|'+it.w+'|'+it.d;(grp[key]=grp[key]||{t:it.type,w:it.w,d:it.d,q:0}).q++;}
-  const all=Object.values(grp).sort((a,b)=>CAT[a.t].n.localeCompare(CAT[b.t].n));
-  return {rooms,carp:all.filter(g=>CAT[g.t].k),furn:all.filter(g=>!CAT[g.t].k),
-    doors:S.openings.filter(o=>o.kind==='door').length,wins:S.openings.filter(o=>o.kind==='window').length};
-}
-const mm=v=>Math.round(v*1000);
-function scheduleText(){
-  const d=scheduleData(),L=[`${S.name}`,`Floor area ${d.rooms.reduce((a,r)=>a+r.a,0).toFixed(1)} m², ceiling ${S.H.toFixed(2)} m`,'','ROOMS'];
-  d.rooms.forEach(r=>L.push(`  ${r.n}: ${r.a.toFixed(1)} m², ${r.f}`));
-  L.push('',`DOORS ${d.doors}   WINDOWS ${d.wins}`,'','CARPENTRY (width x depth, mm)');
-  d.carp.forEach(g=>L.push(`  ${g.q} x ${CAT[g.t].n}  ${mm(g.w)} x ${mm(g.d)}  (run ${(g.q*g.w).toFixed(2)} m)`));
-  L.push('','FURNITURE & FITTINGS');d.furn.forEach(g=>L.push(`  ${g.q} x ${CAT[g.t].n}  ${mm(g.w)} x ${mm(g.d)}`));
-  L.push('','Measure on site before ordering. Dimensions come from this drawing only.');return L.join('\n');
-}
-function scheduleHtml(){
-  const d=scheduleData(),line=g=>`<div class="kv"><span>${g.q} × ${esc(CAT[g.t].n)}</span><b>${mm(g.w)}×${mm(g.d)}</b></div>`;
-  return `<div class="sec sch"><h4>Rooms</h4>${d.rooms.map(r=>`<div class="kv"><span>${esc(r.n)}<br><small style="color:var(--ink2)">${r.f}</small></span><b>${r.a.toFixed(1)} m²</b></div>`).join('')||'<p class="note">No rooms yet.</p>'}
-    <div class="kv"><span>Doors / windows</span><b>${d.doors} / ${d.wins}</b></div>
-    <h4>Carpentry (mm)</h4>${d.carp.map(g=>line(g)+`<div class="kv" style="border:0;padding-top:0"><span style="color:var(--ink2)">Run length</span><b>${(g.q*g.w).toFixed(2)} m</b></div>`).join('')||'<p class="note">None placed.</p>'}
-    <h4>Furniture (mm)</h4>${d.furn.map(line).join('')||'<p class="note">None placed.</p>'}
-    <div class="acts"><button class="btn primary" data-act="copy">Copy list</button></div>
-    <p class="note">Take this to your contractor. Dimensions come from the drawing only, so measure on site before ordering.</p><pre id="schedTxt" hidden>${esc(scheduleText())}</pre></div>`;
-}
-function copyText(txt,btn){
-  const ok=()=>{const o=btn.textContent;btn.textContent='Copied';setTimeout(()=>btn.textContent=o,1400);};
-  const fb=()=>{const t=document.createElement('textarea');t.value=txt;t.style.cssText='position:fixed;opacity:0';document.body.appendChild(t);t.select();try{document.execCommand('copy')&&ok();}catch(e){}t.remove();};
-  try{navigator.clipboard.writeText(txt).then(ok,fb);}catch(e){fb();}
-}
+function manageModels(){{const mods=Object.entries(CAT).filter(([,v])=>v.g==='My models'&&!v.missing);
+    dialog(`<h2>Remove a model</h2><p class="note" style="margin:0 0 10px">Items using it stay in your design as grey placeholders.</p>${mods.map(([k,v])=>`<div class="kv"><span>${esc(v.n)}</span><button class="btn danger" data-d="rmmodel" data-id="${k.slice(2)}">Remove</button></div>`).join('')}<div class="acts"><button class="btn" data-d="close">Close</button></div>`);}}
 
 /* image underlay loading */
 $('#imgIn').addEventListener('change',e=>{
@@ -1126,6 +890,7 @@ function setTab(t){$('#app').dataset.tab=t;$$('.mtabs button').forEach(b=>b.setA
 $$('.mtabs button').forEach(b=>b.addEventListener('click',()=>setTab(b.dataset.t)));
 
 /* keyboard */
+let pasteN=0;
 addEventListener('keydown',e=>{
   if(drag&&drag.k==='wall'&&draft){
     if(/^[0-9.@-]$/.test(e.key)){e.preventDefault();draft.typed=(draft.typed||'')+e.key;render2D();return;}
@@ -1272,36 +1037,8 @@ async function buildPdf(){
 $('#dcard').addEventListener('click',e=>{const b=e.target.closest('[data-ex]');if(b)doExport(b.dataset.ex);});
 
 /* ───────── budget ───────── */
-const budgetLines=()=>budgetLinesOf(S,CAT);
 const budgetSummary=()=>budgetSummaryOf(S,CAT);
-const budgetTotal=()=>budgetTotalOf(S,CAT);
-function budgetHtml(){const L=budgetLines(),tot=budgetTotal(),cap=S.budget||0,diff=cap-tot;
-  return `<div class="sec"><h3>Budget</h3><p class="note" style="margin-top:0">Enter your own unit prices from quotes. Nothing is pre-filled.</p>${row('Budget cap ($)',`<input type="number" data-bcap="1" value="${cap||''}" min="0" step="any" inputmode="decimal" placeholder="optional">`)}
-    <div style="height:8px"></div>${L.map(l=>l.fixed!==undefined?`<div class="bl"><span>${esc(l.name)}<small>${l.qty} ${l.unit}</small></span><span style="text-align:right;color:var(--ink2)">set on item</span><b>${money(l.fixed)}</b></div>`:`<div class="bl"><span>${esc(l.name)}<small>${l.qty} ${l.unit}</small></span><input type="number" data-bp="${l.key}" value="${S.prices[l.key]??''}" min="0" step="any" inputmode="decimal" placeholder="price" aria-label="Unit price for ${esc(l.name)}"><b>${money(l.qty*(S.prices[l.key]||0))}</b></div>`).join('')||'<p class="note">Nothing to price yet.</p>'}
-    <h3 style="margin-top:16px">Other costs</h3>${S.extras.map(x=>`<div class="bl x"><input type="text" data-bx="name:${x.id}" value="${esc(x.name)}" maxlength="40" placeholder="Item" aria-label="Cost name"><input type="number" data-bx="amt:${x.id}" value="${x.amt||''}" min="0" step="any" placeholder="$"><button class="btn" data-act="xdel" data-v="${x.id}" aria-label="Remove line">×</button></div>`).join('')}
-    <div class="acts"><button class="btn" data-act="xadd">Add a cost line</button></div>
-    <div class="kv" style="margin-top:12px;font-weight:600"><span>Total</span><b>${money(tot)}</b></div>
-    ${cap?`<div class="kv"><span>${diff>=0?'Under budget by':'Over budget by'}</span><b style="color:var(${diff>=0?'--accent':'--danger'})">${money(Math.abs(diff))}</b></div>`:''}
-    <p class="note">Quantities come from your design: furniture, flooring, carpentry runs, false ceilings, electrical points, doors, windows and wall finishes. Add hacking, labour and permits as cost lines.</p></div>${quotesHtml(S)}`;}
 const budgetText=()=>budgetTextOf(S,CAT);
-$('#rbody').addEventListener('change',e=>{const t=e.target;if(!S||!t.dataset)return;
-  if(t.dataset.bp!==undefined){const v=parseFloat(t.value);mut(()=>{if(isFinite(v)&&v>=0)S.prices[t.dataset.bp]=v;else delete S.prices[t.dataset.bp];});}
-  else if(t.dataset.bx){const [f,id]=t.dataset.bx.split(':');mut(()=>{const x=S.extras.find(q=>q.id===id);if(!x)return;if(f==='name')x.name=t.value.slice(0,40);else x.amt=Math.max(0,parseFloat(t.value)||0);});}
-  else if(t.dataset.bcap!==undefined){mut(()=>{S.budget=Math.max(0,parseFloat(t.value)||0);});}});
-$('#rbody').addEventListener('click',e=>{const b=e.target.closest('[data-act]');if(!b||!S)return;
-  if(b.dataset.act==='xadd')mut(()=>S.extras.push({id:uid(),name:'',amt:0}));
-  else if(b.dataset.act==='xdel')mut(()=>{S.extras=S.extras.filter(q=>q.id!==b.dataset.v);});});
-/* quotes */
-$('#rbody').addEventListener('click',e=>{const b=e.target.closest('[data-q]');if(!b||!S)return;const a=b.dataset.q;
-  if(a==='add')dialog(quoteDialogHtml());
-  else if(a==='edit')dialog(quoteDialogHtml((S.quotes||[]).find(q=>q.id===b.dataset.id)));
-  else if(a==='budget'){mut(()=>{S.budget=+b.dataset.v;});toast('Budget cap set to the lowest quote');}});
-$('#dcard').addEventListener('click',e=>{const b=e.target.closest('[data-q]');if(!b||!S)return;const a=b.dataset.q,id=b.dataset.id;
-  if(a==='del'){mut(()=>{S.quotes=(S.quotes||[]).filter(q=>q.id!==id);});closeDlg();return;}
-  if(a!=='save')return;const lines=parseQuote($('#qt').value),name=($('#qn').value||'').trim()||'Quote '+((S.quotes||[]).length+1);
-  if(!lines.length){$('#qmsg').textContent='No priced lines found. Each line needs an amount, such as $1,200.';return;}
-  mut(()=>{S.quotes=S.quotes||[];const q=S.quotes.find(x=>x.id===id);if(q){q.name=name.slice(0,40);q.lines=lines;}else if(S.quotes.length<3)S.quotes.push({id:'q'+Date.now().toString(36),name:name.slice(0,40),lines});});
-  closeDlg();rtab='budget';renderRight();toast(`Read ${lines.length} priced lines`);});
 /* ───────── versions, cloud, comments ───────── */
 const VKEY='flatstudio.versions';
 const vers=()=>{try{return JSON.parse(localStorage.getItem(VKEY)||'[]');}catch(e){return [];}};
@@ -1374,25 +1111,7 @@ function hdbPreset(n){
   }
   return {name:n+'-room (generic layout)',H:2.6,wallColor:'#f2f0eb',walls,rooms,openings,items,dims:[],layers:{furn:1,labels:1,dims:1,grid:1}};}
 const snapBase=()=>snapBaseOf(S,t=>!!(CAT[t]&&CAT[t].wet));
-const runChecks=()=>runChecksOf(S,CAT,CHECKS);
-const lightPlan=()=>lightPlanOf(S,CAT);
-function lightingHtml(){const L=lightPlan();if(!L.length)return '';
-  return `<div class="sec"><h3>Lighting plan</h3><p class="note" style="margin-top:0">Rough guide only: target light level by room type, an assumed 1000 lumen ceiling light and 50% efficiency. A lighting designer or electrician decides the real layout.</p>`+
-  L.map(x=>{const gap=x.want-x.have;return `<div class="chk-i info"><i></i><span><b>${esc(x.r.name)}</b>: ${x.ar.toFixed(1)} m², about ${x.lux} lux for a ${x.kind}. Suggested ${x.want} ceiling light${x.want>1?'s':''}, you have ${x.have}${x.lamps?` plus ${x.lamps} lamp${x.lamps>1?'s':''}`:''}.${gap>0?` <button class="btn" data-lt="${x.r.id}" style="margin-left:6px;padding:2px 8px">Add ${gap}</button>`:''}</span></div>`;}).join('')+`</div>`;}
-function addLights(id){const r=S.rooms.find(x=>x.id===id);if(!r)return;const pl=lightPlan().find(x=>x.r.id===id),n=pl.want-pl.have;if(n<=0)return;
-  mut(()=>{lightSpots(r,n).forEach(c=>S.items.push({id:uid(),type:'ceilL',x:c[0],y:c[1],rot:0,w:CAT.ceilL.w,d:CAT.ceilL.d,color:CAT.ceilL.c,g:0,h:0,mt:'',nm:'',pr:0}));});toast('Ceiling lights added');}
 const checksText=()=>checksTextOf(S,CAT,CHECKS);
-function checksHtml(){const r=runChecks(),warn=r.filter(x=>x.lvl==='warn'),info=r.filter(x=>x.lvl!=='warn');
-  const li=(x)=>`<div class="chk-i ${x.lvl}"><i></i><span>${esc(x.msg)}</span></div>`;
-  return `<div class="sec"><h3>Original layout</h3>${S.base?`<p class="note" style="margin-top:0">Saved ${fmtT(S.base.t)}. Changes below are compared with it.</p><div class="acts"><button class="btn" data-act="setbase">Replace with current</button><button class="btn" data-act="clearbase">Clear</button></div>`:`<p class="note" style="margin-top:0">Load or draw your flat as it is handed over, then press the button. Later changes to walls and wet areas will be compared against it.</p><div class="acts"><button class="btn primary" data-act="setbase">Set current as original</button></div>`}</div>
-    ${lightingHtml()}
-    <div class="sec"><h3>Needs a look (${warn.length})</h3>${warn.map(li).join('')||'<p class="note" style="margin-top:0">Nothing flagged.</p>'}</div>
-    <div class="sec"><h3>Notes (${info.length})</h3>${info.map(li).join('')||'<p class="note" style="margin-top:0">None.</p>'}</div>
-    <div class="sec"><p class="note" style="margin:0"><b>This is a planning aid, not an approval.</b> It only knows what you tell it: mark structural walls in the wall inspector, and set the original layout. HDB decides which walls, floors and services can be altered and which works need a permit or a registered contractor. Check HDB's current renovation guidelines for your flat type before you start work.</p></div>`;}
-$('#rbody').addEventListener('click',e=>{const lt=e.target.closest('[data-lt]');if(lt&&S){addLights(lt.dataset.lt);return;}const b=e.target.closest('[data-act]');if(!b||!S)return;
-  if(b.dataset.act==='setbase'){mut(()=>{S.base=snapBase();});toast('Saved as the original layout');}
-  else if(b.dataset.act==='clearbase')mut(()=>{S.base=null;});});
-
 
 /* ───────── photo render: accumulated passes (soft shadows + antialiasing) ───────── */
 let photoJob=null;
@@ -1453,6 +1172,16 @@ async function openShared(){const code=sharedDesignCode(location.hash);if(!code)
   try{const o=await readSharedDesign(code);if(S&&S.walls.length){const v=vers();v.unshift({id:'v'+Date.now().toString(36),name:('Before shared '+String(o.name||'design')).slice(0,40),t:Date.now(),json:JSON.stringify(S)});vstore(v);}
     newDesign(o);toast(`Opened “${S.name}” from a shared link. Your previous design is under Files → Versions.`,5000);}catch(e){toast('Could not open the shared link: '+(e&&e.message||e),5000);}}
 addEventListener('hashchange',openShared);
+/* the panels (leftPanel.ts, inspector.ts) reach the core through this */
+const app={
+  get S(){return S;},get sel(){return sel;},set sel(v){sel=v;},get ms(){return ms;},set ms(v){ms=v;},get rtab(){return rtab;},set rtab(v){rtab=v;},
+  get tool(){return tool;},get freeAng(){return freeAng;},set freeAng(v){freeAng=v;},get flush(){return flush;},set flush(v){flush=v;},
+  get under(){return under;},set under(v){under=v;},get view(){return view;},cat:CAT,checks:CHECKS,
+  getE,mut,checkpoint,changed,render2D,setTool,setTab,toast,dialog,closeDlg,fillViews,snapBase,wallInfo,pruneOps,fmtT,renderUnder,saveUnder,
+  removeUnder(){under=null;underSrc='';calib=null;if(tool==='calib'||tool==='imove')setTool('select');saveUnder();renderUnder();renderTrace();render2D();},
+  pickImage(){$('#imgIn').click();},importModel(){$('#modelIn').click();},manageModels,
+};
+initLeftPanel(app);initInspector(app);
 /* ───────── boot ───────── */
 (function boot(){
   let st=null;try{const raw=localStorage.getItem('flatstudio.v1');if(raw)st=loadState(JSON.parse(raw));}catch(e){}
