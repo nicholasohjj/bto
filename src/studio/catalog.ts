@@ -115,7 +115,11 @@ export const CATALOG: Record<string, CatalogItem> = {
   trap:{n:'Floor trap',g:'Services',w:.15,d:.15,c:'#7d8386',b:'trap',flat:1,svc:1,wet:1},
   wpoint:{n:'Water point',g:'Services',w:.12,d:.08,c:'#cfd8dc',b:'wpoint',svc:1,wet:1,elev:1},
   socket:{n:'Power socket',g:'Services',w:.1,d:.06,c:'#f4f4f2',b:'socket',svc:1,elev:1},
-  duct:{n:'Pipe duct',g:'Services',w:.5,d:.4,c:'#cfcac0',b:'duct',svc:1}
+  duct:{n:'Pipe duct',g:'Services',w:.5,d:.4,c:'#cfcac0',b:'duct',svc:1},
+  sw1:{n:'Light switch',g:'Services',w:.09,d:.05,c:'#f4f4f2',b:'sw1',svc:1,elev:1},
+  datapt:{n:'Data / TV point',g:'Services',w:.09,d:.05,c:'#f4f4f2',b:'datapt',svc:1,elev:1},
+  acpt:{n:'Aircon point',g:'Services',w:.1,d:.06,c:'#f4f4f2',b:'acpt',svc:1,elev:1},
+  downl:{n:'Downlight',g:'Lighting',w:.12,d:.12,c:'#f4f4f2',b:'downl',lamp:1,ly:(H:number)=>H-.05,top:1}
 }
 for (const k of ['wc', 'shower', 'vanity', 'sink', 'washer']) CATALOG[k].wet = 1
 Object.assign(CATALOG, CARP_CATALOG)

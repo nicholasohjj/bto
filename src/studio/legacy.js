@@ -8,11 +8,14 @@ import LAYOUTS from './layouts.json'
 import { CATALOG, GROUPS, FLOORS, WALLS, SW, WTYPES, DTYPES, FINS } from './catalog'
 import { importBrochure } from './importer'
 import { buildCarp, carpHtml, setCfg } from './carpentry'
+import { ceilHtml, setCeil, ceilOf, inset, ceilingSvg, ceilingChecks } from './ceiling'
+import { electricalSvg, electricalChecks, electricalCounts } from './electrical'
+import { quotesHtml, quoteDialogHtml, parseQuote } from './quotes'
 import { zipStore, pdfBuild, dxfBuild as dxfBuildOf } from './files'
 import { money, budgetLines as budgetLinesOf, budgetSummary as budgetSummaryOf, budgetTotal as budgetTotalOf, budgetText as budgetTextOf } from './budget'
 import { runChecks as runChecksOf, lightPlan as lightPlanOf, lightSpots, checksText as checksTextOf } from './checks'
 /** Extra checks from feature modules (ceiling, electrical). */
-const CHECKS=[];
+const CHECKS=[ceilingChecks,electricalChecks];
 import { detectRoom as detectRoomOf } from './model'
 import { uid, clamp, sn, loadState as loadDesign, wallInfo as wallInfoOf, bounds as boundsOf, rpts, rarea, syncBox, rcent, pip, dpSimp, pruneOps as pruneOpsOf, wallCover, itemPoly, polyOverlap, snapBase as snapBaseOf, mirrorDesign as mirrorOf } from './model'
 
@@ -144,6 +147,10 @@ const B={
     for(const sx of[-1,1])bx(g,.04,.9,d,sx*(w/2),.45+H/2,0,'#3a3d3f',.5,.4).rotation.x=0;},
   aircon(g,w,d){bx(g,w,.3,d,0,2.15,0,'#f3f5f5',.4);bx(g,w-.1,.015,.012,0,2.05,d/2+.002,'#c4cacc',.5);bx(g,.03,.012,.01,w/2-.07,2.22,d/2+.002,'#59c27a',.5);}
 };
+B.sw1=(g,w,d)=>{bx(g,.08,.08,.015,0,1.3,-d/2+.0075,'#f4f4f2',.4);bx(g,.03,.04,.01,0,1.3,-d/2+.02,'#d9d9d6',.4);};
+B.datapt=(g,w,d)=>{bx(g,.08,.08,.015,0,.3,-d/2+.0075,'#f4f4f2',.4);bx(g,.02,.015,.01,0,.3,-d/2+.02,'#3f8fd2',.4);};
+B.acpt=(g,w,d)=>{bx(g,.1,.1,.02,0,2.0,-d/2+.01,'#f4f4f2',.4);bx(g,.03,.03,.01,0,2.0,-d/2+.025,'#c0392b',.5);};
+B.downl=(g,w,d)=>{cyl(g,w/2,.02,0,CH-.01,0,'#f4f4f2',{r:.5,seg:24});const l=new THREE.Mesh(new THREE.CylinderGeometry(w/2-.02,w/2-.02,.005,24),LAMPMAT);l.position.set(0,CH-.022,0);g.add(l);};
 B.carp=(g,w,d,c,it)=>buildCarp(g,w,d,c,it,{bx,cyl,shade,glass:GLASS});
 const CAT=Object.fromEntries(Object.entries(CATALOG).map(([k,v])=>[k,{...v,b:B[v.b]}]));
 
@@ -153,7 +160,7 @@ let undoS=[], redoS=[];
 let walk={x:5,y:7.4,yaw:0,pitch:-.02};
 let under=null,underSrc='',snapG=.1,calib=null;
 let ms=[],freeAng=false,flush=true,clip=null,polyDraft=null,marq=null,gidn=1;
-const LAYERS=[['furn','Furniture'],['labels','Labels'],['dims','Dimensions'],['grid','Grid']];
+const LAYERS=[['furn','Furniture'],['labels','Labels'],['dims','Dimensions'],['grid','Grid'],['ceil','Ceilings']];
 
 function sample(){
   const walls=[],openings=[],rooms=[],items=[];
@@ -317,6 +324,7 @@ function planMarkup(ex){
   if(S.layers.labels)for(const r of S.rooms)if(r.w>1.2&&r.h>.9){if(r.pts){const c=rcent(r);h+=`<text class="rname" x="${c.x}" y="${c.y}" text-anchor="middle" style="font-size:.21px">${esc(r.name)}</text><text class="rarea" x="${c.x}" y="${c.y+.22}" text-anchor="middle" style="font-size:.15px">${area(r).toFixed(1)} m²</text>`;}
     else h+=`<text class="rname" x="${r.x+.14}" y="${r.y+.3}" style="font-size:.21px">${esc(r.name)}</text><text class="rarea" x="${r.x+.14}" y="${r.y+.52}" style="font-size:.15px">${area(r).toFixed(1)} m²</text>`;
     if(S.layers.dims&&!r.pts)h+=`<text class="rdim" x="${r.x+r.w/2}" y="${r.y+r.h-.1}" style="font-size:.13px">${r.w.toFixed(2)} × ${r.h.toFixed(2)}</text>`;}
+  if(S.layers.ceil)h+=ceilingSvg(S);
   // selected room handles
   const sr=!ex&&sel&&sel.t==='room'&&getE('room',sel.id);
   if(sr){const cc=sr.pts?rcent(sr):{x:sr.x+sr.w/2,y:sr.y+sr.h/2};
@@ -660,6 +668,14 @@ function buildStructure(){
           else if(o.w>1.4)box(o.p-.02,o.p+.02,sill,top,frameW,T+.02);}
       }}
   }
+  // False ceilings (seen in walk mode): a dropped plane, or a box around the edge with a fascia, and cove light.
+  for(const r of S.rooms){const c=ceilOf(r);if(c.type==='none')continue;const P=rpts(r),y=S.H-c.drop,cm=mat(S.ceilCol||'#f8f7f4',.95);
+    const sh=new THREE.Shape(P.map(q=>new THREE.Vector2(q[0],-q[1])));let I=null;
+    if(c.type==='box'){I=inset(P,c.band);sh.holes.push(new THREE.Path(I.map(q=>new THREE.Vector2(q[0],-q[1]))));}
+    const m=new THREE.Mesh(new THREE.ShapeGeometry(sh),cm);m.rotation.x=-Math.PI/2;m.position.y=y;m.material.side=THREE.DoubleSide;ceilG.add(m);
+    if(I){I.forEach((q,i)=>{const n=I[(i+1)%I.length],L=Math.hypot(n[0]-q[0],n[1]-q[1]);if(L<.05)return;const f=new THREE.Mesh(new THREE.BoxGeometry(L,c.drop,.02),cm);f.position.set((q[0]+n[0])/2,y+c.drop/2,(q[1]+n[1])/2);f.rotation.y=-Math.atan2(n[1]-q[1],n[0]-q[0]);ceilG.add(f);
+      if(c.cove){const l=new THREE.Mesh(new THREE.BoxGeometry(L,.02,.04),LAMPMAT);l.position.set(f.position.x,y+.02,f.position.z);l.rotation.y=f.rotation.y;ceilG.add(l);}});}
+    else if(c.cove){P.forEach((q,i)=>{const n=P[(i+1)%P.length],L=Math.hypot(n[0]-q[0],n[1]-q[1]);const l=new THREE.Mesh(new THREE.BoxGeometry(L,.02,.04),LAMPMAT);l.position.set((q[0]+n[0])/2,y-.01,(q[1]+n[1])/2);l.rotation.y=-Math.atan2(n[1]-q[1],n[0]-q[0]);ceilG.add(l);});}}
   slabM.scale.set(b.w+1.6,.2,b.h+1.6);slabM.position.set(b.cx,-.11,b.cy);
   const cm=new THREE.Mesh(new THREE.PlaneGeometry(b.w+T,b.h+T),new THREE.MeshStandardMaterial({color:S.ceilCol||'#f8f7f4',roughness:1}));cm.rotation.x=Math.PI/2;cm.castShadow=true;cm.position.set(b.cx,S.H,b.cy);ceilG.add(cm);
   const rad=Math.max(b.w,b.h)*.75+2;sunC={x:b.cx,z:b.cy,rad};
@@ -850,7 +866,7 @@ function renderRight(){try{fillViews();}catch(e){}
     h=`<div class="sec"><h3>Room</h3>${row('Name',`<input type="text" data-k="name" value="${esc(e.name)}" maxlength="40">`)}
       ${e.pts?`<div class="kv"><span>Shape</span><b>Polygon, ${e.pts.length} corners</b></div>`:`<div class="pair">${row('X (m)',num('x',e.x,.1,-50,80))}${row('Y (m)',num('y',e.y,.1,-50,80))}</div><div class="pair">${row('Width',num('w',e.w,.1,.6))}${row('Depth',num('h',e.h,.1,.6))}</div>`}
       <div class="kv"><span>Area</span><b>${area(e).toFixed(2)} m²</b></div>
-      <div style="margin:12px 0 6px;color:var(--ink2)">Floor finish</div><div class="floors">${Object.entries(FLOORS).map(([k,f])=>`<button data-act="floor" data-v="${k}" aria-pressed="${e.floor===k}"><i style="background:${f.c}"></i>${f.n}</button>`).join('')}</div>
+      <div style="margin:12px 0 6px;color:var(--ink2)">Floor finish</div><div class="floors">${Object.entries(FLOORS).map(([k,f])=>`<button data-act="floor" data-v="${k}" aria-pressed="${e.floor===k}"><i style="background:${f.c}"></i>${f.n}</button>`).join('')}</div>${ceilHtml(e)}
       <div class="acts">${e.pts?'<button class="btn" data-act="torect">Use bounding box</button>':'<button class="btn" data-act="topoly">Edit corners</button>'}<button class="btn danger" data-act="del">Delete room</button></div><p class="note">${e.pts?'Drag the corner dots. Drag the faint dots on edges to add a corner. Shift-click a corner to remove it. ':''}Deleting a room removes its floor only. Walls and furniture stay.</p></div>`;
   }else if(sel.t==='wall'){
     const wi=wallInfo(e),len=wi.b-wi.a,ang=wi.axis==='a';
@@ -967,6 +983,9 @@ function multiHtml(){
     <div class="acts" style="margin-top:12px"><button class="btn" data-act="m_group">Group</button>${grouped?'<button class="btn" data-act="m_ungroup">Ungroup</button>':''}</div>`:''}
     <p class="note">Drag any selected item to move them all. Ctrl or Cmd with C and V copies and pastes.</p></div>`;}
 $('#rbody').addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.tagName==='INPUT')e.target.blur();});
+/* false ceiling settings */
+$('#rbody').addEventListener('change',ev=>{const t=ev.target,k=t.dataset&&(t.dataset.ceil||t.dataset.ceilck);if(!k||!sel||sel.t!=='room')return;const r=getE('room',sel.id);if(!r)return;
+  mut(()=>{setCeil(r,k,t.dataset.ceilck?String(t.checked):t.value);if(ceilOf(r).type!=='none')S.layers.ceil=1;});renderOpts();});
 /* carpentry settings */
 $('#rbody').addEventListener('change',ev=>{const t=ev.target,k=t.dataset&&(t.dataset.cfg||t.dataset.cfgck);if(!k||!sel||sel.t!=='item')return;const it=getE('item',sel.id);if(!it)return;
   mut(()=>{setCfg(it,k,t.dataset.cfgck?String(t.checked):t.value,S.H);});});
@@ -1146,8 +1165,9 @@ async function saveFile(name,data){
 
 /* ───────── drawings: plan svg, elevations, export dialog ───────── */
 const EXP_VARS='--paper:#ffffff;--ink:#14242a;--ink2:#54686f;--accent:#17707a;--sel:#d98c00;--danger:#b3372f;--wall:#14242a;--grid:#e3eaea;--grid2:#d3dddd;--room-op:.55;--f-mono:Menlo,Consolas,monospace;--f-display:Arial,Helvetica,sans-serif;';
-function planCss(f){let css='';$$('style').forEach(st=>{st.textContent.split('\n').forEach(l=>{if(/^#plan\s/.test(l))css+=l.replace(/^#plan\s+/,'')+'\n';});});
-  return css.replace(/stroke-width:([\d.]+)px/g,(m,n)=>`stroke-width:${(n*f).toFixed(2)}px`);}
+/** The plan's own CSS rules (#plan …), from whichever stylesheet holds them, for standalone SVG exports. */
+function planCss(f){let css='';for(const sh of document.styleSheets){let rules;try{rules=sh.cssRules;}catch(e){continue;}for(const r of rules){if(r.selectorText&&/^#plan\s/.test(r.selectorText))css+=r.cssText.replace(/#plan\s+/g,'')+'\n';}}
+  return css.replace(/stroke-width:\s*([\d.]+)px/g,(m,n)=>`stroke-width:${(n*f).toFixed(2)}px`);}
 function planSvgString(wpx,mmWidth){
   const r=planMarkup(true),v=r.vb.split(' ').map(Number),hpx=Math.round(wpx*v[3]/v[2]),f=wpx/1000;
   const tot=S.rooms.reduce((a,q)=>a+area(q),0);
@@ -1187,9 +1207,9 @@ function elevSheetSvg(panels,wpx){let x=.6,y=.9,rowH=0,maxW=0,body='';const WMAX
 /* export dialog */
 function openExport(){
   dialog(`<h2>Export</h2><p class="note" style="margin:0 0 12px">Drawings are made from the current design. Your browser asks you to confirm each save.</p>
-    <div class="exg"><button class="btn" data-ex="png">Plan image (PNG)</button><button class="btn" data-ex="svg">Plan drawing (SVG)</button><button class="btn" data-ex="pdf">Drawing pack (PDF)</button><button class="btn" data-ex="dxf">CAD file (DXF in ZIP)</button><button class="btn" data-ex="png3d">3D view (PNG)</button><button class="btn" data-ex="elev">View elevations</button><button class="btn" data-ex="json">Design file (JSON)</button></div>
+    <div class="exg"><button class="btn" data-ex="png">Plan image (PNG)</button><button class="btn" data-ex="svg">Plan drawing (SVG)</button><button class="btn" data-ex="pdf">Drawing pack (PDF)</button><button class="btn" data-ex="dxf">CAD file (DXF in ZIP)</button><button class="btn" data-ex="png3d">3D view (PNG)</button><button class="btn" data-ex="elev">View elevations</button><button class="btn" data-ex="elec">Electrical plan (PNG)</button><button class="btn" data-ex="elecsvg">Electrical plan (SVG)</button><button class="btn" data-ex="json">Design file (JSON)</button></div>
     <div class="pair" style="margin-top:14px"><label class="row" style="grid-template-columns:1fr"><span>SVG scale</span><select id="exs"><option value="50">1:50</option><option value="100">1:100</option></select></label><label class="row" style="grid-template-columns:1fr"><span>PDF paper</span><select id="exp"><option value="a3">A3 landscape</option><option value="a4">A4 landscape</option></select></label></div>
-    <p class="note">The PDF has the plan, elevations, schedule${typeof budgetText==='function'?', budget':''}${typeof checksText==='function'?' and checks':''}. DXF units are millimetres.</p><div class="acts"><button class="btn" data-d="close">Close</button></div>`);}
+    <p class="note">The PDF has the plan, electrical plan, elevations, schedule${typeof budgetText==='function'?', budget':''}${typeof checksText==='function'?' and checks':''}. DXF units are millimetres.</p><div class="acts"><button class="btn" data-d="close">Close</button></div>`);}
 const safeName=()=>(S.name||'flat').replace(/[^\w\- ]+/g,'').trim().replace(/\s+/g,'-').slice(0,40)||'flat';
 async function doExport(k){
   try{
@@ -1201,6 +1221,7 @@ async function doExport(k){
     if(k==='elev'){const ps=elevPanels();if(!ps.length){toast('Add rooms first. Elevations are drawn for each room wall.');return;}const sh=elevSheetSvg(ps,1400);
       dialog(`<h2>Elevations</h2><div style="overflow:auto;max-height:62vh;border:1px solid var(--line);border-radius:8px">${sh.svg.replace(/width="\d+" height="\d+"/,'style="width:100%;min-width:900px;height:auto"')}</div><div class="acts"><button class="btn primary" data-ex="elevpng">Save as PNG</button><button class="btn" data-ex="elevsvg">Save as SVG</button><button class="btn" data-d="close">Close</button></div>`);return;}
     if(k==='elevpng'||k==='elevsvg'){const ps=elevPanels(),sh=elevSheetSvg(ps,k==='elevpng'?2600:1600);if(k==='elevsvg')return saveFile(safeName()+'-elevations.svg',sh.svg);return saveFile(safeName()+'-elevations.png',await cvBlob(await svgToCanvas(sh.svg,sh.w,sh.h)));}
+    if(k==='elec'||k==='elecsvg'){if(!Object.keys(electricalCounts(S)).length){toast('Add sockets, switches or lights first (Services and Lighting).');return;}const e2=electricalSvg(S,k==='elec'?2600:1600);if(k==='elecsvg')return saveFile(safeName()+'-electrical.svg',e2.svg);return saveFile(safeName()+'-electrical.png',await cvBlob(await svgToCanvas(e2.svg,e2.w,e2.h)));}
     if(k==='pdf'){toast('Building PDF…',2500);return saveFile(safeName()+'-pack.pdf',await buildPdf());}
   }catch(e){toast('Export failed: '+(e&&e.message||e),4500);}
 }
@@ -1209,6 +1230,7 @@ async function buildPdf(){
   const fitImg=(cv,top)=>{const u=cv.toDataURL('image/jpeg',.9),aw=pw-2*M,ah=ph-M-top,k=Math.min(aw/cv.width,ah/cv.height),dw=cv.width*k,dh=cv.height*k;return {url:u,w:cv.width,h:cv.height,x:(pw-dw)/2,y:M+(ah-dh)/2,dw,dh};};
   const pr=planSvgString(2600),pc=await svgToCanvas(pr.svg,pr.w,pr.h),im=fitImg(pc,M+34),ratio=Math.round(pr.vw*1000/(im.dw/72*25.4));
   pages.push({w:pw,h:ph,img:im,text:[{x:M,y:ph-M-14,s:16,t:S.name,b:1},{x:M,y:ph-M-28,s:9,t:`Floor plan. About 1:${ratio} at this paper size. ${date}`}]});
+  if(Object.keys(electricalCounts(S)).length){const e2=electricalSvg(S,2600),c=await svgToCanvas(e2.svg,e2.w,e2.h);pages.push({w:pw,h:ph,img:fitImg(c,M+10),text:[{x:M,y:ph-M+2,s:9,t:`Electrical plan. ${S.name}. ${date}`}]});}
   const ps=elevPanels();for(let i=0;i<ps.length;i+=6){const sh=elevSheetSvg(ps.slice(i,i+6),2400),c=await svgToCanvas(sh.svg,sh.w,sh.h);pages.push({w:pw,h:ph,img:fitImg(c,M+10),text:[{x:M,y:ph-M+2,s:9,t:`Elevations, sheet ${i/6+1}. ${S.name}. ${date}`}]});}
   let txt=scheduleText();if(typeof budgetText==='function')txt+='\n\n'+budgetText();if(typeof checksText==='function')txt+='\n\n'+checksText();
   const lines=[];txt.split('\n').forEach(l=>{l=l.replace(/\t/g,'  ');while(l.length>100){lines.push(l.slice(0,100));l='    '+l.slice(100);}lines.push(l);});
@@ -1227,7 +1249,7 @@ function budgetHtml(){const L=budgetLines(),tot=budgetTotal(),cap=S.budget||0,di
     <div class="acts"><button class="btn" data-act="xadd">Add a cost line</button></div>
     <div class="kv" style="margin-top:12px;font-weight:600"><span>Total</span><b>${money(tot)}</b></div>
     ${cap?`<div class="kv"><span>${diff>=0?'Under budget by':'Over budget by'}</span><b style="color:var(${diff>=0?'--accent':'--danger'})">${money(Math.abs(diff))}</b></div>`:''}
-    <p class="note">Furniture, flooring, doors, windows and special wall finishes come from your design. Add labour, carpentry and permits as cost lines.</p></div>`;}
+    <p class="note">Quantities come from your design: furniture, flooring, carpentry runs, false ceilings, electrical points, doors, windows and wall finishes. Add hacking, labour and permits as cost lines.</p></div>${quotesHtml(S)}`;}
 const budgetText=()=>budgetTextOf(S,CAT);
 $('#rbody').addEventListener('change',e=>{const t=e.target;if(!S||!t.dataset)return;
   if(t.dataset.bp!==undefined){const v=parseFloat(t.value);mut(()=>{if(isFinite(v)&&v>=0)S.prices[t.dataset.bp]=v;else delete S.prices[t.dataset.bp];});}
@@ -1236,6 +1258,17 @@ $('#rbody').addEventListener('change',e=>{const t=e.target;if(!S||!t.dataset)ret
 $('#rbody').addEventListener('click',e=>{const b=e.target.closest('[data-act]');if(!b||!S)return;
   if(b.dataset.act==='xadd')mut(()=>S.extras.push({id:uid(),name:'',amt:0}));
   else if(b.dataset.act==='xdel')mut(()=>{S.extras=S.extras.filter(q=>q.id!==b.dataset.v);});});
+/* quotes */
+$('#rbody').addEventListener('click',e=>{const b=e.target.closest('[data-q]');if(!b||!S)return;const a=b.dataset.q;
+  if(a==='add')dialog(quoteDialogHtml());
+  else if(a==='edit')dialog(quoteDialogHtml((S.quotes||[]).find(q=>q.id===b.dataset.id)));
+  else if(a==='budget'){mut(()=>{S.budget=+b.dataset.v;});toast('Budget cap set to the lowest quote');}});
+$('#dcard').addEventListener('click',e=>{const b=e.target.closest('[data-q]');if(!b||!S)return;const a=b.dataset.q,id=b.dataset.id;
+  if(a==='del'){mut(()=>{S.quotes=(S.quotes||[]).filter(q=>q.id!==id);});closeDlg();return;}
+  if(a!=='save')return;const lines=parseQuote($('#qt').value),name=($('#qn').value||'').trim()||'Quote '+((S.quotes||[]).length+1);
+  if(!lines.length){$('#qmsg').textContent='No priced lines found. Each line needs an amount, such as $1,200.';return;}
+  mut(()=>{S.quotes=S.quotes||[];const q=S.quotes.find(x=>x.id===id);if(q){q.name=name.slice(0,40);q.lines=lines;}else if(S.quotes.length<3)S.quotes.push({id:'q'+Date.now().toString(36),name:name.slice(0,40),lines});});
+  closeDlg();rtab='budget';renderRight();toast(`Read ${lines.length} priced lines`);});
 /* ───────── versions, cloud, comments ───────── */
 const VKEY='flatstudio.versions';
 const vers=()=>{try{return JSON.parse(localStorage.getItem(VKEY)||'[]');}catch(e){return [];}};

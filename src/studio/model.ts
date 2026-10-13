@@ -3,11 +3,13 @@
  * Units are metres; x runs right and y runs down the plan.
  */
 import { DTYPES, FINS, FLOORS, WALLS, WTYPES } from './catalog'
+import { cleanCeil, type Ceil } from './ceiling'
+import { cleanQuotes, type Quote } from './quotes'
 
 export type Pt = [number, number]
 
 export interface Wall { id: string; x1: number; y1: number; x2: number; y2: number; fin: string; col: string; str: boolean; th: number }
-export interface Room { id: string; name: string; x: number; y: number; w: number; h: number; floor: string; pts?: Pt[] }
+export interface Room { id: string; name: string; x: number; y: number; w: number; h: number; floor: string; pts?: Pt[]; ceil?: Ceil }
 /** A door or window in a wall: on a horizontal wall (axis 'h') at y = c, centred at x = p; on a vertical wall at x = c, y = p. */
 export interface Opening {
   id: string; kind: 'door' | 'window'; axis: 'h' | 'v'; c: number; p: number; w: number
@@ -44,6 +46,8 @@ export interface Design {
   prices: Record<string, number>; extras: Extra[]; budget: number
   cid: string; base: Base | null
   skirt: boolean; skirtCol: string; ceilCol: string
+  /** Contractors' quotes for comparison. */
+  quotes?: Quote[]
 }
 
 /* ids */
@@ -73,6 +77,8 @@ export function loadState(o: any, itemDefaults: (raw: any) => { w: number; d: nu
       .filter((w: Wall) => [w.x1, w.y1, w.x2, w.y2].every(isFinite) && Math.hypot(w.x2 - w.x1, w.y2 - w.y1) > 0.05),
     rooms: (o.rooms || []).map((r: any) => {
       const q: Room = { id: r.id || uid(), name: String(r.name || 'Room').slice(0, 40), x: num(r.x), y: num(r.y), w: num(r.w), h: num(r.h), floor: (FLOORS as Record<string, unknown>)[r.floor] ? r.floor : 'oak' }
+      const ceil = cleanCeil(r.ceil)
+      if (ceil) q.ceil = ceil
       if (Array.isArray(r.pts) && r.pts.length >= 3) {
         const p: Pt[] = r.pts.map((a: any) => [+a[0], +a[1]])
         if (p.every((a) => isFinite(a[0]) && isFinite(a[1]))) { q.pts = p; syncBox(q) }
@@ -88,6 +94,7 @@ export function loadState(o: any, itemDefaults: (raw: any) => { w: number; d: nu
     extras: (o.extras || []).map((x: any) => ({ id: x.id || uid(), name: String(x.name || '').slice(0, 40), amt: Math.max(0, +x.amt || 0) })),
     budget: Math.max(0, +o.budget || 0), cid: typeof o.cid === 'string' ? o.cid : '',
     base: o.base && typeof o.base === 'object' ? o.base : null,
+    quotes: cleanQuotes(o.quotes),
     skirt: !!o.skirt, skirtCol: typeof o.skirtCol === 'string' ? o.skirtCol : '#f4f2ee', ceilCol: typeof o.ceilCol === 'string' ? o.ceilCol : '#f8f7f4',
     openings: (o.openings || []).map((p: any) => ({ id: p.id || uid(), kind: p.kind === 'window' ? 'window' : 'door', axis: p.axis === 'v' ? 'v' : 'h', c: num(p.c), p: num(p.p), w: clamp(+p.w || 0.9, 0.4, 5), flip: p.flip === undefined ? -1 : (p.flip < 0 ? -1 : 1), wt: (WTYPES as Record<string, unknown>)[p.wt] ? p.wt : 'std', dt: (DTYPES as Record<string, unknown>)[p.dt] ? p.dt : 'single' }))
       .filter((p: Opening) => isFinite(p.c) && isFinite(p.p)),

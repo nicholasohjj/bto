@@ -192,3 +192,9 @@ button{cursor:pointer}
   .pname{width:100%;order:5}
   .hint span{font-size:11px}
 }
+
+/* ceilings on the plan, quotes table */
+#plan .ceilp{fill:none;stroke:var(--accent);stroke-width:1.5px;stroke-dasharray:2 3;pointer-events:none}
+#plan .ceilp.cove{stroke-width:2.5px}
+.qt{border-collapse:collapse;width:100%;font-size:12px}.qt th,.qt td{padding:5px 4px;border-bottom:1px dotted var(--line);text-align:right;vertical-align:top}.qt th:first-child,.qt td:first-child{text-align:left}
+.qt small{color:var(--ink2)}.qt td.lo{color:var(--accent);font-weight:600}.qt tr.tot td{font-weight:600;border-top:1px solid var(--line)}
