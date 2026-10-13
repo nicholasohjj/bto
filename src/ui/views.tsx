@@ -565,10 +565,13 @@ export function AffordCard({ scenario, onTry }: { scenario: Scenario; onTry: (pr
 export interface LaunchPick { launch: Launch; project: LaunchProject; type: FlatType; applicationMonth: string }
 
 const FIT_LIMIT: Record<AffordLimit, string> = {
-  cash: 'cash runs short',
-  msr: 'mortgage over the MSR limit',
-  tdsr: 'over the TDSR limit',
+  cash: 'Cash runs short',
+  msr: 'Mortgage over the MSR limit',
+  tdsr: 'Over the TDSR limit',
 }
+
+/** Rows separated by 1px lines; two columns on wider screens (a lone last row spans both). */
+const ROWS = 'grid gap-px overflow-hidden rounded-lg bg-line md:grid-cols-2 md:[&>li:last-child:nth-child(odd)]:col-span-2'
 
 export function LaunchFitCard({ scenario, onCompare }: { scenario: Scenario; onCompare: (picks: LaunchPick[]) => void }) {
   const launches = LAUNCHES.filter((l) => l.projects.length > 0)
@@ -579,84 +582,111 @@ export function LaunchFitCard({ scenario, onCompare }: { scenario: Scenario; onC
   const closed = !!launch && launch.applicationMonth <= scenario.startMonth
   const applicationMonth = launch ? (closed ? addMonths(scenario.startMonth, 1) : launch.applicationMonth) : ''
   const fits = useMemo(() => (launch ? launchFit(scenario, launch, { applicationMonth }) : []), [scenario, launch, applicationMonth])
+  const types = FLAT_TYPES.filter((t) => fits.some((f) => f.type === t.value))
+  // Start on the plan's own flat type, so the list is one row per project.
+  const [typeFilter, setTypeFilter] = useState<FlatType | 'all'>('all')
+  const [filterTouched, setFilterTouched] = useState(false)
+  const filter = filterTouched ? typeFilter : types.some((t) => t.value === scenario.flat.type) && types.length > 1 ? scenario.flat.type : 'all'
   if (!launch) return null
   const key = (f: ProjectFit) => `${f.project.id}/${f.type}`
   const typeLabel = (t: FlatType) => FLAT_TYPES.find((x) => x.value === t)!.label
-  const okCount = fits.filter((f) => f.ok).length
+  const shown = fits.filter((f) => filter === 'all' || f.type === filter)
+  // One flat type on show (picked, or the only one, as for singles): one row per project.
+  const oneType: FlatType | null = filter !== 'all' ? filter : types.length === 1 ? types[0].value : null
+  const okCount = shown.filter((f) => f.ok).length
   // Short of cash even for the cheapest flat we try: the project isn't the problem.
   const planShort = fits.length > 0 && fits.every((f) => f.maxPrice === undefined)
   const firstShort = fits.map((f) => f.firstShortYm).filter(Boolean).sort()[0]
   const toggle = (k: string) => setPicks((p) => (p.includes(k) ? p.filter((x) => x !== k) : p.length < 3 ? [...p, k] : p))
+  const keysText = (f: ProjectFit) => `keys ${f.project.waitMonths !== undefined ? '' : 'about '}${formatYm(f.keys)}`
+
+  const row = (f: ProjectFit, title: string, sub?: string) => {
+    const k = key(f)
+    const checked = picks.includes(k)
+    return (
+      <li key={k} className="bg-surface-2">
+        <label className={`flex h-full cursor-pointer items-start gap-3 px-3 py-2.5 ${!checked && picks.length >= 3 ? 'cursor-default opacity-60' : ''}`}>
+          <input type="checkbox" className="mt-1 size-4 shrink-0 accent-[var(--accent)]" checked={checked} disabled={!checked && picks.length >= 3}
+            onChange={() => toggle(k)} aria-label={`Compare ${f.project.name} ${typeLabel(f.type)}`} />
+          <span className="min-w-0 flex-1">
+            <span className="flex flex-wrap items-baseline justify-between gap-x-3">
+              <span className="text-sm font-medium">{title}</span>
+              <span className="tnum whitespace-nowrap text-sm text-ink-2">from {money(f.fromPrice)}</span>
+            </span>
+            {sub && <span className="block text-xs text-ink-2">{sub}</span>}
+            <span className={`mt-0.5 block text-xs ${f.ok ? 'text-good-ink' : 'text-critical'}`}>
+              {f.ok
+                ? <>✔ {f.aboveMax ? 'Price isn’t the limit' : <>Works up to <span className="tnum">{money(f.maxPrice!)}</span></>}</>
+                : <>✖ {FIT_LIMIT[f.limit ?? 'cash']}{f.limit === 'cash' && f.firstShortYm ? ` in ${formatYm(f.firstShortYm)}` : ''}{f.maxPrice !== undefined && <>; works up to <span className="tnum">{money(f.maxPrice)}</span></>}</>}
+            </span>
+          </span>
+        </label>
+      </li>
+    )
+  }
+
   return (
     <Card>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-sm font-semibold">Which projects fit {scenario.buyers === 'single' ? 'your' : 'our'} plan?</h2>
-        {launches.length > 1 && (
-          <div className="w-full sm:w-56">
-            <Select value={launchId} onChange={(v) => { setLaunchId(v); setPicks([]) }} ariaLabel="Launch"
+      <h2 className="text-sm font-semibold">Which projects fit {scenario.buyers === 'single' ? 'your' : 'our'} plan?</h2>
+      {(launches.length > 1 || types.length > 1) && !planShort && (
+        <div className="mt-2 grid grid-cols-1 gap-2 min-[360px]:grid-cols-2 sm:max-w-md">
+          {launches.length > 1 && (
+            <Select value={launchId} onChange={(v) => { setLaunchId(v); setPicks([]); setFilterTouched(false) }} ariaLabel="Launch"
               options={launches.map((l) => ({ value: l.id, label: l.name }))} />
-          </div>
-        )}
-      </div>
+          )}
+          {types.length > 1 && (
+            <Select value={filter} onChange={(v) => { setTypeFilter(v); setFilterTouched(true) }} ariaLabel="Flat type"
+              options={[{ value: 'all' as const, label: 'All flat types' }, ...types]} />
+          )}
+        </div>
+      )}
       {planShort ? (
         <p className="mt-2 text-sm text-ink-2">
           Your plan runs short of cash{firstShort ? <> in <b className="text-critical">{formatYm(firstShort)}</b></> : ''} even with a much cheaper flat, so none of
-          the {launch.name} projects would work yet, and the project isn’t the problem. Fix the problems under “What to watch” first, then check back.
+          the {launch.name} projects would work yet. The project isn’t the problem: fix the problems under “What to watch” first, then check back.
         </p>
       ) : <>
-      <p className="mt-1 text-xs text-ink-2">
-        {launch.name}: {okCount} of {fits.length} flat {fits.length === 1 ? 'choice works' : 'choices work'} at the starting price with your savings, income and loan.
-        {closed && <> Applications have closed, so this checks its prices as if you applied in {formatYm(applicationMonth)}: a guide to what the next launch may cost.</>}
-      </p>
-      <ul className="mt-3 space-y-3">
-        {launch.projects.map((p) => {
-          const rows = fits.filter((f) => f.project.id === p.id)
-          if (!rows.length) return null
-          return (
-            <li key={p.id}>
-              <div className="text-sm font-medium">
-                {p.name} <span className="font-normal text-ink-2">· {p.town} · {p.classification} · keys {p.waitMonths !== undefined ? '' : 'about '}{formatYm(rows[0].keys)}</span>
-              </div>
-              <ul className="mt-1 divide-y divide-line rounded-lg bg-surface-2">
-                {rows.map((f) => {
-                  const k = key(f)
-                  const checked = picks.includes(k)
-                  return (
-                    <li key={k}>
-                      <label className="flex cursor-pointer flex-wrap items-center gap-x-3 gap-y-0.5 px-3 py-2 text-sm">
-                        <input type="checkbox" className="accent-[var(--accent)]" checked={checked} disabled={!checked && picks.length >= 3}
-                          onChange={() => toggle(k)} aria-label={`Compare ${p.name} ${typeLabel(f.type)}`} />
-                        <span className="w-24 shrink-0">{typeLabel(f.type)}</span>
-                        <span className="tnum w-28 shrink-0 whitespace-nowrap text-ink-2">from {money(f.fromPrice)}</span>
-                        <span className={`min-w-0 flex-1 text-xs ${f.ok ? 'text-good-ink' : 'text-critical'}`}>
-                          {f.ok
-                            ? <>✔ {f.aboveMax ? 'price isn’t the limit' : <>works up to <span className="tnum">{money(f.maxPrice!)}</span></>}</>
-                            : <>✖ {FIT_LIMIT[f.limit ?? 'cash']}{f.limit === 'cash' && f.firstShortYm ? ` (${formatYm(f.firstShortYm)})` : ''}{f.maxPrice !== undefined && <>; works up to <span className="tnum">{money(f.maxPrice)}</span></>}</>}
-                        </span>
-                      </label>
-                    </li>
-                  )
-                })}
-              </ul>
-            </li>
-          )
-        })}
-      </ul>
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-        <p className="text-[11px] text-muted">Tick up to 3 to add them as plans and compare.</p>
-        <Button variant="primary" disabled={!picks.length} className="text-xs"
-          onClick={() => onCompare(picks.map((k) => {
-            const f = fits.find((x) => key(x) === k)!
-            return { launch, project: f.project, type: f.type, applicationMonth }
-          }))}>
-          Compare {picks.length || ''} {picks.length === 1 ? 'project' : 'projects'}
-        </Button>
-      </div>
+        <p className="mt-2 text-sm text-ink-2">
+          {launch.name}{oneType && `, ${typeLabel(oneType)}`}: <b className={okCount ? 'text-ink' : 'text-critical'}>{okCount} of {shown.length}</b>{' '}
+          {oneType ? 'projects work' : 'flat choices work'} at the starting price.
+        </p>
+        {closed && (
+          <p className="mt-1 text-xs text-muted">Applications have closed, so this uses its prices as if you applied in {formatYm(applicationMonth)}: a guide to what the next launch may cost.</p>
+        )}
+        {!oneType ? (
+          <ul className="mt-3 space-y-3">
+            {launch.projects.map((p) => {
+              const rows = shown.filter((f) => f.project.id === p.id)
+              if (!rows.length) return null
+              return (
+                <li key={p.id}>
+                  <div className="text-sm font-medium">{p.name}</div>
+                  <div className="text-xs text-ink-2">{p.town} · {p.classification} · {keysText(rows[0])}</div>
+                  <ul className={`mt-1.5 ${ROWS}`}>{rows.map((f) => row(f, typeLabel(f.type)))}</ul>
+                </li>
+              )
+            })}
+          </ul>
+        ) : (
+          <ul className={`mt-3 ${ROWS}`}>
+            {shown.map((f) => row(f, f.project.name, `${f.project.town} · ${f.project.classification} · ${keysText(f)}`))}
+          </ul>
+        )}
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+          <p className="text-xs text-ink-2">{picks.length ? `${picks.length} of 3 ticked` : 'Tick up to 3 to compare side by side.'}</p>
+          <Button variant="primary" disabled={!picks.length} className="text-xs"
+            onClick={() => onCompare(picks.map((k) => {
+              const f = fits.find((x) => key(x) === k)!
+              return { launch, project: f.project, type: f.type, applicationMonth }
+            }))}>
+            Compare{picks.length ? ` ${picks.length}` : ''}
+          </Button>
+        </div>
       </>}
-      <p className="mt-2 text-[11px] text-muted">
+      {!planShort && <p className="mt-3 text-[11px] text-muted">
         Starting prices are the cheapest unit of each type, before grants. Keeps your loan, CPF slider, costs and grants; each project’s dates come from
-        its stated waiting time (else a typical one). {scenario.buyers !== 'couple' && 'Singles can only buy 2-room Flexi flats. '}Source: {launch.source}.
-      </p>
+        its stated waiting time (“about”: a typical one). {(scenario.buyers ?? 'couple') !== 'couple' && 'Singles can only buy 2-room Flexi flats. '}Source: {launch.source}.
+      </p>}
     </Card>
   )
 }

@@ -11,7 +11,7 @@ import { money } from '../engine/format'
 import type { CostItem, Milestone, Partner, Scenario, When } from '../engine/types'
 import { defaultCosts, newId } from '../state/defaults'
 import { FLAT_TYPES, MILESTONES } from './labels'
-import { Button, Card, Field, InfoTip, MoneyInput, MonthInput, NumberInput, PercentInput, Segmented, Select, Slider, TextInput, Toggle } from './controls'
+import { Button, Card, Field, InfoTip, inputCls, MoneyInput, MonthInput, NumberInput, PercentInput, Segmented, Select, Slider, TextInput, Toggle } from './controls'
 
 export type Update = (fn: (draft: Scenario) => void) => void
 
@@ -304,65 +304,60 @@ function ProjectPicker({ scenario, update }: { scenario: Scenario; update: Updat
   const launch = pickedLaunch(scenario)
   const value = launch ? `${launch.id}/${picked?.project.id ?? ''}` : ''
   const closed = (l: Launch) => l.applicationMonth < scenario.startMonth
-  const options = [
-    { value: '', label: 'None — I’ll enter the details' },
-    ...LAUNCHES.flatMap((l) => l.projects.length
-      ? l.projects.map((p) => ({
-        value: `${l.id}/${p.id}`,
-        label: `${l.name}${closed(l) ? ' (closed)' : ''} · ${p.name}, ${p.town} · ${p.classification}`,
-      }))
-      : [{ value: `${l.id}/`, label: `${l.name} (upcoming) · projects not announced yet` }]),
-  ]
   const p = picked?.project
-  const from = p?.fromPrices[scenario.flat.type]
   const years = (m: number) => `${Math.round(m / 12 * 10) / 10} years`
+  const onPick = (v: string) => update((d) => {
+    const [launchId, projectId] = v.split('/')
+    const l = LAUNCHES.find((x) => x.id === launchId)
+    const proj = l?.projects.find((x) => x.id === projectId)
+    if (l && proj) applyProject(d, l, proj)
+    else if (l) { setLaunchDates(d, l.applicationMonth); d.flat.project = { launch: l.id } }
+    else delete d.flat.project
+  })
+  const row = (label: string, value: ReactNode) => (
+    <div className="grid grid-cols-[6.5rem_1fr] gap-2"><dt className="text-muted">{label}</dt><dd className="min-w-0 text-ink-2">{value}</dd></div>
+  )
   return (
-    <Card>
-      <Field label="BTO launch and project (optional)" tipText="Fills in the flat price, classification and dates from HDB’s launch announcement. You can change any of them afterwards.">
-        <Select value={value} ariaLabel="BTO project" options={options}
-          onChange={(v) => update((d) => {
-            const [launchId, projectId] = v.split('/')
-            const l = LAUNCHES.find((x) => x.id === launchId)
-            const proj = l?.projects.find((x) => x.id === projectId)
-            if (l && proj) applyProject(d, l, proj)
-            else if (l) { setLaunchDates(d, l.applicationMonth); d.flat.project = { launch: l.id } }
-            else delete d.flat.project
-          })} />
+    <div className="mt-3 border-t border-line pt-3">
+      <Field label="Launch and project (optional)" tipText="Fills in the flat price, classification and dates from HDB’s launch announcement. You can change any of them afterwards.">
+        {/* Grouped by launch, so each option is just the project and fits on a phone. */}
+        <select className={inputCls} value={value} aria-label="BTO project" onChange={(e) => onPick(e.target.value)}>
+          <option value="">None — I’ll enter the details</option>
+          {LAUNCHES.map((l) => (
+            <optgroup key={l.id} label={`${l.name}${l.projects.length ? (closed(l) ? ' (closed)' : '') : ' (upcoming)'}`}>
+              {l.projects.length
+                ? l.projects.map((x) => <option key={x.id} value={`${l.id}/${x.id}`}>{x.name} · {x.town} · {x.classification}</option>)
+                : <option value={`${l.id}/`}>{l.name} · projects not announced yet</option>}
+            </optgroup>
+          ))}
+        </select>
       </Field>
       {launch && (
-        <div className="mt-2 space-y-1 text-[11px] text-muted">
+        <dl className="mt-2 space-y-1 text-xs">
           {p ? (
             <>
-              <p>
-                Flat types: {offeredTypes(p).map((t) => `${FLAT_TYPES.find((x) => x.value === t)!.label} from ${money(p.fromPrices[t]!)}`).join(' · ')}.
-                {from !== undefined && <> The price is the cheapest {FLAT_TYPES.find((x) => x.value === scenario.flat.type)!.label} before grants; most units cost more, so put in your unit’s price once you’ve chosen one.</>}
-                {p.fittingsIncluded && ' Prices include floor finishes, internal doors and sanitary fittings.'}
-              </p>
-              <p>
-                Key collection: {p.waitMonths !== undefined
-                  ? <>{p.waitText ?? `${p.waitMonths} months`} after the launch (set to {formatYm(addMonths(launch.applicationMonth, p.waitMonths))}).</>
-                  : <>HDB didn’t give a waiting time, so it’s set to a typical {years(TYPICAL_WAIT_MONTHS)} ({formatYm(addMonths(launch.applicationMonth, TYPICAL_WAIT_MONTHS))}). The project’s page on the HDB Flat Portal usually gives the estimated completion date.</>}
-                {p.subsidyRecoveryPct !== undefined && <> Subsidy recovery on resale: {p.subsidyRecoveryPct}%.</>}
-              </p>
+              {row('Launch', <>{launch.name}{closed(launch) && <span className="text-muted"> · closed; the dates are for those who applied then</span>}</>)}
+              {row('Starting prices', offeredTypes(p).map((t) => `${FLAT_TYPES.find((x) => x.value === t)!.label} ${money(p.fromPrices[t]!)}`).join(' · '))}
+              {row('Keys', p.waitMonths !== undefined
+                ? <>{formatYm(addMonths(launch.applicationMonth, p.waitMonths))} <span className="text-muted">({p.waitText ?? `${p.waitMonths} months`})</span></>
+                : <>About {formatYm(addMonths(launch.applicationMonth, TYPICAL_WAIT_MONTHS))} <span className="text-muted">(a typical {years(TYPICAL_WAIT_MONTHS)}: HDB gave no waiting time; the Flat Portal project page usually does)</span></>)}
+              {p.subsidyRecoveryPct !== undefined && row('On resale', `${p.subsidyRecoveryPct}% of the price goes back to HDB (subsidy recovery)`)}
+              {p.fittingsIncluded && row('Included', 'Floor finishes, internal doors, sanitary fittings')}
             </>
           ) : (
-            <p>
-              {launch.towns && <>Towns: {launch.towns.join(', ')}. </>}{launch.note && <>{launch.note} </>}
-              Dates are set from {formatYm(launch.applicationMonth)} with a typical {years(TYPICAL_WAIT_MONTHS)} wait; keep your own flat price and type for now.
-              Pick the project here once HDB announces it.
-            </p>
+            <>
+              {launch.towns && row('Towns', launch.towns.join(', '))}
+              {launch.note && row('About', launch.note)}
+              {row('Dates', <>From {formatYm(launch.applicationMonth)}, with a typical wait of {years(TYPICAL_WAIT_MONTHS)}. Keep your own price and flat type, and pick the project once HDB announces it.</>)}
+            </>
           )}
-          {!closed(launch) && (
-            <p className="text-ink-2">
-              {launch.hfeBy
-                ? <>HFE letter: apply with all documents by <b>{formatDay(launch.hfeBy)}</b> to be sure of having it in time.</>
-                : <>HFE letter: HDB hasn’t given the deadline for this launch yet, so apply early. You need a valid one when you apply, and the e-service closes while applications are open.</>}
-            </p>
-          )}
-          <p>Source: {launch.source}.</p>
-        </div>
+          {!closed(launch) && row('HFE letter', launch.hfeBy
+            ? <>Apply with all documents by <b className="text-ink">{formatDay(launch.hfeBy)}</b> to have it in time.</>
+            : <>Deadline not announced yet, so apply early. You need a valid letter when you apply, and the e-service closes while applications are open.</>)}
+          <p className="pt-1 text-[11px] text-muted">Source: {launch.source}.</p>
+        </dl>
       )}
-    </Card>
+    </div>
   )
 }
 
@@ -445,11 +440,12 @@ export function FlatEditor({ scenario, update, policy, brief = false }: { scenar
               </>}
           </p>
         )}
+        {saleType === 'BTO' && <ProjectPicker scenario={scenario} update={update} />}
       </Card>
-      {saleType === 'BTO' && <ProjectPicker scenario={scenario} update={update} />}
       <Card>
         <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-          <Field label={<>Flat price{isExample(scenario, 'flat.price') && <ExampleTag />}</>} tipText="If you pick Optional Component Scheme items at booking (flooring, internal doors, bathroom fittings), their cost is added to the flat price, so include it here.">
+          <Field label={<>Flat price{isExample(scenario, 'flat.price') && <ExampleTag />}</>} tipText="If you pick Optional Component Scheme items at booking (flooring, internal doors, bathroom fittings), their cost is added to the flat price, so include it here."
+            hint={picked && picked.project.fromPrices[f.type] === f.price ? `Cheapest ${FLAT_TYPES.find((t) => t.value === f.type)!.label} at ${picked.project.name}; most units cost more` : undefined}>
             <MoneyInput value={f.price} onChange={(v) => update((d) => { d.flat.price = v; touchExample(d, 'flat.price') })} ariaLabel="Flat price" />
           </Field>
           <Field label="Flat type" hint={picked && !offeredTypes(picked.project).includes(f.type) ? <span className="text-serious">Not offered at {picked.project.name}</span> : undefined}>

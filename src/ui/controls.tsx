@@ -84,7 +84,7 @@ export function Field({ label, tip, tipText, hint, children }: { label: ReactNod
   )
 }
 
-const inputCls =
+export const inputCls =
   'w-full min-w-0 rounded-lg border border-line bg-surface px-3 py-2 text-sm tnum outline-none focus:border-accent focus:ring-2 focus:ring-accent/30'
 
 /** Number input that lets you type freely and commits parseable values. */
