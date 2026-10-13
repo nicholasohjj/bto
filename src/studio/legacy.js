@@ -1,9 +1,17 @@
+/* eslint-disable no-unused-vars, no-unused-expressions -- dense legacy code; new code goes in the typed modules */
 // Flat Studio: 2D plan + 3D view of an HDB flat. Moved from a single HTML file; new, testable
 // pieces live in TypeScript modules next to this one.
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js'
 import LAYOUTS from './layouts.json'
+import { CATALOG, GROUPS, FLOORS, WALLS, SW, WTYPES, DTYPES, FINS } from './catalog'
+import { zipStore, pdfBuild, dxfBuild as dxfBuildOf } from './files'
+import { money, budgetLines as budgetLinesOf, budgetSummary as budgetSummaryOf, budgetTotal as budgetTotalOf, budgetText as budgetTextOf } from './budget'
+import { runChecks as runChecksOf, lightPlan as lightPlanOf, lightSpots, checksText as checksTextOf } from './checks'
+/** Extra checks from feature modules (ceiling, electrical). */
+const CHECKS=[];
+import { uid, clamp, sn, loadState as loadDesign, wallInfo as wallInfoOf, bounds as boundsOf, rpts, rarea, syncBox, rcent, pip, dpSimp, pruneOps as pruneOpsOf, wallCover, itemPoly, polyOverlap, snapBase as snapBaseOf, mirrorDesign as mirrorOf } from './model'
 
 // Keep the look the design had on three.js r128: no colour management, and light intensities
 // scaled by PI (three.js now uses physical light units).
@@ -13,22 +21,10 @@ const LI=Math.PI;
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const T=0.12;                       // wall thickness (m)
 const DH=2.05;                      // door opening height (m)
-const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
-const sn=(v,g=.1)=>+(Math.round(v/g)*g).toFixed(3);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-let uidn=1; const uid=()=>'n'+(uidn++);
 const HAS3D=true;
 
 /* ───────── data tables ───────── */
-const FLOORS={
-  oak:{n:'Oak plank',c:'#c6a47a',r:.7}, walnut:{n:'Walnut plank',c:'#7a5a43',r:.7},
-  vinyl:{n:'Ash vinyl',c:'#d6ccbb',r:.8}, tile:{n:'Grey tile',c:'#c9cecd',r:.35},
-  marble:{n:'White marble',c:'#e8e7e3',r:.25}
-};
-const WALLS=['#f2f0eb','#dcd7cd','#cfd8c8','#cdd8dd','#e2cfc4','#6a7074'];
-const SW=['#d9d3c5','#b9a58a','#8a9a7b','#8aa0ad','#c89a82','#4a4f52','#f0eee9','#7a5a43'];
-const WTYPES={std:{n:'Standard',sill:.9,wh:1.2},slide:{n:'Sliding',sill:.9,wh:1.2},tall:{n:'Floor to ceiling',sill:.05,wh:2.4},high:{n:'High (bathroom)',sill:1.5,wh:.6},bay:{n:'Bay (projects out)',sill:.6,wh:1.5}};
-const DTYPES={single:'Single swing',double:'Double swing',slide:'Sliding',arch:'Open archway'};
 
 /* ───────── 3D primitives ───────── */
 const matCache={};
@@ -145,85 +141,7 @@ const B={
     for(const sx of[-1,1])bx(g,.04,.9,d,sx*(w/2),.45+H/2,0,'#3a3d3f',.5,.4).rotation.x=0;},
   aircon(g,w,d){bx(g,w,.3,d,0,2.15,0,'#f3f5f5',.4);bx(g,w-.1,.015,.012,0,2.05,d/2+.002,'#c4cacc',.5);bx(g,.03,.012,.01,w/2-.07,2.22,d/2+.002,'#59c27a',.5);}
 };
-const CAT={
-  bed_q:{n:'Queen bed',g:'Bedroom',w:1.6,d:2.05,c:'#d9d3c5',b:B.bed},
-  bed_k:{n:'King bed',g:'Bedroom',w:1.9,d:2.05,c:'#8a9a7b',b:B.bed},
-  bed_s:{n:'Single bed',g:'Bedroom',w:1.0,d:2.0,c:'#8aa0ad',b:B.bed},
-  ward:{n:'Wardrobe',g:'Bedroom',w:2.0,d:.6,c:'#b9a58a',b:B.ward,k:1},
-  bside:{n:'Bedside table',g:'Bedroom',w:.45,d:.4,c:'#b9a58a',b:B.bside},
-  desk:{n:'Desk',g:'Bedroom',w:1.2,d:.6,c:'#b9a58a',b:B.desk},
-  chair:{n:'Chair',g:'Bedroom',w:.45,d:.45,c:'#8a9a7b',b:B.chair},
-  sofa:{n:'3-seat sofa',g:'Living',w:2.2,d:.95,c:'#8aa0ad',b:B.sofa},
-  arm:{n:'Armchair',g:'Living',w:.85,d:.85,c:'#c89a82',b:B.sofa},
-  coffee:{n:'Coffee table',g:'Living',w:1.1,d:.6,c:'#b9a58a',b:B.coffee},
-  tvc:{n:'TV console',g:'Living',w:1.8,d:.4,c:'#b9a58a',b:B.tvc,k:1},
-  dining:{n:'Dining set',g:'Living',w:1.5,d:1.3,c:'#b9a58a',b:B.dining},
-  shelf:{n:'Shelf unit',g:'Living',w:.9,d:.3,c:'#b9a58a',b:B.shelf,k:1},
-  shoe:{n:'Shoe cabinet',g:'Living',w:1.0,d:.35,c:'#f0eee9',b:B.shoe,k:1},
-  rug:{n:'Rug',g:'Living',w:2.4,d:1.6,c:'#d9d3c5',b:B.rug,flat:1},
-  plant:{n:'Plant',g:'Living',w:.4,d:.4,c:'#8a9a7b',b:B.plant},
-  cab:{n:'Base cabinet',g:'Kitchen',w:.6,d:.6,c:'#f0eee9',b:B.cab,k:1},
-  sink:{n:'Sink cabinet',g:'Kitchen',w:1.0,d:.6,c:'#f0eee9',b:B.sink,k:1},
-  hob:{n:'Hob cabinet',g:'Kitchen',w:.6,d:.6,c:'#f0eee9',b:B.hob,k:1},
-  over:{n:'Overhead cabinet',g:'Kitchen',w:.9,d:.35,c:'#f0eee9',b:B.over,k:1,elev:1},
-  fridge:{n:'Fridge',g:'Kitchen',w:.7,d:.7,c:'#d9d3c5',b:B.fridge},
-  washer:{n:'Washer',g:'Kitchen',w:.6,d:.6,c:'#f0eee9',b:B.washer},
-  wc:{n:'Toilet',g:'Bathroom',w:.4,d:.7,c:'#f0eee9',b:B.wc},
-  vanity:{n:'Vanity & basin',g:'Bathroom',w:.6,d:.45,c:'#b9a58a',b:B.vanity,k:1},
-  shower:{n:'Shower',g:'Bathroom',w:.9,d:.9,c:'#f0eee9',b:B.shower},
-  aircon:{n:'Air-con unit',g:'Other',w:.9,d:.25,c:'#f0eee9',b:B.aircon,elev:1},
-  bunk:{n:'Bunk bed',g:'Bedroom',w:1.0,d:2.0,c:'#8aa0ad',b:B.bunk},
-  cot:{n:'Baby cot',g:'Bedroom',w:.7,d:1.3,c:'#f0eee9',b:B.cot},
-  wardS:{n:'Sliding wardrobe',g:'Bedroom',w:2.4,d:.65,c:'#d9d3c5',b:B.wardS,k:1},
-  dress:{n:'Dressing table',g:'Bedroom',w:1.0,d:.45,c:'#f0eee9',b:B.dress},
-  bookc:{n:'Bookcase',g:'Bedroom',w:.9,d:.3,c:'#b9a58a',b:B.bookc,k:1},
-  lsofa:{n:'L-shaped sofa',g:'Living',w:2.7,d:1.7,c:'#8aa0ad',b:B.lsofa},
-  recl:{n:'Recliner',g:'Living',w:.85,d:.9,c:'#7a5a43',b:B.recl},
-  tvwall:{n:'TV wall unit',g:'Living',w:2.6,d:.4,c:'#b9a58a',b:B.tvwall,k:1},
-  sidet:{n:'Side table',g:'Living',w:.5,d:.5,c:'#b9a58a',b:B.sidet},
-  consol:{n:'Console table',g:'Living',w:1.2,d:.35,c:'#b9a58a',b:B.consol},
-  disp:{n:'Display cabinet',g:'Living',w:1.0,d:.4,c:'#b9a58a',b:B.disp,k:1},
-  pouf:{n:'Pouf',g:'Living',w:.5,d:.5,c:'#c89a82',b:B.pouf},
-  roundt:{n:'Round dining set',g:'Living',w:1.1,d:1.1,c:'#b9a58a',b:B.roundt},
-  piano:{n:'Piano',g:'Living',w:1.5,d:.6,c:'#2b2e31',b:B.piano},
-  bplant:{n:'Large plant',g:'Living',w:.6,d:.6,c:'#8a9a7b',b:B.bplant},
-  tv:{n:'Wall TV',g:'Living',w:1.2,d:.1,c:'#101213',b:B.tv,elev:1},
-  art:{n:'Wall art',g:'Living',w:.8,d:.05,c:'#8aa0ad',b:B.art,elev:1},
-  mat:{n:'Door mat',g:'Living',w:.8,d:.5,c:'#7a5a43',b:B.mat,flat:1},
-  curtain:{n:'Curtain',g:'Living',w:2.0,d:.1,c:'#cfd8c8',b:B.curtain,elev:1},
-  blinds:{n:'Roller blind',g:'Living',w:1.5,d:.1,c:'#d9d3c5',b:B.blinds,elev:1},
-  fridgeL:{n:'Double-door fridge',g:'Kitchen',w:.9,d:.75,c:'#d9d3c5',b:B.fridgeL},
-  oventw:{n:'Oven tower',g:'Kitchen',w:.6,d:.6,c:'#f0eee9',b:B.oventw,k:1},
-  dishw:{n:'Dishwasher',g:'Kitchen',w:.6,d:.6,c:'#d9dcde',b:B.dishw},
-  hood:{n:'Cooker hood',g:'Kitchen',w:.9,d:.5,c:'#c4cacc',b:B.hood,elev:1},
-  corner:{n:'Corner cabinet',g:'Kitchen',w:.9,d:.6,c:'#f0eee9',b:B.corner,k:1},
-  dvanity:{n:'Double vanity',g:'Bathroom',w:1.2,d:.5,c:'#b9a58a',b:B.dvanity,k:1},
-  towel:{n:'Towel rail',g:'Bathroom',w:.6,d:.1,c:'#9aa2a6',b:B.towel,elev:1},
-  mirror:{n:'Mirror',g:'Bathroom',w:.6,d:.05,c:'#9aa2a6',b:B.mirror,elev:1},
-  heater:{n:'Water heater',g:'Bathroom',w:.35,d:.35,c:'#f0f0ee',b:B.heater,elev:1,wet:1},
-  shoeb:{n:'Shoe bench',g:'Other',w:1.0,d:.35,c:'#b9a58a',b:B.shoeb},
-  rack:{n:'Laundry rack',g:'Other',w:1.2,d:.5,c:'#d9d3c5',b:B.rack},
-  dlamp:{n:'Desk lamp',g:'Lighting',w:.2,d:.2,c:'#e8dcc4',b:B.dlamp,lamp:1,ly:()=>.5},
-  stairs:{n:'Straight stairs',g:'Other',w:.9,d:3.0,c:'#b9a58a',b:B.stairs},
-  dresser:{n:'Chest of drawers',g:'Bedroom',w:.9,d:.45,c:'#b9a58a',b:B.dresser},
-  ottoman:{n:'Ottoman',g:'Living',w:.6,d:.6,c:'#c89a82',b:B.ottoman},
-  sideb:{n:'Sideboard',g:'Living',w:1.6,d:.4,c:'#b9a58a',b:B.sideb,k:1},
-  island:{n:'Kitchen island',g:'Kitchen',w:1.6,d:.9,c:'#f0eee9',b:B.island,k:1},
-  pantry:{n:'Tall pantry',g:'Kitchen',w:.6,d:.6,c:'#f0eee9',b:B.pantry,k:1},
-  stool:{n:'Bar stool',g:'Kitchen',w:.38,d:.38,c:'#b9a58a',b:B.stool},
-  bathtub:{n:'Bathtub',g:'Bathroom',w:1.5,d:.72,c:'#f0eee9',b:B.bathtub,wet:1},
-  pendant:{n:'Pendant lamp',g:'Lighting',w:.45,d:.45,c:'#d9d3c5',b:B.pendant,lamp:1,ly:H=>H-.8,top:1},
-  ceilL:{n:'Ceiling light',g:'Lighting',w:.5,d:.5,c:'#f4f4f2',b:B.ceilL,lamp:1,ly:H=>H-.25,top:1},
-  flampL:{n:'Floor lamp',g:'Lighting',w:.35,d:.35,c:'#e8dcc4',b:B.flampL,lamp:1,ly:()=>1.5},
-  fan:{n:'Ceiling fan',g:'Lighting',w:1.1,d:1.1,c:'#b9a58a',b:B.fan,lamp:1,ly:H=>H-.45,top:1},
-  wlight:{n:'Wall light',g:'Lighting',w:.3,d:.1,c:'#3a3d3f',b:B.wlight,lamp:1,ly:()=>1.75,elev:1},
-  trap:{n:'Floor trap',g:'Services',w:.15,d:.15,c:'#7d8386',b:B.trap,flat:1,svc:1,wet:1},
-  wpoint:{n:'Water point',g:'Services',w:.12,d:.08,c:'#cfd8dc',b:B.wpoint,svc:1,wet:1,elev:1},
-  socket:{n:'Power socket',g:'Services',w:.1,d:.06,c:'#f4f4f2',b:B.socket,svc:1,elev:1},
-  duct:{n:'Pipe duct',g:'Services',w:.5,d:.4,c:'#cfcac0',b:B.duct,svc:1}
-};
-['wc','shower','vanity','sink','washer'].forEach(k=>CAT[k].wet=1);
-const GROUPS=['Bedroom','Living','Kitchen','Bathroom','Lighting','Services','Other'];
+const CAT=Object.fromEntries(Object.entries(CATALOG).map(([k,v])=>[k,{...v,b:B[v.b]}]));
 
 /* ───────── state ───────── */
 let S=null, sel=null, tool='select', rtab='inspect', mode='orbit', cut=true;
@@ -231,7 +149,6 @@ let undoS=[], redoS=[];
 let walk={x:5,y:7.4,yaw:0,pitch:-.02};
 let under=null,underSrc='',snapG=.1,calib=null;
 let ms=[],freeAng=false,flush=true,clip=null,polyDraft=null,marq=null,gidn=1;
-const FINS={paint:'Paint',tile:'Tile',wood:'Timber',concrete:'Concrete'};
 const LAYERS=[['furn','Furniture'],['labels','Labels'],['dims','Dimensions'],['grid','Grid']];
 
 function sample(){
@@ -279,19 +196,7 @@ function blank(w,d){
 function ensureModelCat(i){if(typeof i.type!=='string'||!/^m:[\w-]+$/.test(i.type))return false;
   CAT[i.type]={n:'Missing model',g:'My models',w:+i.w||1,d:+i.d||1,h:+i.h||.5,c:'#c9b9a6',m:1,missing:1,b:(g,w,d,c,it)=>{const h=(it&&it.h)||.5;bx(g,w,h,d,0,h/2,0,'#c9b9a6',.9,0,{transparent:true,opacity:.5});}};return true;}
 function emptyDesign(){return {name:'My flat',H:2.6,wallColor:WALLS[0],walls:[],rooms:[],openings:[],items:[],dims:[],layers:{furn:1,labels:1,dims:1,grid:1}};}
-function loadState(o){
-  const n={name:String(o.name||'My flat').slice(0,60),H:clamp(+o.H||2.6,2.2,3.2),wallColor:o.wallColor||WALLS[0],
-    walls:(o.walls||[]).map(w=>({id:w.id||uid(),x1:+w.x1,y1:+w.y1,x2:+w.x2,y2:+w.y2,fin:FINS[w.fin]?w.fin:'paint',col:typeof w.col==='string'?w.col:'',str:!!w.str,th:(+w.th>=.06&&+w.th<=.4)?+(+w.th).toFixed(3):0})).filter(w=>[w.x1,w.y1,w.x2,w.y2].every(isFinite)&&Math.hypot(w.x2-w.x1,w.y2-w.y1)>.05),
-    rooms:(o.rooms||[]).map(r=>{const q={id:r.id||uid(),name:String(r.name||'Room').slice(0,40),x:+r.x,y:+r.y,w:+r.w,h:+r.h,floor:FLOORS[r.floor]?r.floor:'oak'};
-      if(Array.isArray(r.pts)&&r.pts.length>=3){const p=r.pts.map(a=>[+a[0],+a[1]]);if(p.every(a=>isFinite(a[0])&&isFinite(a[1]))){q.pts=p;syncBox(q);}}return q;}).filter(r=>[r.x,r.y,r.w,r.h].every(isFinite)&&r.w>0&&r.h>0),
-    dims:(o.dims||[]).map(d=>({id:d.id||uid(),x1:+d.x1,y1:+d.y1,x2:+d.x2,y2:+d.y2,o:isFinite(+d.o)?+d.o:.5})).filter(d=>[d.x1,d.y1,d.x2,d.y2].every(isFinite)&&Math.hypot(d.x2-d.x1,d.y2-d.y1)>.05),
-    views:(Array.isArray(o.views)?o.views:[]).filter(v=>v&&Array.isArray(v.a)).slice(0,24).map(v=>({id:v.id||uid(),n:String(v.n||'View').slice(0,40),m:v.m==='walk'?'walk':'orbit',a:[+v.a[0]||0,+v.a[1]||0,+v.a[2]||0,+v.a[3]||0,+v.a[4]||0].map(x=>+x.toFixed(3))})).filter(v=>Array.isArray(v.a)),
-    layers:Object.assign({furn:1,labels:1,dims:1,grid:1},o.layers||{}),prices:Object.fromEntries(Object.entries(o.prices||{}).filter(([k,v])=>typeof v==='number'&&isFinite(v)&&v>=0)),extras:(o.extras||[]).map(x=>({id:x.id||uid(),name:String(x.name||'').slice(0,40),amt:Math.max(0,+x.amt||0)})),budget:Math.max(0,+o.budget||0),cid:typeof o.cid==='string'?o.cid:'',base:o.base&&typeof o.base==='object'?o.base:null,skirt:!!o.skirt,skirtCol:typeof o.skirtCol==='string'?o.skirtCol:'#f4f2ee',ceilCol:typeof o.ceilCol==='string'?o.ceilCol:'#f8f7f4',
-    openings:(o.openings||[]).map(p=>({id:p.id||uid(),kind:p.kind==='window'?'window':'door',axis:p.axis==='v'?'v':'h',c:+p.c,p:+p.p,w:clamp(+p.w||.9,.4,5),flip:p.flip===undefined?-1:(p.flip<0?-1:1),wt:WTYPES[p.wt]?p.wt:'std',dt:DTYPES[p.dt]?p.dt:'single'})),
-    items:(o.items||[]).filter(i=>CAT[i.type]||ensureModelCat(i)).map(i=>({id:i.id||uid(),type:i.type,x:+i.x,y:+i.y,rot:+i.rot||0,w:clamp(+i.w||CAT[i.type].w,.1,8),d:clamp(+i.d||CAT[i.type].d,.1,8),color:i.color||CAT[i.type].c,g:i.g||0,h:+i.h>0?+i.h:0,mt:['wood','fabric','leather','metal','gloss'].includes(i.mt)?i.mt:'',nm:typeof i.nm==='string'?i.nm.slice(0,40):'',pr:(+i.pr>0&&+i.pr<1e7)?+(+i.pr).toFixed(2):0}))};
-  let m=0;[...n.walls,...n.rooms,...n.openings,...n.items,...n.dims].forEach(e=>{const k=+String(e.id).replace(/\D/g,'');if(k>m)m=k;});uidn=Math.max(uidn,m+1);
-  return n;
-}
+function loadState(o){return loadDesign(o,i=>CAT[i.type]||(ensureModelCat(i)?CAT[i.type]:undefined));}
 const getE=(t,id)=>S&&({room:S.rooms,wall:S.walls,open:S.openings,item:S.items,dim:S.dims}[t]||[]).find(e=>e.id===id);
 const checkpoint=()=>{undoS.push(JSON.stringify(S));if(undoS.length>100)undoS.shift();redoS=[];};
 function undo(){if(!undoS.length)return;redoS.push(JSON.stringify(S));S=JSON.parse(undoS.pop());fixSel();changed();}
@@ -309,24 +214,8 @@ const inMs=(t,id)=>ms.some(m=>m.t===t&&m.id===id);
 function updUndo(){$('#bUndo').disabled=!undoS.length;$('#bRedo').disabled=!redoS.length;}
 
 /* ───────── geometry helpers ───────── */
-function wallInfo(w){
-  const T=w.th||.12;
-  if(w.x1!==w.x2&&w.y1!==w.y2){const dx=w.x2-w.x1,dy=w.y2-w.y1,len=Math.hypot(dx,dy);return {axis:'a',a:0,b:len,c:0,ops:[],segs:[[-T/2,len+T/2]],ang:Math.atan2(dy,dx),len,th:T};}
-  const axis=w.y1===w.y2?'h':'v';
-  const a=axis==='h'?Math.min(w.x1,w.x2):Math.min(w.y1,w.y2), b=axis==='h'?Math.max(w.x1,w.x2):Math.max(w.y1,w.y2), c=axis==='h'?w.y1:w.x1;
-  const ops=S.openings.filter(o=>o.axis===axis&&Math.abs(o.c-c)<.011&&o.p>a-.01&&o.p<b+.01).sort((m,n)=>m.p-n.p);
-  const segs=[];let cur=a-T/2;
-  for(const o of ops){const lo=o.p-o.w/2,hi=o.p+o.w/2;if(lo>cur+1e-4)segs.push([cur,lo]);cur=Math.max(cur,hi);}
-  if(b+T/2>cur+1e-4)segs.push([cur,b+T/2]);
-  return {axis,a,b,c,ops,segs,th:T};
-}
-function bounds(){
-  let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;
-  const add=(x,y)=>{x0=Math.min(x0,x);y0=Math.min(y0,y);x1=Math.max(x1,x);y1=Math.max(y1,y);};
-  S.walls.forEach(w=>{add(w.x1,w.y1);add(w.x2,w.y2);});S.rooms.forEach(r=>{add(r.x,r.y);add(r.x+r.w,r.y+r.h);});
-  if(x0>1e8){x0=y0=0;x1=y1=6;}
-  return {x0,y0,x1,y1,w:x1-x0,h:y1-y0,cx:(x0+x1)/2,cy:(y0+y1)/2};
-}
+const wallInfo=w=>wallInfoOf(w,S.openings);
+const bounds=()=>boundsOf(S);
 function nearestWall(p,w){
   let best=null,bd=.5;
   for(const wl of S.walls){const wi=wallInfo(wl);if(wi.axis==='a'||wi.b-wi.a<w+.3)continue;
@@ -335,17 +224,8 @@ function nearestWall(p,w){
     if(off<bd){bd=off;best={axis:wi.axis,c:wi.c,p:clamp(sn(along,.05),wi.a+.15+w/2,wi.b-.15-w/2)};}}
   return best;
 }
-function rpts(r){return r.pts||[[r.x,r.y],[r.x+r.w,r.y],[r.x+r.w,r.y+r.h],[r.x,r.y+r.h]];}
-function rarea(r){if(!r.pts)return r.w*r.h;let a=0;const p=r.pts;for(let i=0;i<p.length;i++){const q=p[(i+1)%p.length];a+=p[i][0]*q[1]-q[0]*p[i][1];}return Math.abs(a)/2;}
 const area=r=>rarea(r);
-function syncBox(r){let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;r.pts.forEach(q=>{x0=Math.min(x0,q[0]);y0=Math.min(y0,q[1]);x1=Math.max(x1,q[0]);y1=Math.max(y1,q[1]);});r.x=x0;r.y=y0;r.w=x1-x0;r.h=y1-y0;}
-function rcent(r){const p=rpts(r);let a=0,cx=0,cy=0;for(let i=0;i<p.length;i++){const q=p[(i+1)%p.length],f=p[i][0]*q[1]-q[0]*p[i][1];a+=f;cx+=(p[i][0]+q[0])*f;cy+=(p[i][1]+q[1])*f;}
-  if(Math.abs(a)<1e-6)return {x:r.x+r.w/2,y:r.y+r.h/2};return {x:cx/(3*a),y:cy/(3*a)};}
-function pip(x,y,p){let c=false;for(let i=0,j=p.length-1;i<p.length;j=i++){if((p[i][1]>y)!==(p[j][1]>y)&&x<(p[j][0]-p[i][0])*(y-p[i][1])/(p[j][1]-p[i][1])+p[i][0])c=!c;}return c;}
-function pruneOps(){S.openings=S.openings.filter(o=>S.walls.some(w=>{const wi=wallInfo(w);return wi.axis===o.axis&&Math.abs(wi.c-o.c)<.011&&o.p>wi.a-.01&&o.p<wi.b+.01;}));}
-function dpSimp(p,eps){if(p.length<3)return p;const a=p[0],b=p[p.length-1];let md=-1,mi=0;const dx=b[0]-a[0],dy=b[1]-a[1],L=Math.hypot(dx,dy)||1e-9;
-  for(let i=1;i<p.length-1;i++){const d=Math.abs((p[i][0]-a[0])*dy-(p[i][1]-a[1])*dx)/L;if(d>md){md=d;mi=i;}}
-  if(md>eps){const l=dpSimp(p.slice(0,mi+1),eps),r=dpSimp(p.slice(mi),eps);return l.slice(0,-1).concat(r);}return [a,b];}
+const pruneOps=()=>pruneOpsOf(S);
 /* flood-fill room detection: returns polygon points (metres) or null */
 function detectRoom(p){
   if(!S.walls.length)return null;const b=bounds(),g=.05,ox=b.x0-1,oy=b.y0-1,nx=Math.ceil((b.w+2)/g)+1,ny=Math.ceil((b.h+2)/g)+1;if(nx*ny>2.5e6)return null;
@@ -1190,15 +1070,7 @@ $('#dcard').addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.tagName=
 const BRO=LAYOUTS;
 {const g=$('#tplBro');const ks=Object.keys(BRO);if(ks.length)g.innerHTML=ks.map(k=>`<option value="b:${esc(k)}">${esc(BRO[k].label)}</option>`).join('');else g.remove();}
 /** Flip the whole design left to right (many HDB units are the mirror image of the brochure's layout). Undoable. */
-function mirrorDesign(){const xs=S.walls.flatMap(w=>[w.x1,w.x2]).concat(S.rooms.flatMap(r=>[r.x,r.x+r.w]));if(!xs.length){toast('Nothing to mirror yet.');return;}
-  const M=Math.min(...xs)+Math.max(...xs),X=x=>+(M-x).toFixed(3);
-  mut(()=>{S.walls.forEach(w=>{w.x1=X(w.x1);w.x2=X(w.x2);});
-    S.rooms.forEach(r=>{if(r.pts){r.pts=r.pts.map(q=>[X(q[0]),q[1]]).reverse();syncBox(r);}else r.x=X(r.x+r.w);});
-    S.openings.forEach(o=>{if(o.axis==='h')o.p=X(o.p);else{o.c=X(o.c);o.flip=-(o.flip||-1);}});
-    S.items.forEach(i=>{i.x=X(i.x);i.rot=(360-i.rot)%360;});
-    S.dims.forEach(d=>{d.x1=X(d.x1);d.x2=X(d.x2);d.o=-d.o;});
-    if(S.base){S.base.walls.forEach(w=>{w.x1=X(w.x1);w.x2=X(w.x2);});S.base.wet.forEach(w=>{w.x=X(w.x);});S.base.ops.forEach(o=>{if(o.axis==='h')o.p=X(o.p);else o.c=X(o.c);});}});
-  fit();toast('Mirrored. Undo to switch back.');}
+function mirrorDesign(){if(!S.walls.length&&!S.rooms.length){toast('Nothing to mirror yet.');return;}mut(()=>{mirrorOf(S);});fit();toast('Mirrored. Undo to switch back.');}
 function loadBrochure(k){const L=BRO[k];if(!L)return false;const cap=S&&S.budget;newDesign(JSON.parse(JSON.stringify(L.design)));S.base=snapBase();if(cap)S.budget=cap;changed();
   toast(`${L.label}: ${L.area}. Redrawn from HDB's brochure, so check it against your unit's plan.`,5200);return true;}
 $('#tpl').addEventListener('change',e=>{const v=e.target.value;e.target.value='';if(v.startsWith('b:')){loadBrochure(v.slice(2));return;}if(v==='mirror'){mirrorDesign();return;}if(v==='p3'||v==='p5'){newDesign(hdbPreset(v==='p3'?3:5));toast('Generic layout, not a real HDB plan. Redraw it to match yours.',4200);return;}
@@ -1271,69 +1143,8 @@ new ResizeObserver(()=>render2D()).observe($('#planPane'));
 
 /* ───────── file helpers: zip, pdf, dxf, save ───────── */
 const te=new TextEncoder();
-const crcT=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0;}return t;})();
-const crc32=u=>{let c=~0;for(let i=0;i<u.length;i++)c=crcT[(c^u[i])&255]^(c>>>8);return (~c)>>>0;};
-function zipStore(files){
-  const parts=[],cen=[];let off=0;const w16=v=>[v&255,v>>8&255],w32=v=>[v&255,v>>8&255,v>>16&255,v>>>24&255];
-  for(const f of files){const nm=te.encode(f.name),crc=crc32(f.data),sz=f.data.length;
-    const lh=Uint8Array.from([0x50,0x4b,3,4,...w16(20),...w16(0),...w16(0),...w16(0),...w16(0x21),...w32(crc),...w32(sz),...w32(sz),...w16(nm.length),...w16(0)]);
-    parts.push(lh,nm,f.data);
-    cen.push(Uint8Array.from([0x50,0x4b,1,2,...w16(20),...w16(20),...w16(0),...w16(0),...w16(0),...w16(0x21),...w32(crc),...w32(sz),...w32(sz),...w16(nm.length),...w16(0),...w16(0),...w16(0),...w16(0),...w32(0),...w32(off)]),nm);
-    off+=lh.length+nm.length+sz;}
-  let cl=0;cen.forEach(c=>cl+=c.length);
-  const end=Uint8Array.from([0x50,0x4b,5,6,...w16(0),...w16(0),...w16(files.length),...w16(files.length),...w32(cl),...w32(off),...w16(0)]);
-  return new Blob([...parts,...cen,end],{type:'application/zip'});}
-const pdfTxt=t=>String(t).replace(/×/g,'x').replace(/²/g,'2').replace(/°/g,' deg').replace(/[–—]/g,'-').replace(/[^\x20-\x7e]/g,'?').replace(/([\\()])/g,'\\$1');
-function b64bytes(u){const b=atob(u.split(',')[1]),a=new Uint8Array(b.length);for(let i=0;i<b.length;i++)a[i]=b.charCodeAt(i);return a;}
-/* pages: [{w,h,img:{url,w,h,x,y,dw,dh}|null,text:[{x,y,s,t,b}]}] */
-function pdfBuild(pages){
-  const chunks=[],offs=[];let pos=0;const push=b=>{if(typeof b==='string')b=te.encode(b);chunks.push(b);pos+=b.length;};
-  const obj=(n,fn)=>{offs[n]=pos;push(`${n} 0 obj\n`);fn();push('\nendobj\n');};
-  push('%PDF-1.4\n');const N=4+pages.length*3;
-  obj(1,()=>push('<</Type/Catalog/Pages 2 0 R>>'));
-  obj(2,()=>push(`<</Type/Pages/Count ${pages.length}/Kids[${pages.map((_,i)=>`${5+i*3} 0 R`).join(' ')}]>>`));
-  obj(3,()=>push('<</Type/Font/Subtype/Type1/BaseFont/Courier>>'));obj(4,()=>push('<</Type/Font/Subtype/Type1/BaseFont/Helvetica-Bold>>'));
-  pages.forEach((p,i)=>{const pg=5+i*3,ct=6+i*3,im=7+i*3;let c='';
-    if(p.img)c+=`q ${p.img.dw.toFixed(2)} 0 0 ${p.img.dh.toFixed(2)} ${p.img.x.toFixed(2)} ${p.img.y.toFixed(2)} cm /Im0 Do Q\n`;
-    for(const t of p.text||[])c+=`BT /${t.b?'F2':'F1'} ${t.s} Tf ${t.x.toFixed(1)} ${t.y.toFixed(1)} Td (${pdfTxt(t.t)}) Tj ET\n`;
-    obj(pg,()=>push(`<</Type/Page/Parent 2 0 R/MediaBox[0 0 ${p.w} ${p.h}]/Contents ${ct} 0 R/Resources<</Font<</F1 3 0 R/F2 4 0 R>>${p.img?`/XObject<</Im0 ${im} 0 R>>`:''}>>>>`));
-    obj(ct,()=>{const b=te.encode(c);push(`<</Length ${b.length}>>\nstream\n`);push(b);push('\nendstream');});
-    if(p.img){const d=b64bytes(p.img.url);obj(im,()=>{push(`<</Type/XObject/Subtype/Image/Width ${p.img.w}/Height ${p.img.h}/ColorSpace/DeviceRGB/BitsPerComponent 8/Filter/DCTDecode/Length ${d.length}>>\nstream\n`);push(d);push('\nendstream');});}
-    else{obj(im,()=>push('<<>>'));}});
-  const xr=pos;push(`xref\n0 ${N+1}\n0000000000 65535 f \n`);for(let i=1;i<=N;i++)push(String(offs[i]).padStart(10,'0')+' 00000 n \n');
-  push(`trailer\n<</Size ${N+1}/Root 1 0 R>>\nstartxref\n${xr}\n%%EOF\n`);
-  return new Blob(chunks,{type:'application/pdf'});}
-/* DXF R12 in millimetres */
-function dxfBuild(){
-  const L=[],layers={WALLS:7,DOORS:3,WINDOWS:5,ROOMS:8,FURNITURE:2,TEXT:7,DIMS:1};
-  const g=(c,v)=>L.push(String(c),String(v)),M=v=>+(v*1000).toFixed(1);
-  g(0,'SECTION');g(2,'HEADER');g(9,'$ACADVER');g(1,'AC1009');g(0,'ENDSEC');
-  g(0,'SECTION');g(2,'TABLES');g(0,'TABLE');g(2,'LAYER');g(70,Object.keys(layers).length);
-  for(const [n,c] of Object.entries(layers)){g(0,'LAYER');g(2,n);g(70,0);g(62,c);g(6,'CONTINUOUS');}
-  g(0,'ENDTAB');g(0,'ENDSEC');g(0,'SECTION');g(2,'ENTITIES');
-  const line=(ly,x1,y1,x2,y2)=>{g(0,'LINE');g(8,ly);g(10,M(x1));g(20,M(-y1));g(30,0);g(11,M(x2));g(21,M(-y2));g(31,0);};
-  const poly=(ly,pts)=>pts.forEach((p,i)=>{const q=pts[(i+1)%pts.length];line(ly,p[0],p[1],q[0],q[1]);});
-  const text=(ly,x,y,h,t,rot=0)=>{g(0,'TEXT');g(8,ly);g(10,M(x));g(20,M(-y));g(30,0);g(40,M(h));g(1,pdfTxt(t).replace(/\\/g,''));if(rot){g(50,rot);}};
-  const arc=(x,y,r,a0,a1)=>{g(0,'ARC');g(8,'DOORS');g(10,M(x));g(20,M(-y));g(30,0);g(40,M(r));g(50,a0);g(51,a1);};
-  const arcA=(a,b)=>((b-a+360)%360===90)?[a,b]:[b,a];
-  for(const r of S.rooms){poly('ROOMS',rpts(r));const c=rcent(r);text('TEXT',c.x-.6,c.y,.15,r.name);text('TEXT',c.x-.6,c.y+.25,.12,area(r).toFixed(1)+' m2');}
-  for(const w of S.walls){const wi=wallInfo(w),T=wi.th;
-    if(wi.axis==='a'){const c=Math.cos(wi.ang),s=Math.sin(wi.ang),h=T/2,P=(u,v)=>[w.x1+c*u-s*v,w.y1+s*u+c*v];poly('WALLS',[P(-h,-h),P(wi.len+h,-h),P(wi.len+h,h),P(-h,h)]);continue;}
-    for(const [a,b] of wi.segs){if(wi.axis==='h')poly('WALLS',[[a,wi.c-T/2],[b,wi.c-T/2],[b,wi.c+T/2],[a,wi.c+T/2]]);else poly('WALLS',[[wi.c-T/2,a],[wi.c+T/2,a],[wi.c+T/2,b],[wi.c-T/2,b]]);}
-    for(const o of wi.ops){const lo=o.p-o.w/2,hi=o.p+o.w/2,f=o.flip||-1,h=wi.axis==='h';
-      const P=(u,n)=>h?[u,wi.c+n]:[wi.c+n,u];
-      if(o.kind==='window'){const a=P(lo,-T/2),b=P(hi,-T/2),c=P(lo,T/2),d=P(hi,T/2),m1=P(lo,0),m2=P(hi,0);line('WINDOWS',a[0],a[1],c[0],c[1]);line('WINDOWS',b[0],b[1],d[0],d[1]);line('WINDOWS',m1[0],m1[1],m2[0],m2[1]);}
-      else{const dt=o.dt||'single';
-        if(dt==='single'||dt==='double'){const half=dt==='double'?o.w/2:o.w,hs=dt==='double'?[[lo,1],[hi,-1]]:[[lo,1]];
-          for(const [hu,dir] of hs){const A=P(hu,0),B=P(hu,f*half);line('DOORS',A[0],A[1],B[0],B[1]);
-            const cl=h?(dir>0?0:180):(dir>0?270:90),op=h?(f>0?270:90):(f>0?0:180);const [a0,a1]=arcA(cl%360,op%360);arc(A[0],A[1],half,a0,a1);}}
-        else{const a=P(lo,0),b=P(hi,0);line('DOORS',a[0],a[1],b[0],b[1]);}}}}
-  for(const it of S.items){const k=CAT[it.type];if(!k)continue;const a=it.rot*Math.PI/180,c=Math.cos(a),s=Math.sin(a),R=(x,y)=>[it.x+x*c-y*s,it.y+x*s+y*c],hw=it.w/2,hd=it.d/2;
-    poly('FURNITURE',[R(-hw,-hd),R(hw,-hd),R(hw,hd),R(-hw,hd)]);text('TEXT',it.x-hw*.8,it.y,Math.min(.1,it.w*.18),k.n);}
-  for(const d of S.dims){const dx=d.x2-d.x1,dy=d.y2-d.y1,Ln=Math.hypot(dx,dy),ux=dx/Ln,uy=dy/Ln,nx=-uy*d.o,ny=ux*d.o;
-    line('DIMS',d.x1,d.y1,d.x1+nx,d.y1+ny);line('DIMS',d.x2,d.y2,d.x2+nx,d.y2+ny);line('DIMS',d.x1+nx,d.y1+ny,d.x2+nx,d.y2+ny);
-    text('DIMS',(d.x1+d.x2)/2+nx,(d.y1+d.y2)/2+ny-.05,.12,Ln.toFixed(2)+' m');}
-  g(0,'ENDSEC');g(0,'EOF');return L.join('\n')+'\n';}
+const DXF=[];
+const dxfBuild=()=>dxfBuildOf(S,CAT,DXF);
 /* saving */
 const capCache={};
 function capUse(n){if(capCache[n])return capCache[n];let p;try{p=(window.claude&&window.claude.use)?Promise.resolve(window.claude.use(n)).catch(()=>null):Promise.resolve(null);}catch(e){p=Promise.resolve(null);}return capCache[n]=p;}
@@ -1415,18 +1226,9 @@ async function buildPdf(){
 $('#dcard').addEventListener('click',e=>{const b=e.target.closest('[data-ex]');if(b)doExport(b.dataset.ex);});
 
 /* ───────── budget ───────── */
-const money=v=>'$'+(Math.round(v*100)/100).toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:2});
-function budgetLines(){const L=[],cnt={};S.items.forEach(i=>{if(i.pr>0)return;cnt[i.type]=(cnt[i.type]||0)+1;});
-  Object.keys(cnt).filter(t=>CAT[t]&&!CAT[t].svc&&!CAT[t].missing).sort((a,b)=>CAT[a].n.localeCompare(CAT[b].n)).forEach(t=>L.push({key:'i:'+t,name:CAT[t].n,qty:cnt[t],unit:'each'}));
-  S.items.filter(i=>i.pr>0&&CAT[i.type]&&!CAT[i.type].svc&&!CAT[i.type].missing).forEach(i=>L.push({key:'p:'+i.id,name:(i.nm||CAT[i.type].n),qty:1,unit:'each, your price',fixed:i.pr}));
-  const fa={};S.rooms.forEach(r=>fa[r.floor]=(fa[r.floor]||0)+area(r));Object.keys(fa).forEach(f=>L.push({key:'f:'+f,name:'Floor: '+FLOORS[f].n,qty:+fa[f].toFixed(2),unit:'m²'}));
-  const d=S.openings.filter(o=>o.kind==='door').length,w=S.openings.filter(o=>o.kind==='window').length;if(d)L.push({key:'door',name:'Doors',qty:d,unit:'each'});if(w)L.push({key:'window',name:'Windows',qty:w,unit:'each'});
-  const wf={};S.walls.forEach(x=>{const f=x.fin||'paint';if(f!=='paint')wf[f]=(wf[f]||0)+Math.hypot(x.x2-x.x1,x.y2-x.y1)*S.H;});Object.keys(wf).forEach(f=>L.push({key:'w:'+f,name:'Wall finish: '+FINS[f]+' (one face)',qty:+wf[f].toFixed(2),unit:'m²'}));
-  return L;}
-/** Read by the BTO money plan (same site): renovation = floors, wall finishes, doors, windows, built-in carpentry, bathroom fittings and other costs; furniture = everything else you place. */
-const RENO_ITEMS=new Set(['ward','wardS','shoe','tvwall','cab','sink','hob','over','oventw','corner','island','pantry','wc','vanity','dvanity','shower','bathtub','heater']);
-function budgetSummary(){let furniture=0,reno=0;for(const l of budgetLines()){const v=l.qty*(l.fixed??(S.prices[l.key]||0));const it=l.key.startsWith('p:')?S.items.find(i=>i.id===l.key.slice(2)):null,t=it?it.type:l.key.startsWith('i:')?l.key.slice(2):null;if(t&&!RENO_ITEMS.has(t))furniture+=v;else reno+=v;}for(const x of S.extras)reno+=+x.amt||0;return {name:S.name,furniture:Math.round(furniture),reno:Math.round(reno),cap:S.budget||0,at:Date.now()};}
-function budgetTotal(){let t=0;for(const l of budgetLines())t+=l.qty*(l.fixed??(S.prices[l.key]||0));for(const x of S.extras)t+=+x.amt||0;return t;}
+const budgetLines=()=>budgetLinesOf(S,CAT);
+const budgetSummary=()=>budgetSummaryOf(S,CAT);
+const budgetTotal=()=>budgetTotalOf(S,CAT);
 function budgetHtml(){const L=budgetLines(),tot=budgetTotal(),cap=S.budget||0,diff=cap-tot;
   return `<div class="sec"><h3>Budget</h3><p class="note" style="margin-top:0">Enter your own unit prices from quotes. Nothing is pre-filled.</p>${row('Budget cap ($)',`<input type="number" data-bcap="1" value="${cap||''}" min="0" step="any" inputmode="decimal" placeholder="optional">`)}
     <div style="height:8px"></div>${L.map(l=>l.fixed!==undefined?`<div class="bl"><span>${esc(l.name)}<small>${l.qty} ${l.unit}</small></span><span style="text-align:right;color:var(--ink2)">set on item</span><b>${money(l.fixed)}</b></div>`:`<div class="bl"><span>${esc(l.name)}<small>${l.qty} ${l.unit}</small></span><input type="number" data-bp="${l.key}" value="${S.prices[l.key]??''}" min="0" step="any" inputmode="decimal" placeholder="price" aria-label="Unit price for ${esc(l.name)}"><b>${money(l.qty*(S.prices[l.key]||0))}</b></div>`).join('')||'<p class="note">Nothing to price yet.</p>'}
@@ -1435,8 +1237,7 @@ function budgetHtml(){const L=budgetLines(),tot=budgetTotal(),cap=S.budget||0,di
     <div class="kv" style="margin-top:12px;font-weight:600"><span>Total</span><b>${money(tot)}</b></div>
     ${cap?`<div class="kv"><span>${diff>=0?'Under budget by':'Over budget by'}</span><b style="color:var(${diff>=0?'--accent':'--danger'})">${money(Math.abs(diff))}</b></div>`:''}
     <p class="note">Furniture, flooring, doors, windows and special wall finishes come from your design. Add labour, carpentry and permits as cost lines.</p></div>`;}
-function budgetText(){const L=['BUDGET'],ls=budgetLines();ls.forEach(l=>{const p=l.fixed??S.prices[l.key];L.push(`  ${l.name}: ${l.qty} ${l.unit}`+(p?` x ${money(p)} = ${money(l.qty*p)}`:' (no price)'));});
-  S.extras.forEach(x=>L.push(`  ${x.name||'Other'}: ${money(+x.amt||0)}`));L.push(`  TOTAL ${money(budgetTotal())}`+(S.budget?`  (cap ${money(S.budget)})`:''));return L.join('\n');}
+const budgetText=()=>budgetTextOf(S,CAT);
 $('#rbody').addEventListener('change',e=>{const t=e.target;if(!S||!t.dataset)return;
   if(t.dataset.bp!==undefined){const v=parseFloat(t.value);mut(()=>{if(isFinite(v)&&v>=0)S.prices[t.dataset.bp]=v;else delete S.prices[t.dataset.bp];});}
   else if(t.dataset.bx){const [f,id]=t.dataset.bx.split(':');mut(()=>{const x=S.extras.find(q=>q.id===id);if(!x)return;if(f==='name')x.name=t.value.slice(0,40);else x.amt=Math.max(0,parseFloat(t.value)||0);});}
@@ -1513,77 +1314,15 @@ function hdbPreset(n){
     I('tvc',12.14,5.0,90,1.8);I('rug',9.9,5.0,90,2.6,2,'#d9d3c5');I('sofa',8.2,5.0,270,2.4,.95);I('coffee',9.4,5.0,90);I('dining',5.6,7.4,0,1.8,1.3);I('shoe',4.2,8.82,180);I('plant',11.9,8.5,0);I('aircon',6.0,3.95,0);
   }
   return {name:n+'-room (generic layout)',H:2.6,wallColor:'#f2f0eb',walls,rooms,openings,items,dims:[],layers:{furn:1,labels:1,dims:1,grid:1}};}
-function snapBase(){return {t:Date.now(),walls:S.walls.map(w=>({x1:w.x1,y1:w.y1,x2:w.x2,y2:w.y2,str:!!w.str})),
-  wet:S.items.filter(i=>CAT[i.type]&&CAT[i.type].wet).map(i=>({type:i.type,x:i.x,y:i.y})),
-  ops:S.openings.map(o=>({axis:o.axis,c:o.c,p:o.p,w:o.w,kind:o.kind}))};}
-function wallCover(b,walls){const dx=b.x2-b.x1,dy=b.y2-b.y1,L=Math.hypot(dx,dy);if(L<1e-6)return 1;
-  if(b.x1!==b.x2&&b.y1!==b.y2){return walls.some(w=>(Math.hypot(w.x1-b.x1,w.y1-b.y1)<.12&&Math.hypot(w.x2-b.x2,w.y2-b.y2)<.12)||(Math.hypot(w.x1-b.x2,w.y1-b.y2)<.12&&Math.hypot(w.x2-b.x1,w.y2-b.y1)<.12))?1:0;}
-  const hz=b.y1===b.y2,a0=hz?Math.min(b.x1,b.x2):Math.min(b.y1,b.y2),a1=hz?Math.max(b.x1,b.x2):Math.max(b.y1,b.y2),c=hz?b.y1:b.x1,iv=[];
-  for(const w of walls){if(w.x1!==w.x2&&w.y1!==w.y2)continue;const wh=w.y1===w.y2;if(wh!==hz)continue;if(Math.abs((wh?w.y1:w.x1)-c)>.06)continue;
-    const s=Math.max(a0,wh?Math.min(w.x1,w.x2):Math.min(w.y1,w.y2)),e=Math.min(a1,wh?Math.max(w.x1,w.x2):Math.max(w.y1,w.y2));if(e>s)iv.push([s,e]);}
-  iv.sort((p,q)=>p[0]-q[0]);let tot=0,cur=a0;for(const [s,e] of iv){const s2=Math.max(s,cur);if(e>s2){tot+=e-s2;cur=e;}}return tot/(a1-a0);}
-const itemPoly=it=>{const a=it.rot*Math.PI/180,c=Math.cos(a),s=Math.sin(a);return [[-1,-1],[1,-1],[1,1],[-1,1]].map(([qx,qy])=>[it.x+qx*it.w/2*c-qy*it.d/2*s,it.y+qx*it.w/2*s+qy*it.d/2*c]);};
-function polyOverlap(A,B){const ax=[A,B];for(const P of ax)for(let i=0;i<4;i++){const q=P[(i+1)%4],nx=-(q[1]-P[i][1]),ny=q[0]-P[i][0];let a0=1e9,a1=-1e9,b0=1e9,b1=-1e9;
-    for(const p of A){const d=p[0]*nx+p[1]*ny;a0=Math.min(a0,d);a1=Math.max(a1,d);}for(const p of B){const d=p[0]*nx+p[1]*ny;b0=Math.min(b0,d);b1=Math.max(b1,d);}
-    const L=Math.hypot(nx,ny)||1;if(a1/L<=b0/L+.03||b1/L<=a0/L+.03)return false;}return true;}
-function runChecks(){
-  const out=[],add=(lvl,msg,cat)=>out.push({lvl,msg,cat}),B=S.base;
-  const nm=t=>CAT[t]?CAT[t].n:t,f1=v=>v.toFixed(1);
-  if(B){
-    for(const b of B.walls){const cv=wallCover(b,S.walls),len=Math.hypot(b.x2-b.x1,b.y2-b.y1),isStr=b.str||S.walls.some(w=>w.str&&wallCover(b,[w])>.5);
-      if(cv<.95){add(isStr?'warn':'info',`${cv<.05?'Removed':'Shortened'} wall: ${f1(len)} m wall at (${f1(b.x1)}, ${f1(b.y1)}) to (${f1(b.x2)}, ${f1(b.y2)}), ${Math.round((1-cv)*100)}% gone.${isStr?' You marked this wall structural, so it must stay. Do not hack it.':' If it is structural it cannot be removed. Confirm with HDB and a registered contractor before work.'}`,'walls');}}
-    for(const w of S.walls){const cv=wallCover(w,B.walls);if(cv<.5)add('info',`New wall: ${f1(Math.hypot(w.x2-w.x1,w.y2-w.y1))} m at (${f1(w.x1)}, ${f1(w.y1)}). New partitions still need to follow HDB's renovation rules.`,'walls');}
-    const cur=S.items.filter(i=>CAT[i.type]&&CAT[i.type].wet),pool=B.wet.map(x=>Object.assign({},x,{used:false}));
-    for(const it of cur){let best=null,bd=1e9;for(const p of pool){if(p.used||p.type!==it.type)continue;const d=Math.hypot(p.x-it.x,p.y-it.y);if(d<bd){bd=d;best=p;}}
-      if(!best){add('info',`${nm(it.type)} is new, it was not in the original layout.`,'wet');continue;}best.used=true;
-      if(bd>.3)add(bd>1?'warn':'info',`${nm(it.type)} moved ${bd.toFixed(1)} m from its original position. Moving wet fixtures changes pipes and waterproofing, so check what is allowed before you commit.`,'wet');}
-    for(const p of pool)if(!p.used)add('info',`${nm(p.type)} from the original layout is no longer in the design.`,'wet');
-    for(const w of S.walls.filter(x=>x.str)){const wi=wallInfo(w);for(const o of wi.ops){if(!B.ops.some(b=>b.axis===o.axis&&Math.abs(b.c-o.c)<.1&&Math.abs(b.p-o.p)<.3&&b.kind===o.kind))add('warn',`A new ${o.kind} opening is cut into a wall you marked structural, near (${f1(o.axis==='h'?o.p:o.c)}, ${f1(o.axis==='h'?o.c:o.p)}).`,'walls');}}
-  }
-  /* design sanity checks */
-  const its=S.items.filter(i=>CAT[i.type]&&!CAT[i.type].flat&&!CAT[i.type].elev&&!CAT[i.type].svc&&!CAT[i.type].top&&!CAT[i.type].missing);
-  for(let i=0;i<its.length;i++)for(let j=i+1;j<its.length;j++){const A=its[i],Bq=its[j];if(Math.hypot(A.x-Bq.x,A.y-Bq.y)>Math.max(A.w,A.d)+Math.max(Bq.w,Bq.d))continue;
-    if(CAT[A.type].n==='Dining set'||CAT[Bq.type].n==='Dining set')continue;if(polyOverlap(itemPoly(A),itemPoly(Bq)))add('warn',`${nm(A.type)} overlaps ${nm(Bq.type)} near (${f1(A.x)}, ${f1(A.y)}).`,'layout');}
-  for(const it of its){if(S.rooms.length&&!S.rooms.some(r=>pip(it.x,it.y,rpts(r))))add('warn',`${nm(it.type)} at (${f1(it.x)}, ${f1(it.y)}) is outside every room.`,'layout');}
-  for(const o of S.openings){if(o.kind!=='door'||(o.dt&&o.dt!=='single'&&o.dt!=='double'))continue;const f=o.flip||-1,half=o.dt==='double'?o.w/2:o.w,hs=o.dt==='double'?[[o.p-o.w/2,1],[o.p+o.w/2,-1]]:[[o.p-o.w/2,1]];let hit=null;
-    for(const [hu,dir] of hs){for(let u=.05;u<=half&&!hit;u+=.1)for(let n=.05;n<=half&&!hit;n+=.1){if(u*u+n*n>half*half)continue;const uu=hu+dir*u,nn=f*n,px=o.axis==='h'?uu:o.c+nn,py=o.axis==='h'?o.c+nn:uu;
-        for(const it of its)if(pip(px,py,itemPoly(it))){hit=it;break;}}}
-    if(hit)add('warn',`A door near (${f1(o.axis==='h'?o.p:o.c)}, ${f1(o.axis==='h'?o.c:o.p)}) swings into the ${nm(hit.type).toLowerCase()}. Flip it, resize it or move the furniture.`,'layout');
-    if(o.w<.75)add('info',`A door near (${f1(o.axis==='h'?o.p:o.c)}, ${f1(o.axis==='h'?o.c:o.p)}) is only ${Math.round(o.w*1000)} mm wide.`,'layout');}
-  /* clearance checks */
-  const nearWall=(px,py)=>{for(const w of S.walls){const wi=wallInfo(w),T=wi.th/2+.03,dx=w.x2-w.x1,dy=w.y2-w.y1,L2=dx*dx+dy*dy||1,t=clamp(((px-w.x1)*dx+(py-w.y1)*dy)/L2,0,1);if(Math.hypot(px-(w.x1+t*dx),py-(w.y1+t*dy))<T)return true;}return false;};
-  const blocked=(px,py,self)=>{if(nearWall(px,py))return true;for(const o of its){if(o===self)continue;if(pip(px,py,itemPoly(o)))return true;}return false;};
-  const sideOpen=(it,sx,sy,dist)=>{const a=it.rot*Math.PI/180,c=Math.cos(a),sn=Math.sin(a),ex=sx?Math.abs(sx)*it.w/2:it.w/2,ey=sy?Math.abs(sy)*it.d/2:it.d/2;let bad=0;
-    for(const k of[-.7,0,.7]){const lx=sx?sx*(it.w/2+dist):k*it.w/2,ly=sy?sy*(it.d/2+dist):k*it.d/2;const px=it.x+lx*c-ly*sn,py=it.y+lx*sn+ly*c;if(blocked(px,py,it))bad++;}return bad<2;};
-  for(const it of its){
-    if(['bed_q','bed_k','bed_s'].includes(it.type)){const L=sideOpen(it,-1,0,.6),R=sideOpen(it,1,0,.6),F=sideOpen(it,0,1,.6);
-      if(!L&&!R&&!F)add('warn',`${nm(it.type)} near (${f1(it.x)}, ${f1(it.y)}) has less than 60 cm of free space on every side. There is no way to get into the bed.`,'clear');
-      else if(it.type!=='bed_s'&&!L&&!R)add('info',`${nm(it.type)} near (${f1(it.x)}, ${f1(it.y)}) can only be reached from the foot. Leave 60 cm on at least one long side.`,'clear');
-      else if(it.type!=='bed_s'&&(+!L+ +!R)===1&&!F)add('info',`${nm(it.type)} near (${f1(it.x)}, ${f1(it.y)}) is tight on two sides. A 60 cm walkway on one long side is the usual minimum.`,'clear');}
-    if(['ward','wardS','dress'].includes(it.type)&&!sideOpen(it,0,1,it.type==='dress'?.5:.6))add('warn',`${nm(it.type)} near (${f1(it.x)}, ${f1(it.y)}) has less than ${it.type==='dress'?50:60} cm in front, so doors and drawers will be hard to use.`,'clear');
-  }
-  const TALL=['ward','wardS','bookc','shelf','fridgeL','fridge','bunk'];
-  for(const o of S.openings){if(o.kind!=='window')continue;const mx=o.axis==='h'?o.p:o.c,my=o.axis==='h'?o.c:o.p;
-    for(const it of its){if(!TALL.includes(it.type))continue;let hit=false;
-      for(const u of[-.4,0,.4])for(const n of[-.35,.35]){const px=o.axis==='h'?o.p+u*o.w:o.c+n,py=o.axis==='h'?o.c+n:o.p+u*o.w;if(pip(px,py,itemPoly(it)))hit=true;}
-      if(hit)add('info',`${nm(it.type)} stands in front of the window near (${f1(mx)}, ${f1(my)}). It will block light and make the window hard to open.`,'clear');}}
-  return out;}
-const LUX=[[/bath|toilet|wc/i,200,'bathroom'],[/kitchen/i,300,'kitchen'],[/study|office|work/i,300,'study'],[/living|dining|hall/i,150,'living'],[/bed|master/i,100,'bedroom'],[/yard|service|store|corridor/i,100,'utility']];
-const LM_PER_LIGHT=1000;
-function lightPlan(){return S.rooms.map(r=>{const ar=rarea(r),rule=LUX.find(x=>x[0].test(r.name))||[null,150,'general'],lux=rule[1],need=lux*ar/.5,want=Math.max(1,Math.round(need/LM_PER_LIGHT)),
-    have=S.items.filter(it=>CAT[it.type]&&['ceilL','pendant'].includes(it.type)&&pip(it.x,it.y,rpts(r))).length,
-    lamps=S.items.filter(it=>CAT[it.type]&&CAT[it.type].lamp&&!['ceilL','pendant'].includes(it.type)&&pip(it.x,it.y,rpts(r))).length;
-    return {r,ar,lux,kind:rule[2],want,have,lamps};});}
+const snapBase=()=>snapBaseOf(S,t=>!!(CAT[t]&&CAT[t].wet));
+const runChecks=()=>runChecksOf(S,CAT,CHECKS);
+const lightPlan=()=>lightPlanOf(S,CAT);
 function lightingHtml(){const L=lightPlan();if(!L.length)return '';
   return `<div class="sec"><h3>Lighting plan</h3><p class="note" style="margin-top:0">Rough guide only: target light level by room type, an assumed 1000 lumen ceiling light and 50% efficiency. A lighting designer or electrician decides the real layout.</p>`+
   L.map(x=>{const gap=x.want-x.have;return `<div class="chk-i info"><i></i><span><b>${esc(x.r.name)}</b>: ${x.ar.toFixed(1)} m², about ${x.lux} lux for a ${x.kind}. Suggested ${x.want} ceiling light${x.want>1?'s':''}, you have ${x.have}${x.lamps?` plus ${x.lamps} lamp${x.lamps>1?'s':''}`:''}.${gap>0?` <button class="btn" data-lt="${x.r.id}" style="margin-left:6px;padding:2px 8px">Add ${gap}</button>`:''}</span></div>`;}).join('')+`</div>`;}
-function addLights(id){const r=S.rooms.find(x=>x.id===id);if(!r)return;const pl=lightPlan().find(x=>x.r.id===id),n=pl.want-pl.have;if(n<=0)return;const pts=rpts(r),xs=pts.map(q=>q[0]),ys=pts.map(q=>q[1]),x0=Math.min(...xs),x1=Math.max(...xs),y0=Math.min(...ys),y1=Math.max(...ys);
-  const cand=[];const cols=Math.ceil(Math.sqrt(n*(x1-x0)/(y1-y0||1))),rows=Math.ceil(n/cols);
-  for(let i=0;i<cols;i++)for(let j=0;j<rows;j++){const x=x0+(i+.5)*(x1-x0)/cols,y=y0+(j+.5)*(y1-y0)/rows;if(pip(x,y,pts))cand.push([+x.toFixed(2),+y.toFixed(2)]);}
-  if(!cand.length){const c=rcent(r);cand.push([c.x,c.y]);}
-  mut(()=>{cand.slice(0,n).forEach(c=>S.items.push({id:uid(),type:'ceilL',x:c[0],y:c[1],rot:0,w:CAT.ceilL.w,d:CAT.ceilL.d,color:CAT.ceilL.c}));});toast('Ceiling lights added');}
-function checksText(){const r=runChecks(),L=['CHECKS (planning aid only, not an HDB approval)'];if(!S.base)L.push('  No original layout was set, so changes to walls and wet areas were not compared.');
-  if(!r.length)L.push('  No issues found.');r.forEach(x=>L.push(`  [${x.lvl==='warn'?'CHECK':'NOTE'}] ${x.msg}`));return L.join('\n');}
+function addLights(id){const r=S.rooms.find(x=>x.id===id);if(!r)return;const pl=lightPlan().find(x=>x.r.id===id),n=pl.want-pl.have;if(n<=0)return;
+  mut(()=>{lightSpots(r,n).forEach(c=>S.items.push({id:uid(),type:'ceilL',x:c[0],y:c[1],rot:0,w:CAT.ceilL.w,d:CAT.ceilL.d,color:CAT.ceilL.c,g:0,h:0,mt:'',nm:'',pr:0}));});toast('Ceiling lights added');}
+const checksText=()=>checksTextOf(S,CAT,CHECKS);
 function checksHtml(){const r=runChecks(),warn=r.filter(x=>x.lvl==='warn'),info=r.filter(x=>x.lvl!=='warn');
   const li=(x)=>`<div class="chk-i ${x.lvl}"><i></i><span>${esc(x.msg)}</span></div>`;
   return `<div class="sec"><h3>Original layout</h3>${S.base?`<p class="note" style="margin-top:0">Saved ${fmtT(S.base.t)}. Changes below are compared with it.</p><div class="acts"><button class="btn" data-act="setbase">Replace with current</button><button class="btn" data-act="clearbase">Clear</button></div>`:`<p class="note" style="margin-top:0">Load or draw your flat as it is handed over, then press the button. Later changes to walls and wet areas will be compared against it.</p><div class="acts"><button class="btn primary" data-act="setbase">Set current as original</button></div>`}</div>
