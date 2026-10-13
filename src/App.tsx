@@ -12,10 +12,11 @@ import { TimelineChart } from './ui/lazyCharts'
 import { Button, Card, Segmented, Toggle } from './ui/controls'
 import { Disclaimer } from './ui/Disclaimer'
 import { CostsEditor, FinancingEditor, FlatEditor, PartnersEditor, type Update } from './ui/editors'
-import { AccruedView, AffordCard, CompareView, Verdict, JobLossCard, LoanPanel, ScheduleTable, SummaryCards, WarningsList } from './ui/views'
+import { AccruedView, AffordCard, CompareView, Verdict, JobLossCard, LaunchFitCard, LoanPanel, ScheduleTable, SummaryCards, WarningsList, type LaunchPick } from './ui/views'
+import { applyProject } from './engine/launch'
 import { GuidePage } from './ui/GuidePage'
 import { FaqPage, GlossaryPage, LearnNav, RulesPage } from './ui/LearnPages'
-import { LEARN_PATHS, type LearnPage } from './ui/labels'
+import { FLAT_TYPES, LEARN_PATHS, type LearnPage } from './ui/labels'
 import { PrintSummary } from './ui/PrintSummary'
 import { Wizard } from './ui/Wizard'
 
@@ -122,6 +123,17 @@ export default function App() {
   const addScenario = (s: Scenario) =>
     setState((st) => ({ ...st, scenarios: [...st.scenarios, s], activeId: s.id, wizardDone: true, compareIds: [...st.compareIds, s.id].slice(-3) }))
 
+  /** One plan per picked project (a copy of this plan with that project's flat), shown side by side in Compare. */
+  const compareProjects = (picks: LaunchPick[]) => {
+    const added = picks.map(({ launch, project, type, applicationMonth }) => {
+      const d: Scenario = { ...structuredClone(active), id: newId('sc'), name: `${project.name} ${FLAT_TYPES.find((t) => t.value === type)!.label}` }
+      applyProject(d, launch, project, { type, applicationMonth })
+      return d
+    })
+    setState((st) => ({ ...st, scenarios: [...st.scenarios, ...added], compareIds: [...(added.length < 3 ? [active.id] : []), ...added.map((s) => s.id)] }))
+    setMessage(`Added ${added.length} plan${added.length > 1 ? 's' : ''}, copied from “${active.name}”.`)
+    setTab('compare')
+  }
   const duplicate = () => {
     const copy: Scenario = { ...structuredClone(active), id: newId('sc'), name: `${active.name} (copy)` }
     addScenario(copy)
@@ -292,6 +304,7 @@ export default function App() {
               addScenario({ ...structuredClone(active), id: newId('sc'), name: `${active.name} — at ${money(price)}`, flat: { ...structuredClone(active.flat), price } })
               setMessage('Added. Use Compare to see it next to your plan.')
             }} />
+            <LaunchFitCard scenario={active} onCompare={compareProjects} />
             <JobLossCard scenario={active} onAddScenario={(s) => {
               const gap = s.partners.flatMap((p) => p.incomeChanges ?? []).find((c) => c.id.startsWith('whatif-gap'))
               const who = gap ? s.partners.find((p) => p.incomeChanges?.includes(gap))?.name : ''

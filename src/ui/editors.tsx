@@ -1,10 +1,10 @@
 import { useState, type ReactNode } from 'react'
 import type { FlatType, Policy } from '../config/policy'
-import { LAUNCHES, TYPICAL_WAIT_MONTHS } from '../config/launches'
+import { LAUNCHES, TYPICAL_WAIT_MONTHS, type Launch } from '../config/launches'
 import { ageInMonths, estimatedLivingCosts, prYear, ratesFor } from '../engine/cpf'
 import { assessmentMonth, autoAmount, downpaymentSchedule, effectiveLtv, grantAmount, grantSplitA, hdbMaxTenure, loanChangesOf, maxLtvFor, voluntaryList } from '../engine/payments'
 import { assessEligibility, hfeMonth } from '../engine/eligibility'
-import { applyProject, offeredTypes, pickedProject } from '../engine/launch'
+import { applyProject, offeredTypes, pickedLaunch, pickedProject, setLaunchDates } from '../engine/launch'
 import { isCompleted, isResale, isSingle, isSinglesPurchase, leaseFactor, normalizeScenario, typicalDates } from '../engine/saleType'
 import { addMonths, formatYm } from '../engine/dates'
 import { money } from '../engine/format'
@@ -298,49 +298,77 @@ function IncomeChanges({ partner: p, startMonth, years, onChange }: {
 
 // ---------------- Flat ----------------
 
-/** Pick a project from a BTO launch to fill in price, classification and dates. */
+/** Pick a project from a BTO launch (or a launch whose projects aren't out yet) to fill in the flat. */
 function ProjectPicker({ scenario, update }: { scenario: Scenario; update: Update }) {
   const picked = pickedProject(scenario)
-  const value = picked ? `${picked.launch.id}/${picked.project.id}` : ''
+  const launch = pickedLaunch(scenario)
+  const value = launch ? `${launch.id}/${picked?.project.id ?? ''}` : ''
+  const closed = (l: Launch) => l.applicationMonth < scenario.startMonth
   const options = [
     { value: '', label: 'None — I’ll enter the details' },
-    ...LAUNCHES.flatMap((l) => l.projects.map((p) => ({
-      value: `${l.id}/${p.id}`,
-      label: `${l.name}${l.applicationMonth < scenario.startMonth ? ' (closed)' : ''} · ${p.name}, ${p.town} · ${p.classification}`,
-    }))),
+    ...LAUNCHES.flatMap((l) => l.projects.length
+      ? l.projects.map((p) => ({
+        value: `${l.id}/${p.id}`,
+        label: `${l.name}${closed(l) ? ' (closed)' : ''} · ${p.name}, ${p.town} · ${p.classification}`,
+      }))
+      : [{ value: `${l.id}/`, label: `${l.name} (upcoming) · projects not announced yet` }]),
   ]
   const p = picked?.project
   const from = p?.fromPrices[scenario.flat.type]
+  const years = (m: number) => `${Math.round(m / 12 * 10) / 10} years`
   return (
     <Card>
-      <Field label="BTO project (optional)" tipText="Fills in the flat price, classification and dates from HDB’s launch announcement. You can change any of them afterwards.">
+      <Field label="BTO launch and project (optional)" tipText="Fills in the flat price, classification and dates from HDB’s launch announcement. You can change any of them afterwards.">
         <Select value={value} ariaLabel="BTO project" options={options}
           onChange={(v) => update((d) => {
             const [launchId, projectId] = v.split('/')
             const l = LAUNCHES.find((x) => x.id === launchId)
             const proj = l?.projects.find((x) => x.id === projectId)
             if (l && proj) applyProject(d, l, proj)
+            else if (l) { setLaunchDates(d, l.applicationMonth); d.flat.project = { launch: l.id } }
             else delete d.flat.project
           })} />
       </Field>
-      {picked && p && (
+      {launch && (
         <div className="mt-2 space-y-1 text-[11px] text-muted">
-          <p>
-            Flat types: {offeredTypes(p).map((t) => `${FLAT_TYPES.find((x) => x.value === t)!.label} from ${money(p.fromPrices[t]!)}`).join(' · ')}.
-            {from !== undefined && <> The price is the cheapest {FLAT_TYPES.find((x) => x.value === scenario.flat.type)!.label} before grants; most units cost more, so put in your unit’s price once you’ve chosen one.</>}
-            {p.fittingsIncluded && ' Prices include floor finishes, internal doors and sanitary fittings.'}
-          </p>
-          <p>
-            Key collection: {p.waitMonths !== undefined
-              ? <>{p.waitText ?? `${p.waitMonths} months`} after the launch (set to {formatYm(addMonths(picked.launch.applicationMonth, p.waitMonths))}).</>
-              : <>HDB didn’t give a waiting time, so it’s set to a typical {Math.round(TYPICAL_WAIT_MONTHS / 12 * 10) / 10} years ({formatYm(addMonths(picked.launch.applicationMonth, TYPICAL_WAIT_MONTHS))}). The brochure has the estimated completion date.</>}
-            {p.subsidyRecoveryPct !== undefined && <> Subsidy recovery on resale: {p.subsidyRecoveryPct}%.</>}
-          </p>
-          <p>Source: {picked.launch.source}.</p>
+          {p ? (
+            <>
+              <p>
+                Flat types: {offeredTypes(p).map((t) => `${FLAT_TYPES.find((x) => x.value === t)!.label} from ${money(p.fromPrices[t]!)}`).join(' · ')}.
+                {from !== undefined && <> The price is the cheapest {FLAT_TYPES.find((x) => x.value === scenario.flat.type)!.label} before grants; most units cost more, so put in your unit’s price once you’ve chosen one.</>}
+                {p.fittingsIncluded && ' Prices include floor finishes, internal doors and sanitary fittings.'}
+              </p>
+              <p>
+                Key collection: {p.waitMonths !== undefined
+                  ? <>{p.waitText ?? `${p.waitMonths} months`} after the launch (set to {formatYm(addMonths(launch.applicationMonth, p.waitMonths))}).</>
+                  : <>HDB didn’t give a waiting time, so it’s set to a typical {years(TYPICAL_WAIT_MONTHS)} ({formatYm(addMonths(launch.applicationMonth, TYPICAL_WAIT_MONTHS))}). The project’s page on the HDB Flat Portal usually gives the estimated completion date.</>}
+                {p.subsidyRecoveryPct !== undefined && <> Subsidy recovery on resale: {p.subsidyRecoveryPct}%.</>}
+              </p>
+            </>
+          ) : (
+            <p>
+              {launch.towns && <>Towns: {launch.towns.join(', ')}. </>}{launch.note && <>{launch.note} </>}
+              Dates are set from {formatYm(launch.applicationMonth)} with a typical {years(TYPICAL_WAIT_MONTHS)} wait; keep your own flat price and type for now.
+              Pick the project here once HDB announces it.
+            </p>
+          )}
+          {!closed(launch) && (
+            <p className="text-ink-2">
+              {launch.hfeBy
+                ? <>HFE letter: apply with all documents by <b>{formatDay(launch.hfeBy)}</b> to be sure of having it in time.</>
+                : <>HFE letter: HDB hasn’t given the deadline for this launch yet, so apply early. You need a valid one when you apply, and the e-service closes while applications are open.</>}
+            </p>
+          )}
+          <p>Source: {launch.source}.</p>
         </div>
       )}
     </Card>
   )
+}
+
+function formatDay(ymd: string): string {
+  const [y, m, d] = ymd.split('-').map(Number)
+  return `${d} ${MONTH_NAMES[m - 1]} ${y}`
 }
 
 export function FlatEditor({ scenario, update, policy, brief = false }: { scenario: Scenario; update: Update; policy: Policy; brief?: boolean }) {

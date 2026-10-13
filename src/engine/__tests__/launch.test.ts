@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { LAUNCHES, TYPICAL_WAIT_MONTHS, findProject } from '../../config/launches'
 import { runScenario } from '../index'
-import { applyProject, offeredTypes, pickedProject } from '../launch'
+import { applyProject, launchFit, offeredTypes, pickedProject, setLaunchDates } from '../launch'
 import { addMonths } from '../dates'
 import { newPlan } from '../../state/defaults'
 import type { Scenario } from '../types'
@@ -50,5 +50,65 @@ describe('picking a project', () => {
   it('the Plus/Prime note gives the project’s subsidy recovery rate', () => {
     const w = runScenario(pick('berlayar-rise')).warnings.find((x) => x.id === 'plus-prime')!
     expect(w.explanation).toMatch(/14% of the resale price/)
+  })
+})
+
+describe('which projects fit', () => {
+  const june = LAUNCHES.find((l) => l.id === '2026-06')!
+  const plan = (f: (s: Scenario) => void = () => {}) => {
+    const s = newPlan('fit')
+    s.startMonth = '2026-05'
+    s.exampleFields = []
+    s.partners.forEach((p) => { p.birthYearMonth = '1997-01'; p.grossMonthly = 5000; p.cash = 40000; p.cpfOA = 40000; p.monthlyCashSavings = 1000 })
+    f(s)
+    return s
+  }
+
+  it('checks every flat type of every project', () => {
+    const fits = launchFit(plan(), june)
+    expect(fits).toHaveLength(june.projects.reduce((n, p) => n + offeredTypes(p).length, 0))
+    const ridge = fits.filter((f) => f.project.id === 'kebun-baru-ridge')
+    expect(ridge.map((f) => f.type)).toEqual(['2R', '3R', '4R'])
+    expect(ridge[0].keys).toBe('2029-07')
+    // Same flat type and dates: whether it works depends only on the price.
+    for (const f of fits) {
+      for (const g of fits) {
+        if (f.type === g.type && f.keys === g.keys && f.project.classification === g.project.classification && f.ok && g.fromPrice <= f.fromPrice) expect(g.ok).toBe(true)
+      }
+    }
+  })
+
+  it('agrees with running the plan at that price', () => {
+    for (const f of launchFit(plan(), june).filter((x) => x.project.id === 'woodgrove-acres')) {
+      const s = plan()
+      applyProject(s, june, f.project, { type: f.type })
+      const failing = runScenario(s).warnings.some((w) => w.id.startsWith('cash-') || w.id === 'msr')
+      expect(failing).toBe(!f.ok)
+    }
+  })
+
+  it('a poor plan fails on cash and says when', () => {
+    const fits = launchFit(plan((s) => s.partners.forEach((p) => { p.cash = 0; p.cpfOA = 0; p.monthlyCashSavings = 0 })), june)
+    const prime = fits.find((f) => f.project.id === 'berlayar-rise' && f.type === '4R')!
+    expect(prime.ok).toBe(false)
+    expect(prime.limit).toBeDefined()
+  })
+
+  it('singles only see 2-room Flexi', () => {
+    expect(new Set(launchFit(plan((s) => { s.buyers = 'single' }), june).map((f) => f.type))).toEqual(new Set(['2R']))
+  })
+
+  it('can move a closed launch to a later month', () => {
+    const fits = launchFit(plan((s) => { s.startMonth = '2026-10' }), june, { applicationMonth: '2026-11' })
+    expect(fits.find((f) => f.project.id === 'kebun-baru-ridge')!.keys).toBe(addMonths('2026-11', 37))
+  })
+})
+
+describe('upcoming launch without projects', () => {
+  it('sets BTO dates from the launch month', () => {
+    const s = newPlan('nov')
+    setLaunchDates(s, '2026-11')
+    expect(s.flat.dates).toEqual({ application: '2026-11', booking: '2027-04', afl: '2027-09', keys: addMonths('2026-11', TYPICAL_WAIT_MONTHS) })
+    expect(LAUNCHES.find((l) => l.id === '2026-11')!.projects).toEqual([])
   })
 })

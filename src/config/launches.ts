@@ -35,8 +35,14 @@ export interface Launch {
   name: string
   /** Month applications open ("YYYY-MM"). */
   applicationMonth: string
+  /** Apply for the HFE letter, with all documents, by this date ("YYYY-MM-DD") to be processed in time. */
+  hfeBy?: string
+  /** Announced before its projects: the towns, and anything else known. */
+  towns?: string[]
+  note?: string
   source: string
   verified: string
+  /** Empty until HDB announces the projects. */
   projects: LaunchProject[]
 }
 
@@ -44,8 +50,9 @@ const JUNE_2026: Launch = {
   id: '2026-06',
   name: 'June 2026 BTO',
   applicationMonth: '2026-06',
+  hfeBy: '2026-05-15',
   // Applications 17–24 June 2026.
-  source: 'hdb.gov.sg news release, 17 June 2026: "HDB Launches 6,952 Flats Across 7 Projects in June 2026 BTO Sales Exercise" (Tables 1–3, paras 2 and 5)',
+  source: 'hdb.gov.sg news release, 17 June 2026: "HDB Launches 6,952 Flats Across 7 Projects in June 2026 BTO Sales Exercise" (Tables 1–3, paras 2, 5 and 10)',
   verified: '2026-10-13',
   projects: [
     {
@@ -82,8 +89,21 @@ const JUNE_2026: Launch = {
   ],
 }
 
+// Announced as October 2026 in the June release (para 17), with an HFE deadline of 15 Sep 2026 for that date.
+// Since moved to November 2026 (UNVERIFIED: date change not yet read on hdb.gov.sg; HFE deadline for November not known).
+const NOVEMBER_2026: Launch = {
+  id: '2026-11',
+  name: 'November 2026 BTO',
+  applicationMonth: '2026-11',
+  towns: ['Bedok', 'Geylang', 'Sembawang', 'Tengah', 'Toa Payoh', 'Yishun'],
+  note: 'About 7,960 flats, plus Community Care Apartments in Toa Payoh. First planned for October 2026.',
+  source: 'hdb.gov.sg news release, 17 June 2026, para 17 (towns and flat count); move to November not yet checked on hdb.gov.sg',
+  verified: '2026-10-13',
+  projects: [],
+}
+
 /** Newest first. */
-export const LAUNCHES: Launch[] = [JUNE_2026]
+export const LAUNCHES: Launch[] = [NOVEMBER_2026, JUNE_2026]
 
 /** Typical months from a BTO launch to key collection when HDB doesn't state one. */
 export const TYPICAL_WAIT_MONTHS = 46

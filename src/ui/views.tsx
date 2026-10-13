@@ -3,6 +3,10 @@ import { compareRows } from '../engine/compare'
 import { addMonths, formatYm } from '../engine/dates'
 import { jobLossImpact, withJobLoss } from '../engine/whatIf'
 import { affordablePrice, type AffordLimit } from '../engine/afford'
+import { launchFit, pickedLaunch, type ProjectFit } from '../engine/launch'
+import { LAUNCHES, type Launch, type LaunchProject } from '../config/launches'
+import type { FlatType } from '../config/policy'
+import { FLAT_TYPES } from './labels'
 import { money } from '../engine/format'
 import { monthlyInstalment } from '../engine/loan'
 import type { Scenario, SimResult, Warning } from '../engine/types'
@@ -551,6 +555,107 @@ export function AffordCard({ scenario, onTry }: { scenario: Scenario; onTry: (pr
       <p className="mt-2 text-[11px] text-muted">
         Keeps everything else the same: loan type and LTV, CPF slider, costs, grants and dates. Stamp duty, fees and the downpayment change with the price.
         Rounded down to the nearest $1,000.
+      </p>
+    </Card>
+  )
+}
+
+// ---------------- Which projects fit? ----------------
+
+export interface LaunchPick { launch: Launch; project: LaunchProject; type: FlatType; applicationMonth: string }
+
+const FIT_LIMIT: Record<AffordLimit, string> = {
+  cash: 'cash runs short',
+  msr: 'mortgage over the MSR limit',
+  tdsr: 'over the TDSR limit',
+}
+
+export function LaunchFitCard({ scenario, onCompare }: { scenario: Scenario; onCompare: (picks: LaunchPick[]) => void }) {
+  const launches = LAUNCHES.filter((l) => l.projects.length > 0)
+  const [launchId, setLaunchId] = useState(() => (pickedLaunch(scenario)?.projects.length ? pickedLaunch(scenario)!.id : launches[0]?.id))
+  const [picks, setPicks] = useState<string[]>([])
+  const launch = launches.find((l) => l.id === launchId)
+  // A launch that has closed is checked as if it opened next month; otherwise its payments would count as already made.
+  const closed = !!launch && launch.applicationMonth <= scenario.startMonth
+  const applicationMonth = launch ? (closed ? addMonths(scenario.startMonth, 1) : launch.applicationMonth) : ''
+  const fits = useMemo(() => (launch ? launchFit(scenario, launch, { applicationMonth }) : []), [scenario, launch, applicationMonth])
+  if (!launch) return null
+  const key = (f: ProjectFit) => `${f.project.id}/${f.type}`
+  const typeLabel = (t: FlatType) => FLAT_TYPES.find((x) => x.value === t)!.label
+  const okCount = fits.filter((f) => f.ok).length
+  // Short of cash even for the cheapest flat we try: the project isn't the problem.
+  const planShort = fits.length > 0 && fits.every((f) => f.maxPrice === undefined)
+  const firstShort = fits.map((f) => f.firstShortYm).filter(Boolean).sort()[0]
+  const toggle = (k: string) => setPicks((p) => (p.includes(k) ? p.filter((x) => x !== k) : p.length < 3 ? [...p, k] : p))
+  return (
+    <Card>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-sm font-semibold">Which projects fit {scenario.buyers === 'single' ? 'your' : 'our'} plan?</h2>
+        {launches.length > 1 && (
+          <div className="w-full sm:w-56">
+            <Select value={launchId} onChange={(v) => { setLaunchId(v); setPicks([]) }} ariaLabel="Launch"
+              options={launches.map((l) => ({ value: l.id, label: l.name }))} />
+          </div>
+        )}
+      </div>
+      {planShort ? (
+        <p className="mt-2 text-sm text-ink-2">
+          Your plan runs short of cash{firstShort ? <> in <b className="text-critical">{formatYm(firstShort)}</b></> : ''} even with a much cheaper flat, so none of
+          the {launch.name} projects would work yet, and the project isn’t the problem. Fix the problems under “What to watch” first, then check back.
+        </p>
+      ) : <>
+      <p className="mt-1 text-xs text-ink-2">
+        {launch.name}: {okCount} of {fits.length} flat {fits.length === 1 ? 'choice works' : 'choices work'} at the starting price with your savings, income and loan.
+        {closed && <> Applications have closed, so this checks its prices as if you applied in {formatYm(applicationMonth)}: a guide to what the next launch may cost.</>}
+      </p>
+      <ul className="mt-3 space-y-3">
+        {launch.projects.map((p) => {
+          const rows = fits.filter((f) => f.project.id === p.id)
+          if (!rows.length) return null
+          return (
+            <li key={p.id}>
+              <div className="text-sm font-medium">
+                {p.name} <span className="font-normal text-ink-2">· {p.town} · {p.classification} · keys {p.waitMonths !== undefined ? '' : 'about '}{formatYm(rows[0].keys)}</span>
+              </div>
+              <ul className="mt-1 divide-y divide-line rounded-lg bg-surface-2">
+                {rows.map((f) => {
+                  const k = key(f)
+                  const checked = picks.includes(k)
+                  return (
+                    <li key={k}>
+                      <label className="flex cursor-pointer flex-wrap items-center gap-x-3 gap-y-0.5 px-3 py-2 text-sm">
+                        <input type="checkbox" className="accent-[var(--accent)]" checked={checked} disabled={!checked && picks.length >= 3}
+                          onChange={() => toggle(k)} aria-label={`Compare ${p.name} ${typeLabel(f.type)}`} />
+                        <span className="w-24 shrink-0">{typeLabel(f.type)}</span>
+                        <span className="tnum w-28 shrink-0 whitespace-nowrap text-ink-2">from {money(f.fromPrice)}</span>
+                        <span className={`min-w-0 flex-1 text-xs ${f.ok ? 'text-good-ink' : 'text-critical'}`}>
+                          {f.ok
+                            ? <>✔ {f.aboveMax ? 'price isn’t the limit' : <>works up to <span className="tnum">{money(f.maxPrice!)}</span></>}</>
+                            : <>✖ {FIT_LIMIT[f.limit ?? 'cash']}{f.limit === 'cash' && f.firstShortYm ? ` (${formatYm(f.firstShortYm)})` : ''}{f.maxPrice !== undefined && <>; works up to <span className="tnum">{money(f.maxPrice)}</span></>}</>}
+                        </span>
+                      </label>
+                    </li>
+                  )
+                })}
+              </ul>
+            </li>
+          )
+        })}
+      </ul>
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+        <p className="text-[11px] text-muted">Tick up to 3 to add them as plans and compare.</p>
+        <Button variant="primary" disabled={!picks.length} className="text-xs"
+          onClick={() => onCompare(picks.map((k) => {
+            const f = fits.find((x) => key(x) === k)!
+            return { launch, project: f.project, type: f.type, applicationMonth }
+          }))}>
+          Compare {picks.length || ''} {picks.length === 1 ? 'project' : 'projects'}
+        </Button>
+      </div>
+      </>}
+      <p className="mt-2 text-[11px] text-muted">
+        Starting prices are the cheapest unit of each type, before grants. Keeps your loan, CPF slider, costs and grants; each project’s dates come from
+        its stated waiting time (else a typical one). {scenario.buyers !== 'couple' && 'Singles can only buy 2-room Flexi flats. '}Source: {launch.source}.
       </p>
     </Card>
   )
