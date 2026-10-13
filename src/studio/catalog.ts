@@ -2,6 +2,7 @@
  * Flat Studio catalogue data: furniture and fittings, floor and wall finishes, window and door types.
  * The 3D shapes are built in legacy.js from each item's `b` (builder) key.
  */
+import { CARP_CATALOG } from './carpentry'
 
 export interface CatalogItem {
   /** Display name. */
@@ -35,6 +36,8 @@ export interface CatalogItem {
   h?: number
   model?: string
   missing?: number
+  /** Made-to-measure carpentry (see carpentry.ts). */
+  carp?: number
 }
 
 export const CATALOG: Record<string, CatalogItem> = {
@@ -115,8 +118,9 @@ export const CATALOG: Record<string, CatalogItem> = {
   duct:{n:'Pipe duct',g:'Services',w:.5,d:.4,c:'#cfcac0',b:'duct',svc:1}
 }
 for (const k of ['wc', 'shower', 'vanity', 'sink', 'washer']) CATALOG[k].wet = 1
+Object.assign(CATALOG, CARP_CATALOG)
 
-export const GROUPS = ['Bedroom', 'Living', 'Kitchen', 'Bathroom', 'Lighting', 'Services', 'Other']
+export const GROUPS = ['Carpentry', 'Bedroom', 'Living', 'Kitchen', 'Bathroom', 'Lighting', 'Services', 'Other']
 
 export const FLOORS={
   oak:{n:'Oak plank',c:'#c6a47a',r:.7}, walnut:{n:'Walnut plank',c:'#7a5a43',r:.7},

@@ -1,5 +1,6 @@
 /** Flat Studio budget: priced lines from the design's quantities and the user's own unit prices. */
 import { FINS, FLOORS, type CatalogItem } from './catalog'
+import { carpentryLines } from './carpentry'
 import { rarea, type Design } from './model'
 
 export type Catalog = Record<string, CatalogItem>
@@ -19,7 +20,7 @@ export interface BudgetLine {
 /** Built-in carpentry and bathroom fittings: part of the renovation quote, not furniture. */
 export const RENO_ITEMS = new Set(['ward', 'wardS', 'shoe', 'tvwall', 'cab', 'sink', 'hob', 'over', 'oventw', 'corner', 'island', 'pantry', 'wc', 'vanity', 'dvanity', 'shower', 'bathtub', 'heater'])
 
-const pricedItem = (k: CatalogItem | undefined) => !!k && !k.svc && !k.missing
+const pricedItem = (k: CatalogItem | undefined) => !!k && !k.svc && !k.missing && !k.carp
 
 /** Extra quantity lines from other modules (carpentry runs, ceilings, electrical points). */
 export type LineSource = (S: Design) => BudgetLine[]
@@ -31,8 +32,9 @@ export function budgetLines(S: Design, cat: Catalog): BudgetLine[] {
   S.items.forEach((i) => { if (i.pr > 0) return; cnt[i.type] = (cnt[i.type] || 0) + 1 })
   Object.keys(cnt).filter((t) => pricedItem(cat[t])).sort((a, b) => cat[a].n.localeCompare(cat[b].n))
     .forEach((t) => L.push({ key: 'i:' + t, name: cat[t].n, qty: cnt[t], unit: 'each', part: RENO_ITEMS.has(t) ? 'reno' : 'furniture' }))
-  S.items.filter((i) => i.pr > 0 && pricedItem(cat[i.type]))
-    .forEach((i) => L.push({ key: 'p:' + i.id, name: i.nm || cat[i.type].n, qty: 1, unit: 'each, your price', fixed: i.pr, part: RENO_ITEMS.has(i.type) ? 'reno' : 'furniture' }))
+  S.items.filter((i) => i.pr > 0 && (pricedItem(cat[i.type]) || cat[i.type]?.carp))
+    .forEach((i) => L.push({ key: 'p:' + i.id, name: i.nm || cat[i.type].n, qty: 1, unit: 'each, your price', fixed: i.pr, part: RENO_ITEMS.has(i.type) || cat[i.type]?.carp ? 'reno' : 'furniture' }))
+  L.push(...carpentryLines(S))
   const fa: Record<string, number> = {}
   S.rooms.forEach((r) => { fa[r.floor] = (fa[r.floor] || 0) + rarea(r) })
   Object.keys(fa).forEach((f) => L.push({ key: 'f:' + f, name: 'Floor: ' + (FLOORS as Record<string, { n: string }>)[f].n, qty: +fa[f].toFixed(2), unit: 'm²', part: 'reno' }))

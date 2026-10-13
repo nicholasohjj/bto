@@ -7,6 +7,7 @@ import { OBJLoader } from 'three/addons/loaders/OBJLoader.js'
 import LAYOUTS from './layouts.json'
 import { CATALOG, GROUPS, FLOORS, WALLS, SW, WTYPES, DTYPES, FINS } from './catalog'
 import { importBrochure } from './importer'
+import { buildCarp, carpHtml, setCfg } from './carpentry'
 import { zipStore, pdfBuild, dxfBuild as dxfBuildOf } from './files'
 import { money, budgetLines as budgetLinesOf, budgetSummary as budgetSummaryOf, budgetTotal as budgetTotalOf, budgetText as budgetTextOf } from './budget'
 import { runChecks as runChecksOf, lightPlan as lightPlanOf, lightSpots, checksText as checksTextOf } from './checks'
@@ -36,7 +37,7 @@ function mat(c,r=.85,m=0,x){const k=c+'|'+r+'|'+m+(x?JSON.stringify(x):'');
   return matCache[k];}
 function shade(hex,f){const c=new THREE.Color(hex);c.multiplyScalar(f);c.r=Math.min(1,c.r);c.g=Math.min(1,c.g);c.b=Math.min(1,c.b);return '#'+c.getHexString();}
 function bx(g,w,h,d,x,y,z,c,r,m,x2){const me=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat(c,r,m,x2));me.position.set(x,y,z);me.castShadow=!(x2&&x2.transparent);me.receiveShadow=true;g.add(me);return me;}
-function cyl(g,r,h,x,y,z,c,o={}){const me=new THREE.Mesh(new THREE.CylinderGeometry(o.rt??r,r,h,o.seg||24),mat(c,o.r??.7,o.m??0));me.position.set(x,y,z);me.scale.set(o.sx||1,1,o.sz||1);if(o.rx)me.rotation.x=o.rx;me.castShadow=true;me.receiveShadow=true;g.add(me);return me;}
+function cyl(g,r,h,x,y,z,c,o={}){const me=new THREE.Mesh(new THREE.CylinderGeometry(o.rt??r,r,h,o.seg||24),mat(c,o.r??.7,o.m??0));me.position.set(x,y,z);me.scale.set(o.sx||1,1,o.sz||1);if(o.rx)me.rotation.x=o.rx;if(o.rz)me.rotation.z=o.rz;me.castShadow=true;me.receiveShadow=true;g.add(me);return me;}
 function sph(g,r,x,y,z,c,sx=1,sy=1,sz=1){const me=new THREE.Mesh(new THREE.SphereGeometry(r,14,10),mat(c,.9));me.position.set(x,y,z);me.scale.set(sx,sy,sz);me.castShadow=true;g.add(me);return me;}
 function legs(g,w,d,h,t,col,ins=.04){for(const sx of[-1,1])for(const sz of[-1,1])bx(g,t,h,t,sx*(w/2-ins),h/2,sz*(d/2-ins),col,.6);}
 const GLASS={transparent:true,opacity:.28};
@@ -143,6 +144,7 @@ const B={
     for(const sx of[-1,1])bx(g,.04,.9,d,sx*(w/2),.45+H/2,0,'#3a3d3f',.5,.4).rotation.x=0;},
   aircon(g,w,d){bx(g,w,.3,d,0,2.15,0,'#f3f5f5',.4);bx(g,w-.1,.015,.012,0,2.05,d/2+.002,'#c4cacc',.5);bx(g,.03,.012,.01,w/2-.07,2.22,d/2+.002,'#59c27a',.5);}
 };
+B.carp=(g,w,d,c,it)=>buildCarp(g,w,d,c,it,{bx,cyl,shade,glass:GLASS});
 const CAT=Object.fromEntries(Object.entries(CATALOG).map(([k,v])=>[k,{...v,b:B[v.b]}]));
 
 /* ───────── state ───────── */
@@ -668,7 +670,7 @@ function sync3D(){
   const sig=JSON.stringify([S.walls,S.openings,S.rooms,S.wallColor,S.H,S.skirt,S.skirtCol,S.ceilCol]);
   if(sig!==structSig){structSig=sig;buildStructure();}
   const seen=new Set();
-  for(const it of S.items){seen.add(it.id);const sg=it.type+'|'+it.w+'|'+it.d+'|'+it.color+'|'+S.H+'|'+(it.mt||'')+'|'+(it.h||0)+'|'+(CAT[it.type].missing?1:0)+'|'+modelRev;let e=itemMap.get(it.id);CH=S.H;
+  for(const it of S.items){seen.add(it.id);const sg=it.type+'|'+it.w+'|'+it.d+'|'+it.color+'|'+S.H+'|'+(it.mt||'')+'|'+(it.h||0)+'|'+(CAT[it.type].missing?1:0)+'|'+modelRev+'|'+(it.cfg?JSON.stringify(it.cfg):'');let e=itemMap.get(it.id);CH=S.H;
     if(!e||e.sig!==sg){if(e){itemsG.remove(e.g);disposeG(e.g);}const g=new THREE.Group();CAT[it.type].b(g,it.w,it.d,it.color,it);if(it.mt)applyMt(g,it);g.userData.id=it.id;itemsG.add(g);e={g,sig:sg};itemMap.set(it.id,e);}
     e.g.position.set(it.x,0,it.y);e.g.rotation.y=-it.rot*Math.PI/180;}
   for(const [id,e] of itemMap)if(!seen.has(id)){itemsG.remove(e.g);disposeG(e.g);itemMap.delete(id);}
@@ -840,7 +842,7 @@ function renderRight(){try{fillViews();}catch(e){}
   }else if(sel.t==='item'){
     const k=CAT[e.type];
     h=`<div class="sec"><h3>${esc(k.n)}</h3>${row('Width (m)',num('w',e.w))}${row('Depth (m)',num('d',e.d))}${k.m?row('Height (m)',num('h',e.h||k.h)):''}${row('Rotation °',num('rot',e.rot,15,0,359).replace('.00',''))}
-      ${k.m?'':`<div style="margin-bottom:6px;color:var(--ink2)">Colour</div>${sw('col',SW,e.color)}${row('Material',`<select data-k="mt"><option value="">Plain</option>${[['wood','Timber grain'],['fabric','Fabric'],['leather','Leather'],['metal','Metal'],['gloss','Gloss']].map(([v,n])=>`<option value="${v}"${e.mt===v?' selected':''}>${n}</option>`).join('')}</select>`)}`}
+      ${k.carp?carpHtml(e,S.H):k.m?'':`<div style="margin-bottom:6px;color:var(--ink2)">Colour</div>${sw('col',SW,e.color)}${row('Material',`<select data-k="mt"><option value="">Plain</option>${[['wood','Timber grain'],['fabric','Fabric'],['leather','Leather'],['metal','Metal'],['gloss','Gloss']].map(([v,n])=>`<option value="${v}"${e.mt===v?' selected':''}>${n}</option>`).join('')}</select>`)}`}
       ${row('Product name',`<input type="text" data-k="nm" value="${esc(e.nm||'')}" maxlength="40" placeholder="optional">`)}${row('Your price ($)',`<input type="number" data-k="pr" value="${e.pr||''}" min="0" step="any" inputmode="decimal" placeholder="overrides unit price">`)}
       <div class="acts"><button class="btn" data-act="rot90">Rotate 90°</button><button class="btn" data-act="dup">Duplicate</button><button class="btn danger" data-act="del">Delete</button></div>
       <p class="note">Front of the item is marked by the small triangle on the plan.${k.k?' Counts as carpentry in the schedule.':''}</p></div>`;
@@ -965,6 +967,11 @@ function multiHtml(){
     <div class="acts" style="margin-top:12px"><button class="btn" data-act="m_group">Group</button>${grouped?'<button class="btn" data-act="m_ungroup">Ungroup</button>':''}</div>`:''}
     <p class="note">Drag any selected item to move them all. Ctrl or Cmd with C and V copies and pastes.</p></div>`;}
 $('#rbody').addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.tagName==='INPUT')e.target.blur();});
+/* carpentry settings */
+$('#rbody').addEventListener('change',ev=>{const t=ev.target,k=t.dataset&&(t.dataset.cfg||t.dataset.cfgck);if(!k||!sel||sel.t!=='item')return;const it=getE('item',sel.id);if(!it)return;
+  mut(()=>{setCfg(it,k,t.dataset.cfgck?String(t.checked):t.value,S.H);});});
+$('#rbody').addEventListener('click',ev=>{const b=ev.target.closest('[data-cfgsw]');if(!b||!sel||sel.t!=='item')return;const it=getE('item',sel.id);if(!it)return;
+  mut(()=>{if(b.dataset.cfgsw==='color')it.color=b.dataset.v;else setCfg(it,b.dataset.cfgsw,b.dataset.v,S.H);});});
 $$('.tabs [data-rt]').forEach(b=>b.addEventListener('click',()=>{rtab=b.dataset.rt;renderRight();}));
 
 function scheduleData(){
@@ -1032,7 +1039,7 @@ $('#dcard').addEventListener('click',e=>{
   const a=e.target.closest('[data-d]');if(!a)return;const k=a.dataset.d;
   if(k==='close')closeDlg();
   else if(k==='cancel'){calib=null;closeDlg();render2D();}
-  else if(k==='empty'){newDesign(emptyDesign());closeDlg();startTrace();}
+  else if(k==='empty'){newDesign(emptyDesign(),true);closeDlg();startTrace();}
   else if(k==='keep'){closeDlg();startTrace();}
   else if(k==='scale'){const real=parseFloat($('#cd').value);if(!(real>=.1&&real<=200)){$('#cerr').textContent='Enter a distance in metres, for example 3.4.';return;}
     if(!calib||calib.length<2||!under){closeDlg();return;}const A=calib[0],B=calib[1],f=real/Math.hypot(B.x-A.x,B.y-A.y);
@@ -1043,7 +1050,9 @@ $('#dcard').addEventListener('click',e=>{
   else if(k==='copy')copyText($('#jt').value,a);
   else if(k==='load'){try{newDesign(loadState(JSON.parse($('#jt').value)));closeDlg();}catch(err){$('#jerr').textContent='That text is not a valid design. Paste the full text you copied from Save / load.';}}
 });
-function newDesign(o){checkpoint();S=loadState(o);sel=null;ms=[];structSig='';$('#pname').value=S.name;
+/** Start a different design. A tracing image belongs to the design it was loaded for, so it goes unless kept. */
+function newDesign(o,keepUnder){checkpoint();S=loadState(o);sel=null;ms=[];structSig='';$('#pname').value=S.name;
+  if(!keepUnder&&under){under=null;underSrc='';calib=null;saveUnder();renderUnder();renderTrace();}
   const r=S.rooms[0];if(S.rooms.length>1&&o.name.indexOf('sample')>=0){walk={x:5,y:7.4,yaw:0,pitch:-.02};}else if(r){walk={x:r.x+r.w/2,y:r.y+r.h/2,yaw:0,pitch:-.02};}
   resetOrbit();fit();changed();setMode(mode);}
 $('#dcard').addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.tagName==='INPUT'){const p=$('#dcard .btn.primary');if(p)p.click();}});

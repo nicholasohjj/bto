@@ -24,6 +24,8 @@ export interface Item {
   mt: string
   /** Product name and the user's own price. */
   nm: string; pr: number
+  /** Settings for made-to-measure items (carpentry). */
+  cfg?: Record<string, string | number | boolean>
 }
 export interface Dim { id: string; x1: number; y1: number; x2: number; y2: number; o: number }
 export interface View { id: string; n: string; m: 'walk' | 'orbit'; a: number[] }
@@ -95,10 +97,23 @@ export function loadState(o: any, itemDefaults: (raw: any) => { w: number; d: nu
     }).map(({ i, k }: { i: any; k: { w: number; d: number; c: string } }) => ({
       id: i.id || uid(), type: i.type, x: num(i.x), y: num(i.y), rot: +i.rot || 0, w: clamp(+i.w || k.w, 0.1, 8), d: clamp(+i.d || k.d, 0.1, 8), color: i.color || k.c, g: i.g || 0, h: +i.h > 0 ? +i.h : 0,
       mt: ['wood', 'fabric', 'leather', 'metal', 'gloss'].includes(i.mt) ? i.mt : '', nm: typeof i.nm === 'string' ? i.nm.slice(0, 40) : '', pr: (+i.pr > 0 && +i.pr < 1e7) ? +(+i.pr).toFixed(2) : 0,
+      ...(i.cfg && typeof i.cfg === 'object' ? { cfg: cleanCfg(i.cfg) } : {}),
     })).filter((i: Item) => isFinite(i.x) && isFinite(i.y)),
   }
   bumpIds([...n.walls, ...n.rooms, ...n.openings, ...n.items, ...n.dims].map((e) => e.id))
   return n
+}
+
+/** Only small plain values from a saved file: up to 20 keys, short strings, finite numbers, booleans. */
+function cleanCfg(o: Record<string, unknown>) {
+  const out: Record<string, string | number | boolean> = {}
+  for (const [k, v] of Object.entries(o).slice(0, 20)) {
+    if (!/^\w{1,20}$/.test(k)) continue
+    if (typeof v === 'string' && v.length <= 20) out[k] = v
+    else if (typeof v === 'number' && isFinite(v)) out[k] = v
+    else if (typeof v === 'boolean') out[k] = v
+  }
+  return out
 }
 
 /* rooms */

@@ -1,5 +1,6 @@
 /** Flat Studio checks: changes against the original layout, layout clashes, clearances and a rough lighting guide. */
 import type { Catalog } from './budget'
+import { TALL_CARP } from './carpentry'
 import { clamp, itemPoly, pip, polyOverlap, rarea, rcent, rpts, wallCover, wallInfo, type Design, type Item, type Pt, type Room } from './model'
 
 export interface Check { lvl: 'warn' | 'info'; msg: string; cat: 'walls' | 'wet' | 'layout' | 'clear' | 'ceiling' | 'electrical' }
@@ -84,9 +85,9 @@ export function runChecks(S: Design, cat: Catalog, extra: ((S: Design) => Check[
       else if (it.type !== 'bed_s' && !L && !R) add('info', `${nm(it.type)} ${at} can only be reached from the foot. Leave 60 cm on at least one long side.`, 'clear')
       else if (it.type !== 'bed_s' && (+!L + +!R) === 1 && !F) add('info', `${nm(it.type)} ${at} is tight on two sides. A 60 cm walkway on one long side is the usual minimum.`, 'clear')
     }
-    if (['ward', 'wardS', 'dress'].includes(it.type) && !sideOpen(it, 0, 1, it.type === 'dress' ? 0.5 : 0.6)) add('warn', `${nm(it.type)} ${at} has less than ${it.type === 'dress' ? 50 : 60} cm in front, so doors and drawers will be hard to use.`, 'clear')
+    if (['ward', 'wardS', 'dress', 'ctall'].includes(it.type) && !sideOpen(it, 0, 1, it.type === 'dress' ? 0.5 : 0.6)) add('warn', `${nm(it.type)} ${at} has less than ${it.type === 'dress' ? 50 : 60} cm in front, so doors and drawers will be hard to use.`, 'clear')
   }
-  const TALL = ['ward', 'wardS', 'bookc', 'shelf', 'fridgeL', 'fridge', 'bunk']
+  const TALL = ['ward', 'wardS', 'bookc', 'shelf', 'fridgeL', 'fridge', 'bunk', ...TALL_CARP]
   for (const o of S.openings) {
     if (o.kind !== 'window') continue
     const mx = o.axis === 'h' ? o.p : o.c, my = o.axis === 'h' ? o.c : o.p
