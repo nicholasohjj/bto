@@ -72,3 +72,26 @@ describe('Berlayar Rise units', () => {
     expect(a.find((x) => x.a.name.startsWith('Telok Blangah MRT'))!.dist).toBeLessThan(150)
   })
 })
+
+describe('with OpenStreetMap', async () => {
+  const { toLatLng, fromLatLng } = await import('./analysis')
+  const osm = (await import('./sites/berlayar-rise.osm.json')).default as unknown as import('./analysis').Osm
+  it('converts site metres to latitude and longitude and back', () => {
+    const [lat, lon] = toLatLng(S, [258, 31])
+    expect(lat).toBeCloseTo(1.2706, 3); expect(lon).toBeCloseTo(103.8097, 3)
+    const p = fromLatLng(S, lat, lon)
+    expect(p[0]).toBeCloseTo(258, 3); expect(p[1]).toBeCloseTo(31, 3)
+    // Telok Blangah MRT exit A (from OpenStreetMap) sits on the station drawn on the site plan.
+    const a = fromLatLng(S, 1.2707388, 103.8098348)
+    expect(a[0]).toBeGreaterThan(240); expect(a[0]).toBeLessThan(295); expect(a[1]).toBeGreaterThan(10); expect(a[1]).toBeLessThan(45)
+  })
+  it('blocks a north view that looked clear without the existing buildings', () => {
+    const u = unitPos(S, { block: '200B', unit: '129', storey: 5 })!
+    expect(view(u, obstacles(S, 0)).farPct).toBe(100)
+    expect(view(u, obstacles(S, 0, osm)).farPct).toBeLessThan(100)
+  })
+  it('keeps the estate out of the OpenStreetMap buildings (the brochure model covers it)', () => {
+    const inEstate = osm.buildings.filter((b) => { const x = b.p[0], y = b.p[1]; return x > 110 && x < 330 && y > 80 && y < 290 })
+    expect(inEstate.length).toBe(0)
+  })
+})

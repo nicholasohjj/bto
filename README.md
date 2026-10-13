@@ -106,16 +106,29 @@ surroundings/index.html      the page (a third Vite entry)
 src/surroundings/
   analysis.ts               sun position, shading, view, road and amenity distances (tested)
   scene.ts                  the 3D estate (three.js)
-  map.ts                    the map with walking rings
+  walk.ts                   walking routes over the footpath network (tested)
+  map.ts                    the real map (Leaflet; OneMap or OpenStreetMap tiles)
   main.ts                   the page: pickers, results, comparison
-  sites/<project>.json      one file per project
+  sites/<project>.json      one file per project (from the brochure)
+  sites/<project>.osm.json  OpenStreetMap snapshot: buildings, footpaths, amenities (loaded lazily)
+scripts/osm-snapshot.mjs    refreshes a snapshot from the Overpass API
 ```
 
 Each site file is redrawn from the project's HDB brochure: block outlines and unit positions from the
 vector block floor plans, placed on the site plan by its scale bar; roads, reserved land and buildings
 traced from the site plan; amenities from the town map. Storeys are taken as 2.8 m. Heights of
-reserved land are unknown, so the page lets people assume one. Existing buildings beyond the estate's
-roads aren't modelled.
+reserved land are unknown, so the page lets people assume one. Each site has a `geo` anchor that ties
+the site plan to latitude and longitude.
+
+Around the estate, the page uses an OpenStreetMap snapshot (© OpenStreetMap contributors, ODbL):
+existing buildings go into the 3D model and the sun and view checks (a building with no height is taken
+as 2 storeys), walking times follow real footpaths and streets, and amenities such as MRT exits, schools
+and clinics are added to the brochure's list. Primary schools are listed within 1 km and 1–2 km; for
+P1 registration, people still need to check distances on OneMap. To refresh a snapshot:
+
+```
+node scripts/osm-snapshot.mjs berlayar-rise
+```
 
 `*.local.test.ts` files run only where the git-ignored brochures are present (`brochures/`): they
 check the PDF importer on a real block plan.

@@ -1,16 +1,20 @@
 /** Surroundings page: pick a unit, see its view, sun, roads and amenities, and compare units. */
-import { amenityDistances, KEY_DAYS, obstacles, roadDistances, sunDay, unitPos, view, yearSun, type Pick, type Site, type UnitPos } from './analysis'
+import { KEY_DAYS, obstacles, roadDistances, sunDay, unitPos, view, yearSun, type Amenity, type Osm, type Pick, type Pt, type Site, type UnitPos } from './analysis'
 import { createMap, KIND } from './map'
 import { createScene } from './scene'
 import berlayar from './sites/berlayar-rise.json'
+import { buildGraph, fromStarts, nearestNodes, routeTo, type Graph, type Route } from './walk'
 
 const SITES: Record<string, Site> = { 'berlayar-rise': berlayar as unknown as Site }
+/** OpenStreetMap snapshots load after the page is up (they're the bulk of the data). */
+const OSM: Record<string, () => Promise<Osm>> = { 'berlayar-rise': () => import('./sites/berlayar-rise.osm.json').then((m) => m.default as unknown as Osm) }
 const TYPE: Record<string, string> = { '2R-1': '2-room Flexi (Type 1)', '2R-2': '2-room Flexi (Type 2)', '3R': '3-room', '4R': '4-room' }
 
 const $ = <T extends HTMLElement = HTMLElement>(s: string) => document.querySelector(s) as T
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!)
 const hrs = (h: number) => h < 0.05 ? 'none' : h < 1 ? `${Math.round(h * 60)} min` : `${h.toFixed(1)} h`
 const clock = (t: number) => `${Math.floor(t)}:${String(Math.round((t % 1) * 60)).padStart(2, '0')}`
+const km = (m: number) => m < 1000 ? `${Math.round(m / 10) * 10} m` : `${(m / 1000).toFixed(1)} km`
 function toast(m: string) { const t = $('#toast'); t.textContent = m; t.classList.add('on'); setTimeout(() => t.classList.remove('on'), 2400) }
 
 /* state, from the address, then this browser, then defaults */
@@ -26,6 +30,8 @@ let future = 40, winView = false
 const today = new Date()
 const DAYS = [{ label: 'Today', m: today.getMonth() + 1, d: today.getDate() }, ...KEY_DAYS]
 let dayIdx = 0, time = 15
+let osm: Osm | null = null, graph: Graph | null = null
+const runs = new Map<string, ReturnType<typeof fromStarts>>()
 
 function persist() {
   try { localStorage.setItem('surroundings', JSON.stringify({ site: siteId, pick, compare })) } catch { /* private mode */ }
@@ -36,7 +42,7 @@ function persist() {
 
 /* views */
 const scene = createScene($('#gl') as HTMLCanvasElement)
-const map = createMap($('#map') as unknown as SVGSVGElement)
+const map = createMap($('#map'), (a) => showRoute(a))
 if (!scene) $('#hint3').textContent = 'The 3D view needs WebGL. The Map tab and results still work.'
 
 function current(): UnitPos | null {
@@ -44,6 +50,37 @@ function current(): UnitPos | null {
   if (!b.units.some((u) => u.no === pick.unit)) pick.unit = b.units[0].no
   pick.block = b.id
   return unitPos(site, pick)
+}
+
+/* places and walking */
+const centre = (u: UnitPos): Pt => { const fp = u.block.footprint; return [fp.reduce((s, p) => s + p[0], 0) / fp.length, fp.reduce((s, p) => s + p[1], 0) / fp.length] }
+/** In-estate places from the brochure, plus OpenStreetMap's once loaded (the brochure's town-map list until then). */
+const places = (): Amenity[] => osm ? [...site.amenities.filter((a) => a.local), ...osm.amenities] : site.amenities
+interface Place { a: Amenity; straight: number; route: Route | null; dist: number; walkMin: number }
+function walkTo(u: UnitPos, a: Amenity): Place {
+  const c = centre(u), straight = Math.hypot(a.at[0] - c[0], a.at[1] - c[1])
+  let route: Route | null = null
+  if (graph && !a.local) {
+    let run = runs.get(u.block.id)
+    if (!run) { run = fromStarts(graph, nearestNodes(graph, c, 4, 400)); runs.set(u.block.id, run) }
+    route = routeTo(graph, run, c, a.at)
+  }
+  const dist = route ? route.dist : Math.round(straight * 1.3)
+  return { a, straight: Math.round(straight), route, dist, walkMin: Math.max(1, Math.round(dist / 80)) }
+}
+/** Nearest of a kind by walking distance (checks the 8 closest in a straight line). */
+function nearest(u: UnitPos, kind: string, filter: (a: Amenity) => boolean = () => true): Place | null {
+  const c = centre(u)
+  const cands = places().filter((a) => a.kind === kind && filter(a)).sort((p, q2) => Math.hypot(p.at[0] - c[0], p.at[1] - c[1]) - Math.hypot(q2.at[0] - c[0], q2.at[1] - c[1])).slice(0, 8)
+  return cands.map((a) => walkTo(u, a)).sort((p, q2) => p.dist - q2.dist)[0] ?? null
+}
+function showRoute(a: Amenity) {
+  const u = current()
+  if (!u) return
+  const p = walkTo(u, a)
+  const c = centre(u)
+  if ($('#pmap').hidden) (document.querySelector('.seg [data-v=map]') as HTMLElement).click()
+  map.showRoute(p.route?.line ?? [c, a.at], `${a.name}: ${km(p.dist)}, about ${p.walkMin} min walk${p.route ? '' : ' (straight line)'}`)
 }
 
 function fillPickers() {
@@ -61,9 +98,10 @@ function update() {
   pick.storey = u.storey
   fillPickers()
   persist()
-  const obs = obstacles(site, future), d = DAYS[dayIdx], y = today.getFullYear()
+  const obs = obstacles(site, future, osm), d = DAYS[dayIdx], y = today.getFullYear()
   scene?.setUnit(u); scene?.setFuture(future); scene?.setSun(y, d.m, d.d, time)
   map.setUnit(u); map.setFuture(future)
+  map.setAmenities(places().map((a) => { const p = walkTo(u, a); return { a, label: `${km(p.dist)} · about ${p.walkMin} min walk${p.route ? '' : ' (estimate)'}` } }))
   $('#timeLbl').textContent = `${clock(time)} on ${d.label === 'Today' ? 'today' : 'the ' + d.label}`
   $('#unitNote').textContent = `Unit #${String(u.storey).padStart(2, '0')}-${u.unit.no}: floor about ${Math.round(u.floorZ)} m up, main windows face ${u.facing}.`
   renderResults(u, obs)
@@ -76,9 +114,9 @@ function sunBar(day: ReturnType<typeof sunDay>) {
 }
 
 function renderResults(u: UnitPos, obs: ReturnType<typeof obstacles>) {
-  const d = DAYS[dayIdx], y = today.getFullYear(), day = sunDay(site, u, y, d.m, d.d, obs), yr = yearSun(site, u, obs, y), v = view(u, obs), roads = roadDistances(site, u), am = amenityDistances(site, u)
+  const d = DAYS[dayIdx], y = today.getFullYear(), day = sunDay(site, u, y, d.m, d.d, obs), yr = yearSun(site, u, obs, y), v = view(u, obs), roads = roadDistances(site, u)
   const westy = yr.avgAfternoon >= 1.5, bright = yr.avgSun >= 2
-  const near = (k: string) => am.find((a) => a.a.kind === k)
+  const guessed = osm ? osm.buildings.filter((b) => b.a).length : 0
   let h = `<div class="sec"><h3>Block ${u.block.id}, #${String(u.storey).padStart(2, '0')}-${u.unit.no}</h3>
     <div class="kv"><span>Flat type</span><b>${TYPE[u.unit.type] ?? u.unit.type}</b></div>
     <div class="kv"><span>Floor height</span><b>about ${Math.round(u.floorZ)} m</b></div>
@@ -91,13 +129,19 @@ function renderResults(u: UnitPos, obs: ReturnType<typeof obstacles>) {
   h += `<div class="sec"><h3>View</h3><div class="big">${v.farPct}% <small>of the view clear for 300 m or more</small></div>
     <div class="kv"><span>Clear for 100 m or more</span><b>${v.openPct}%</b></div>
     <div class="kv"><span>Nearest building in front</span><b>${v.nearest ? `${esc(v.nearest.name.replace(/:.*/, ''))}, ${Math.round(v.nearest.dist)} m` : 'none within 1 km'}</b></div>
-    <p class="note">Looking out across 140° at eye level. Only buildings taller than your floor block the view.${future > 0 ? ` Reserved land is assumed to get ${future}-storey blocks.` : ''} <b>Only this estate and its reserved land are modelled</b>: existing buildings beyond the roads (for example the condominiums north of Telok Blangah Road) aren't, so a view that looks clear here may not be.</p></div>`
+    <p class="note">Looking out across 140° at eye level. Only buildings taller than your floor block the view.${future > 0 ? ` Reserved land is assumed to get ${future}-storey blocks.` : ''} ${osm ? `Buildings around the estate are from OpenStreetMap (${guessed} of ${osm.buildings.length} have no height there and are taken as 2 storeys).` : '<b>Loading the buildings around the estate…</b>'}</p></div>`
   h += `<div class="sec"><h3>Roads and noise</h3>${roads.slice(0, 4).map((r) => `<div class="kv"><span>${esc(r.name)}${r.faces ? ' <span class="pill warn">faces it</span>' : ''}</span><b>${r.dist} m</b></div>`).join('')}
     <p class="note">Distance from the window to the road's edge, counting height. ${roads[0].dist < 80 && roads[0].faces ? 'Close to a road and facing it, so expect traffic noise; check at different times.' : 'Visit at peak hour to judge noise.'} The Circle Line runs underground here.</p></div>`
-  h += `<div class="sec"><h3>Nearby</h3>${['mrt', 'bus', 'school', 'park', 'shops', 'community', 'health'].map((k) => near(k)).filter(Boolean).map((x) => `<div class="am"><i style="background:${KIND[x!.a.kind].c}">${esc(KIND[x!.a.kind].l)}</i><span>${esc(x!.a.name)}</span><b>${x!.dist < 1000 ? x!.dist + ' m' : (x!.dist / 1000).toFixed(1) + ' km'} · ${x!.walkMin} min</b></div>`).join('')}
-    <p class="note">Nearest of each kind. Straight-line distance from the block; walking times assume a 30% longer route at 80 m a minute. The Map tab shows more.</p></div>`
+  const kinds: [string, string][] = [['mrt', 'MRT'], ['bus', 'Bus interchange'], ['shops', 'Shops and food'], ['park', 'Park'], ['community', 'Community'], ['health', 'Clinic or hospital']]
+  const near = kinds.map(([k]) => nearest(u, k)).filter((x): x is Place => !!x)
+  h += `<div class="sec"><h3>Nearby</h3>${near.map((x) => `<div class="am link" data-am="${esc(x.a.name)}"><i style="background:${KIND[x.a.kind].c}">${esc(KIND[x.a.kind].l)}</i><span>${esc(x.a.name)}</span><b>${km(x.dist)} · ${x.walkMin} min</b></div>`).join('')}
+    <p class="note">${graph ? 'Walking distance along paths and streets from the block (OpenStreetMap). Tap one to see the route on the map.' : 'Walking estimates for now (straight line plus 30%); routes along real paths load in a moment.'} 80 m a minute.</p></div>`
+  // Primary schools by straight-line distance: Primary 1 registration gives priority within 1 km and 2 km.
+  const c = centre(u), prim = places().filter((a) => a.kind === 'school' && (a.sub === 'primary' || /primary/i.test(a.name))).map((a) => ({ a, d: Math.round(Math.hypot(a.at[0] - c[0], a.at[1] - c[1])) })).filter((x) => x.d <= 2000).sort((p, q2) => p.d - q2.d)
+  h += `<div class="sec"><h3>Primary schools within 2 km</h3>${prim.length ? prim.map((x) => `<div class="am link" data-am="${esc(x.a.name)}"><i style="background:${KIND.school.c}">S</i><span>${esc(x.a.name)}</span><b>${x.d <= 1000 ? 'within 1 km' : '1–2 km'} · ${km(x.d)}</b></div>`).join('') : '<p class="note" style="margin:0">None found.</p>'}
+    <p class="note">Primary 1 registration gives priority to homes within 1 km and 2 km of a school. These are rough straight-line distances to the school's map point; the official distance is measured by SLA from your address (OneMap's school query).</p></div>`
   h += compareHtml(obs)
-  h += `<div class="sec"><p class="note" style="margin:0">From ${esc(site.source)}. Blocks are placed to within a few metres; storeys are taken as ${site.storeyM} m. Heights of future buildings around the estate are not known, and existing buildings beyond the estate's roads aren't modelled, so the view out is only part of the picture. A planning aid, not a survey.</p></div>`
+  h += `<div class="sec"><p class="note" style="margin:0">Estate: ${esc(site.source)}. ${osm ? `Surroundings: ${esc(osm.attribution)}, snapshot of ${osm.fetched}.` : ''} Blocks are placed to within a few metres; storeys are taken as ${site.storeyM} m. Heights of future buildings on reserved land are not known. A planning aid, not a survey.</p></div>`
   $('#results').innerHTML = h
 }
 
@@ -105,8 +149,8 @@ function compareHtml(obs: ReturnType<typeof obstacles>) {
   const rows = compare.map((p) => unitPos(site, p)).filter((u): u is UnitPos => !!u)
   if (!rows.length) return `<div class="sec"><h3>Compare units</h3><p class="note" style="margin:0">Add up to 3 units to compare their sun, view and distances side by side.</p></div>`
   const y = today.getFullYear(), data = rows.map((u) => {
-    const yr = yearSun(site, u, obs, y), v = view(u, obs), r = roadDistances(site, u)[0], mrt = amenityDistances(site, u).find((a) => a.a.kind === 'mrt')!
-    return { u, sun: yr.avgSun, pm: yr.avgAfternoon, far: v.farPct, road: r.dist, mrt: mrt.walkMin }
+    const yr = yearSun(site, u, obs, y), v = view(u, obs), r = roadDistances(site, u)[0], mrt = nearest(u, 'mrt')
+    return { u, sun: yr.avgSun, pm: yr.avgAfternoon, far: v.farPct, road: r.dist, mrt: mrt ? mrt.walkMin : 99 }
   })
   const best = (k: keyof (typeof data)[number], hi: boolean) => { const vals = data.map((x) => x[k] as number); return hi ? Math.max(...vals) : Math.min(...vals) }
   const cell = (v: number, b: number, s: string) => `<td class="${data.length > 1 && v === b ? 'best' : ''}">${s}</td>`
@@ -124,7 +168,19 @@ function compareHtml(obs: ReturnType<typeof obstacles>) {
 }
 
 /* controls */
-$('#site').addEventListener('change', (e) => { siteId = (e.target as HTMLSelectElement).value; site = SITES[siteId]; compare = []; pick = { block: site.blocks[0].id, unit: site.blocks[0].units[0].no, storey: 10 }; scene?.setSite(site); map.setSite(site); update() })
+async function loadOsm() {
+  osm = null; graph = null; runs.clear()
+  const load = OSM[siteId]
+  if (!load) return
+  try {
+    const o = await load()
+    if (site !== SITES[siteId]) return
+    osm = o; graph = buildGraph(o.walk)
+    scene?.setOsm(o)
+    update()
+  } catch { toast('Could not load the buildings around the estate') }
+}
+$('#site').addEventListener('change', (e) => { siteId = (e.target as HTMLSelectElement).value; site = SITES[siteId]; compare = []; pick = { block: site.blocks[0].id, unit: site.blocks[0].units[0].no, storey: 10 }; scene?.setSite(site); map.setSite(site); update(); loadOsm() })
 $('#block').addEventListener('change', (e) => { pick.block = (e.target as HTMLSelectElement).value; update(); scene?.reset() })
 $('#unit').addEventListener('change', (e) => { pick.unit = (e.target as HTMLSelectElement).value; update() })
 for (const id of ['#storey', '#storeyR']) $(id).addEventListener('input', (e) => { const v = parseInt((e.target as HTMLInputElement).value); if (isFinite(v)) { pick.storey = v; update() } })
@@ -135,7 +191,12 @@ $('#addCmp').addEventListener('click', () => {
   if (compare.some((p) => p.block === pick.block && p.unit === pick.unit && p.storey === pick.storey)) { toast('Already in the comparison'); return }
   compare = [...compare, { ...pick }].slice(-3); update(); toast('Added to the comparison')
 })
-$('#results').addEventListener('click', (e) => { const b = (e.target as HTMLElement).closest<HTMLElement>('[data-rm]'); if (b) { compare.splice(+b.dataset.rm!, 1); update() } })
+$('#results').addEventListener('click', (e) => {
+  const t = e.target as HTMLElement, b = t.closest<HTMLElement>('[data-rm]')
+  if (b) { compare.splice(+b.dataset.rm!, 1); update(); return }
+  const am = t.closest<HTMLElement>('[data-am]')
+  if (am) { const a = places().find((x) => x.name === am.dataset.am); if (a) showRoute(a) }
+})
 $('#winView').addEventListener('click', () => { winView = !winView; $('#winView').setAttribute('aria-pressed', String(winView)); scene?.windowView(winView); $('#hint3').textContent = winView ? 'Drag to look around. This is the view straight out of the main windows at eye level.' : '' })
 $('#reset').addEventListener('click', () => { if (winView) { winView = false; $('#winView').setAttribute('aria-pressed', 'false'); scene?.windowView(false); $('#hint3').textContent = '' } scene?.reset() })
 document.querySelectorAll<HTMLElement>('.seg [data-v]').forEach((b) => b.addEventListener('click', () => {
@@ -149,3 +210,4 @@ scene?.onHeading((deg) => { $('#compass').style.transform = `rotate(${-deg}deg)`
 scene?.setSite(site)
 map.setSite(site)
 update()
+loadOsm()

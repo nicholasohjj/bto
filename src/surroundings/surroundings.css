@@ -73,3 +73,13 @@ input[type=range]{width:100%;accent-color:var(--accent)}
   #left,#right{border:0;border-bottom:1px solid var(--line);overflow:visible}
   #stage{min-height:55vh}
 }
+
+/* map */
+#map{position:absolute;inset:0;background:var(--paper)}
+.leaflet-tooltip.blk{background:transparent;border:0;box-shadow:none;font:600 11px var(--f-body);color:#14242a;padding:0}
+.leaflet-tooltip.blk::before{display:none}
+.leaflet-tooltip.ring{background:rgba(255,255,255,.85);border:0;color:#17707a;font-size:11px;padding:1px 5px}
+.leaflet-tooltip.ring::before{display:none}
+.amk i{display:grid;place-items:center;width:20px;height:20px;border-radius:50%;color:#fff;font:700 10px var(--f-body);font-style:normal;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.35)}
+.am.link{cursor:pointer}.am.link:hover span{text-decoration:underline}
+.am.on span{font-weight:600;color:var(--accent)}

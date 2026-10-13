@@ -1,0 +1,108 @@
+// Snapshot OpenStreetMap data around a Surroundings site: buildings (with heights), the walking
+// network, and amenities, converted to the site's metres. Run occasionally to refresh:
+//   node scripts/osm-snapshot.mjs berlayar-rise
+// Data © OpenStreetMap contributors, ODbL; the page credits this.
+import { readFileSync, writeFileSync } from 'node:fs'
+import { simplifyWalk } from './simplify-walk.mjs'
+
+const id = process.argv[2] || 'berlayar-rise'
+const site = JSON.parse(readFileSync(`src/surroundings/sites/${id}.json`, 'utf8'))
+const g = site.geo
+if (!g) throw new Error(`${id}.json has no "geo" (lat0, lon0, cx, cy) to place it on the map`)
+const KX = 111320 * Math.cos(g.lat0 * Math.PI / 180), KY = 110574
+const toSite = (lat, lon) => [+(g.cx + (lon - g.lon0) * KX).toFixed(1), +(g.cy - (lat - g.lat0) * KY).toFixed(1)]
+const C = `${g.lat0},${g.lon0}`
+/** A south,west,north,east box reaching `m` metres from the site centre (box queries are lighter than "around"). */
+const box = (m) => { const dl = m / KY, dn = m / KX; return `${(g.lat0 - dl).toFixed(5)},${(g.lon0 - dn).toFixed(5)},${(g.lat0 + dl).toFixed(5)},${(g.lon0 + dn).toFixed(5)}` }
+
+async function overpass(q) {
+  // Public servers are often busy: try each a few times, waiting between attempts.
+  for (let attempt = 0; attempt < 4; attempt++) {
+    for (const url of ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter']) {
+      const r = await fetch(url, { method: 'POST', headers: { 'User-Agent': 'bto-money-timeline/1.0 (surroundings snapshot)', Accept: 'application/json' }, body: new URLSearchParams({ data: q }) }).catch(() => null)
+      if (r?.ok) return (await r.json()).elements
+      console.warn(url, r?.status ?? 'network error')
+    }
+    await new Promise((res) => setTimeout(res, 20000 * (attempt + 1)))
+  }
+  throw new Error('Overpass unavailable')
+}
+
+const inside = (p, poly) => { let c = false; for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) if ((poly[i][1] > p[1]) !== (poly[j][1] > p[1]) && p[0] < (poly[j][0] - poly[i][0]) * (p[1] - poly[i][1]) / (poly[j][1] - poly[i][1]) + poly[i][0]) c = !c; return c }
+
+// The estate itself, which the brochure model covers (OSM has it only as a construction site).
+const [estateWay] = await overpass(`[out:json][timeout:60];way["landuse"="construction"]["name"="${site.name}"](around:600,${C});out geom;`)
+const estate = estateWay ? estateWay.geometry.map((p) => toSite(p.lat, p.lon)) : []
+
+// Buildings: height from "height", else storeys from "building:levels" (3 m each), else assumed 2 storeys.
+const B = await overpass(`[out:json][timeout:120];way["building"](${box(1300)});out tags geom;`)
+let known = 0
+const buildings = []
+for (const w of B) {
+  const poly = (w.geometry || []).map((p) => toSite(p.lat, p.lon))
+  if (poly.length < 4) continue
+  const c = poly.reduce((s, p) => [s[0] + p[0] / poly.length, s[1] + p[1] / poly.length], [0, 0])
+  if (estate.length && inside(c, estate)) continue
+  const t = w.tags || {}, h = parseFloat(t.height), lv = parseFloat(t['building:levels'])
+  const height = isFinite(h) && h > 0 ? h : isFinite(lv) && lv > 0 ? lv * 3 : 6
+  const has = (isFinite(h) && h > 0) || (isFinite(lv) && lv > 0)
+  if (has) known++
+  poly.pop()   // closed ways repeat the first point
+  buildings.push({ h: +height.toFixed(1), ...(has ? {} : { a: 1 }), ...(t.name ? { n: t.name.slice(0, 60) } : {}), p: poly.flat() })
+}
+
+// Walking network: footpaths and streets (not expressways), with shared nodes joined.
+const W = await overpass(`[out:json][timeout:180];way["highway"~"^(footway|path|pedestrian|steps|living_street|residential|service|unclassified|tertiary|tertiary_link|secondary|secondary_link|primary|primary_link|trunk|trunk_link|cycleway|corridor|track)$"]["access"!~"^(private|no)$"]["foot"!="no"](${box(2600)});out geom;`)
+const idx = new Map(), nodes = [], ways = []
+for (const w of W) {
+  const ids = w.nodes || [], geom = w.geometry || []
+  const list = []
+  ids.forEach((nid, i) => {
+    if (!geom[i]) return
+    if (!idx.has(nid)) { idx.set(nid, nodes.length / 2); const [x, y] = toSite(geom[i].lat, geom[i].lon); nodes.push(Math.round(x), Math.round(y)) }
+    list.push(idx.get(nid))
+  })
+  if (list.length > 1) ways.push(list)
+}
+
+// Amenities.
+const A = await overpass(`[out:json][timeout:120];(
+  node["railway"="subway_entrance"](${box(2600)});
+  nwr["amenity"="school"]["name"](${box(2600)});
+  nwr["leisure"="park"]["name"](${box(2600)});
+  nwr["shop"~"^(supermarket|mall)$"]["name"](${box(2600)});
+  nwr["amenity"~"^(marketplace|food_court)$"]["name"](${box(2600)});
+  nwr["name"~"Food Centre|Hawker"](${box(2600)});
+  nwr["amenity"~"^(clinic|hospital)$"]["name"](${box(2600)});
+  nwr["amenity"="community_centre"]["name"](${box(2600)});
+  nwr["amenity"="bus_station"]["name"](${box(2600)});
+  nwr["amenity"="library"]["name"](${box(2600)});
+);out tags center;`)
+const kindOf = (t) => {
+  if (t.railway === 'subway_entrance') return 'mrt'
+  if (t.amenity === 'school') return 'school'
+  if (t.leisure === 'park') return 'park'
+  if (t.amenity === 'clinic' || t.amenity === 'hospital') return 'health'
+  if (t.amenity === 'community_centre' || t.amenity === 'library') return 'community'
+  if (t.amenity === 'bus_station') return 'bus'
+  return 'shops'
+}
+const amenities = [], seen = new Set()
+for (const e of A) {
+  const t = e.tags || {}, lat = e.lat ?? e.center?.lat, lon = e.lon ?? e.center?.lon
+  if (lat == null) continue
+  let name = t.name || ''
+  const kind = kindOf(t)
+  if (kind === 'mrt') name = name.replace(/\s*\((\w+)\)\s*([A-Z0-9]*)$/, (_m, line, exit) => ` MRT (${line})${exit ? `, exit ${exit}` : ''}`) || 'MRT exit'
+  if (!name) continue
+  const at = toSite(lat, lon), key = kind + name
+  if (seen.has(key)) continue
+  seen.add(key)
+  // Schools: primary and secondary matter most (Primary 1 registration uses distance from home).
+  const sub = kind === 'school' ? (/primary/i.test(name) ? 'primary' : /secondary|high school/i.test(name) ? 'secondary' : 'other') : undefined
+  amenities.push({ name: name.slice(0, 70), kind, at, ...(sub ? { sub } : {}) })
+}
+
+const out = { fetched: new Date().toISOString().slice(0, 10), attribution: '© OpenStreetMap contributors (ODbL)', buildings, walk: simplifyWalk({ nodes, ways }), amenities }
+writeFileSync(`src/surroundings/sites/${id}.osm.json`, JSON.stringify(out))
+console.log(`${buildings.length} buildings (${known} with heights), ${nodes.length / 2} path nodes in ${ways.length} ways, ${amenities.length} amenities`)

@@ -1,10 +1,13 @@
 /** The 3D estate: blocks at their heights, roads, parks, reserved sites, your unit, the sun. */
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
-import { azDir, ellipsePoly, sunPosition, sgTime, type Pt, type Site, type UnitPos } from './analysis'
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
+import { azDir, ellipsePoly, sunPosition, sgTime, type Osm, type Pt, type Site, type UnitPos } from './analysis'
 
 export interface SceneApi {
   setSite(site: Site): void
+  /** Existing buildings and streets around the estate (OpenStreetMap). */
+  setOsm(osm: Osm): void
   setFuture(storeys: number): void
   setUnit(u: UnitPos | null): void
   setSun(y: number, m: number, d: number, hours: number): void
@@ -34,8 +37,9 @@ export function createScene(canvas: HTMLCanvasElement): SceneApi | null {
   sc.left = -450; sc.right = 450; sc.top = 450; sc.bottom = -450; sc.near = 10; sc.far = 3000
   sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.6
   scene.add(hemi, sun, sun.target)
-  const world = new THREE.Group(), futureG = new THREE.Group(), unitG = new THREE.Group(), labelG = new THREE.Group()
-  scene.add(world, futureG, unitG, labelG)
+  const world = new THREE.Group(), futureG = new THREE.Group(), unitG = new THREE.Group(), labelG = new THREE.Group(), osmG = new THREE.Group()
+  scene.add(world, futureG, unitG, labelG, osmG)
+  let osmData: Osm | null = null
 
   let site: Site | null = null, centre: Pt = [200, 180], future = 40, unit: UnitPos | null = null, winMode = false
   const look = { yaw: 0, pitch: 0 }
@@ -81,6 +85,8 @@ export function createScene(canvas: HTMLCanvasElement): SceneApi | null {
     future: new THREE.MeshStandardMaterial({ color: '#9fb4c8', roughness: 1, transparent: true, opacity: 0.22, depthWrite: false }),
     futureFlat: new THREE.MeshStandardMaterial({ color: '#c9d3dc', roughness: 1 }),
     unit: new THREE.MeshStandardMaterial({ color: '#ff8a00', emissive: '#ff6a00', emissiveIntensity: 0.8 }),
+    osm: new THREE.MeshStandardMaterial({ color: '#c9cdd0', roughness: 0.9 }),
+    osmGuess: new THREE.MeshStandardMaterial({ color: '#d9dcde', roughness: 0.9, transparent: true, opacity: 0.6 }),
   }
 
   function build() {
@@ -135,6 +141,33 @@ export function createScene(canvas: HTMLCanvasElement): SceneApi | null {
       labelG.add(sp, pin)
     }
     if (unit) { const sp = label('Your unit', `#${String(unit.storey).padStart(2, '0')}-${unit.unit.no}, faces ${unit.facing}`, '#ff8a00'); sp.position.copy(V(unit.unit.win, unit.floorZ + site.storeyM + 2)); labelG.add(sp) }
+  }
+  /** OpenStreetMap buildings as two merged meshes (known heights, guessed heights) and streets as lines. */
+  function buildOsm() {
+    osmG.clear()
+    if (!osmData || !site) return
+    const known: THREE.BufferGeometry[] = [], guess: THREE.BufferGeometry[] = []
+    for (const b of osmData.buildings) {
+      const pts: Pt[] = []
+      for (let i = 0; i < b.p.length; i += 2) pts.push([b.p[i], b.p[i + 1]])
+      if (pts.length < 3) continue
+      const g = new THREE.ExtrudeGeometry(shape(pts), { depth: b.h, bevelEnabled: false })
+      g.rotateX(-Math.PI / 2)
+      ;(b.a ? guess : known).push(g.toNonIndexed())
+    }
+    for (const [list, mat] of [[known, mats.osm], [guess, mats.osmGuess]] as const) {
+      if (!list.length) continue
+      const m = new THREE.Mesh(mergeGeometries(list as THREE.BufferGeometry[]), mat)
+      m.castShadow = mat === mats.osm; m.receiveShadow = true
+      osmG.add(m)
+    }
+    const w = osmData.walk, seg: number[] = []
+    for (const way of w.ways) for (let k = 1; k < way.length; k++) {
+      const a = way[k - 1], b = way[k]
+      seg.push(w.nodes[2 * a] - centre[0], 0.2, w.nodes[2 * a + 1] - centre[1], w.nodes[2 * b] - centre[0], 0.2, w.nodes[2 * b + 1] - centre[1])
+    }
+    const lg = new THREE.BufferGeometry(); lg.setAttribute('position', new THREE.Float32BufferAttribute(seg, 3))
+    osmG.add(new THREE.LineSegments(lg, new THREE.LineBasicMaterial({ color: '#f3f1ea', transparent: true, opacity: 0.7 })))
   }
   function buildFuture() {
     futureG.clear()
@@ -208,6 +241,7 @@ export function createScene(canvas: HTMLCanvasElement): SceneApi | null {
       centre = [(Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...ys) + Math.max(...ys)) / 2]
       build(); reset()
     },
+    setOsm(o) { osmData = o; buildOsm() },
     setFuture(st) { future = st; buildFuture() },
     setUnit(u) {
       const changedBlock = unit?.block.id !== u?.block.id

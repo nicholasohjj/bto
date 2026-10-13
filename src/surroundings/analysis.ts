@@ -10,15 +10,36 @@ export interface Block { id: string; storeys: number; footprint: Pt[]; units: Un
 export interface Building { name: string; h: number; poly?: Pt[]; ellipse?: [number, number, number, number] }
 export interface Zone { name: string; kind: 'future' | 'park'; poly: Pt[] }
 export interface Road { name: string; kind: 'major' | 'minor' | 'expressway'; w: number; line: Pt[] }
-export interface Amenity { name: string; kind: string; at: Pt }
+export interface Amenity { name: string; kind: string; at: Pt; sub?: string; local?: boolean }
 export interface Site {
   id: string; name: string; town: string; source: string
   lat: number; lon: number; storeyM: number
+  /** Site point (cx, cy) sits at (lat0, lon0); north is up, units are metres. */
+  geo: { lat0: number; lon0: number; cx: number; cy: number }
   blocks: Block[]; buildings: Building[]; zones: Zone[]; roads: Road[]
   rail: { name: string; underground: boolean; line: Pt[] }[]
   amenities: Amenity[]
 }
 export interface Pick { block: string; unit: string; storey: number }
+/** OpenStreetMap snapshot around the site (sites/<id>.osm.json). */
+export interface Osm {
+  fetched: string; attribution: string
+  /** h: height in metres; a: height assumed (no data); n: name; p: x,y pairs. */
+  buildings: { h: number; a?: number; n?: string; p: number[] }[]
+  walk: { nodes: number[]; ways: number[][] }
+  amenities: Amenity[]
+}
+
+/* map placement */
+const KY = 110574
+export function toLatLng(site: Site, p: Pt): [number, number] {
+  const g = site.geo, kx = 111320 * Math.cos(g.lat0 * Math.PI / 180)
+  return [g.lat0 - (p[1] - g.cy) / KY, g.lon0 + (p[0] - g.cx) / kx]
+}
+export function fromLatLng(site: Site, lat: number, lon: number): Pt {
+  const g = site.geo, kx = 111320 * Math.cos(g.lat0 * Math.PI / 180)
+  return [g.cx + (lon - g.lon0) * kx, g.cy - (lat - g.lat0) * KY]
+}
 
 /* sun */
 const rad = Math.PI / 180
@@ -74,11 +95,27 @@ export function rayPoly(o: Pt, d: Pt, poly: Pt[]) {
 }
 
 /* obstacles: everything that can block sun or view */
-export interface Obstacle { name: string; poly: Pt[]; h: number; block?: string; assumed?: boolean }
-export function obstacles(site: Site, futureStoreys: number): Obstacle[] {
+export interface Obstacle { name: string; poly: Pt[]; h: number; block?: string; assumed?: boolean; /** bounding circle, for skipping far-off rays */ c?: [number, number, number] }
+const circle = (poly: Pt[]): [number, number, number] => {
+  const cx = poly.reduce((s, p) => s + p[0], 0) / poly.length, cy = poly.reduce((s, p) => s + p[1], 0) / poly.length
+  return [cx, cy, Math.max(...poly.map((p) => Math.hypot(p[0] - cx, p[1] - cy)))]
+}
+/** Does a ray (origin o, unit direction d) pass within a circle? */
+const nearRay = (o: Pt, d: Pt, c: [number, number, number]) => {
+  const vx = c[0] - o[0], vy = c[1] - o[1], t = vx * d[0] + vy * d[1]
+  if (t < -c[2]) return false
+  return Math.abs(vx * d[1] - vy * d[0]) <= c[2]
+}
+export function obstacles(site: Site, futureStoreys: number, osm?: Osm | null): Obstacle[] {
   const out: Obstacle[] = site.blocks.map((b) => ({ name: 'Block ' + b.id, poly: b.footprint, h: b.storeys * site.storeyM + 2, block: b.id }))
   for (const g of site.buildings) out.push({ name: g.name, h: g.h, poly: g.poly ?? ellipsePoly(...g.ellipse!) })
   if (futureStoreys > 0) for (const z of site.zones) if (z.kind === 'future') out.push({ name: z.name, poly: z.poly, h: futureStoreys * site.storeyM, assumed: true })
+  for (const b of osm?.buildings ?? []) {
+    const poly: Pt[] = []
+    for (let i = 0; i < b.p.length; i += 2) poly.push([b.p[i], b.p[i + 1]])
+    out.push({ name: b.n ?? (b.a ? 'A nearby building' : `A ${Math.round(b.h / 3)}-storey building`), poly, h: b.h, ...(b.a ? { assumed: true } : {}) })
+  }
+  for (const o of out) o.c = circle(o.poly)
   return out
 }
 
@@ -95,6 +132,7 @@ export function unitPos(site: Site, p: Pick): UnitPos | null {
 /** Is the straight line from the eye towards the sun blocked by anything taller than the line? */
 function shaded(eye: [number, number, number], dir: Pt, tanAlt: number, obs: Obstacle[]) {
   for (const o of obs) {
+    if (o.h <= eye[2] || (o.c && !nearRay([eye[0], eye[1]], dir, o.c))) continue
     const t = rayPoly([eye[0], eye[1]], dir, o.poly)
     if (t < Infinity && eye[2] + t * tanAlt < o.h) return o
   }
@@ -137,7 +175,7 @@ export function view(u: UnitPos, obs: Obstacle[]): View {
     const a = base + k * rad, dir: Pt = [Math.cos(a), Math.sin(a)]
     let dist = 1000, name: string | undefined
     for (const o of obs) {
-      if (o.h <= u.eye[2]) continue
+      if (o.h <= u.eye[2] || (o.c && !nearRay([u.eye[0], u.eye[1]], dir, o.c))) continue
       const t = rayPoly([u.eye[0], u.eye[1]], dir, o.poly)
       if (t < dist) { dist = t; name = o.name }
     }
