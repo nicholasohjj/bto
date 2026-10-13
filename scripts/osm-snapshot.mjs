@@ -118,6 +118,7 @@ for (const e of A) {
   amenities.push({ name: name.slice(0, 70), kind, at, ...(sub ? { sub } : {}) })
 }
 
-const out = { fetched: new Date().toISOString().slice(0, 10), attribution: '© OpenStreetMap contributors (ODbL)', buildings, walk: simplifyWalk({ nodes, ways }), amenities }
+// The estate's outline too: walks start anywhere on its edge (its own paths aren't mapped while it's being built).
+const out = { fetched: new Date().toISOString().slice(0, 10), attribution: '© OpenStreetMap contributors (ODbL)', ...(estate.length ? { estate: estate.slice(0, -1) } : {}), buildings, walk: simplifyWalk({ nodes, ways }), amenities }
 writeFileSync(`src/surroundings/sites/${id}.osm.json`, JSON.stringify(out))
 console.log(`${buildings.length} buildings (${known} with heights), ${nodes.length / 2} path nodes in ${ways.length} ways, ${amenities.length} amenities`)

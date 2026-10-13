@@ -4,14 +4,16 @@ import { createMap, KIND } from './map'
 import { createScene } from './scene'
 import berlayar from './sites/berlayar-rise.json'
 import kebunBaru from './sites/kebun-baru-breeze.json'
+import kebunBaruRidge from './sites/kebun-baru-ridge.json'
 import { saveChosenUnit, studioUnitUrl, unitLabel } from '../state/unit'
 import { buildGraph, estateStarts, fromStarts, hull, routeTo, type Graph, type Route } from './walk'
 
-const SITES: Record<string, Site> = { 'berlayar-rise': berlayar as unknown as Site, 'kebun-baru-breeze': kebunBaru as unknown as Site }
+const SITES: Record<string, Site> = { 'berlayar-rise': berlayar as unknown as Site, 'kebun-baru-breeze': kebunBaru as unknown as Site, 'kebun-baru-ridge': kebunBaruRidge as unknown as Site }
 /** OpenStreetMap snapshots load after the page is up (they're the bulk of the data). */
 const OSM: Record<string, () => Promise<Osm>> = {
   'berlayar-rise': () => import('./sites/berlayar-rise.osm.json').then((m) => m.default as unknown as Osm),
   'kebun-baru-breeze': () => import('./sites/kebun-baru-breeze.osm.json').then((m) => m.default as unknown as Osm),
+  'kebun-baru-ridge': () => import('./sites/kebun-baru-ridge.osm.json').then((m) => m.default as unknown as Osm),
 }
 const TYPE: Record<string, string> = { '2R-1': '2-room Flexi (Type 1)', '2R-2': '2-room Flexi (Type 2)', '3R': '3-room', '4R': '4-room' }
 
@@ -70,7 +72,7 @@ function walkTo(u: UnitPos, a: Amenity): Place {
   if (graph && !a.local) {
     let run = runs.get(u.block.id)
     if (!run) {
-      const estate = hull([...site.blocks.flatMap((b) => b.footprint), ...site.buildings.flatMap((b) => b.poly ?? [])])
+      const estate = osm?.estate ?? hull([...site.blocks.flatMap((b) => b.footprint), ...site.buildings.flatMap((b) => b.poly ?? [])])
       run = fromStarts(graph, estateStarts(graph, c, estate)); runs.set(u.block.id, run)
     }
     route = routeTo(graph, run, c, a.at)
@@ -98,7 +100,8 @@ function fillPickers() {
   $<HTMLSelectElement>('#block').innerHTML = site.blocks.map((b) => `<option value="${b.id}"${b.id === pick.block ? ' selected' : ''}>${b.id} · ${b.storeys} storeys</option>`).join('')
   const b = site.blocks.find((x) => x.id === pick.block)!
   $<HTMLSelectElement>('#unit').innerHTML = b.units.map((u) => `<option value="${u.no}"${u.no === pick.unit ? ' selected' : ''}>Unit ${u.no} · ${TYPE[u.type] ?? u.type}</option>`).join('')
-  for (const id of ['#storey', '#storeyR']) { const el = $<HTMLInputElement>(id); el.max = String(b.storeys); if (el !== document.activeElement || id === '#storeyR') el.value = String(pick.storey) }
+  const lowest = b.units.find((u) => u.no === pick.unit)?.from ?? 2
+  for (const id of ['#storey', '#storeyR']) { const el = $<HTMLInputElement>(id); el.min = String(lowest); el.max = String(b.storeys); if (el !== document.activeElement || id === '#storeyR') el.value = String(pick.storey) }
   $<HTMLSelectElement>('#day').innerHTML = DAYS.map((d, i) => `<option value="${i}"${i === dayIdx ? ' selected' : ''}>${d.label}</option>`).join('')
 }
 
@@ -135,7 +138,7 @@ function update() {
   const studio = studioUnitUrl({ site: siteId, type: u.unit.type }), toStudio = $<HTMLAnchorElement>('#toStudio')
   toStudio.hidden = !studio
   if (studio) { toStudio.href = studio; toStudio.title = `Open the ${TYPE[u.unit.type] ?? u.unit.type} layout, redrawn from HDB's brochure, for ${unitLabel({ block: u.block.id, unit: u.unit.no, storey: u.storey })}` }
-  $('#unitNote').textContent = `Unit #${String(u.storey).padStart(2, '0')}-${u.unit.no} is about ${Math.round(u.floorZ)} m above ground; its main windows face ${u.facing}.`
+  $('#unitNote').textContent = `Unit #${String(u.storey).padStart(2, '0')}-${u.unit.no} is about ${Math.round(u.floorZ)} m above ground; its main windows face ${u.facing}.${u.unit.from ? ` This stack starts at storey ${u.unit.from}.` : ''}`
   renderResults(u, obs)
 }
 /** Sliders fire many times a frame; redo the results once per frame at most. */

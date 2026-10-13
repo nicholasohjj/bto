@@ -119,12 +119,13 @@ src/surroundings/
 scripts/osm-snapshot.mjs    refreshes a snapshot from the Overpass API
 ```
 
-Sites: Berlayar Rise and Kebun Baru Breeze (June 2026). Each site file is redrawn from the project's HDB
+Sites: Berlayar Rise, Kebun Baru Breeze and Kebun Baru Ridge (June 2026). Each site file is redrawn from the project's HDB
 brochure: block outlines and unit positions from the vector block floor plans, placed on the site plan
-(Kebun Baru Breeze's blocks are turned about 16° from north, so they were fitted unit by unit); roads,
+(blocks turned from north, as at both Kebun Baru projects, are fitted unit by unit); roads,
 reserved land and buildings traced from the site plan or taken from OpenStreetMap; amenities from the
 town map. Storeys are taken as 2.8 m. Heights of reserved land are unknown, so the page lets people
-assume one (the control hides where there is none). Each site has a `geo` anchor that ties the site plan
+assume one (the control hides where there is none). A unit stack can start above the 2nd storey (`from`, from the
+brochure's unit distribution). Each site has a `geo` anchor that ties the site plan
 to latitude and longitude, checked against OpenStreetMap's outline of the estate or its blocks.
 
 A brochure's block-plan scale bar isn't always drawn at the plan's scale (Kebun Baru Breeze page 17 is
@@ -139,7 +140,11 @@ P1 registration, people still need to check distances on OneMap. To refresh a sn
 ```
 node scripts/osm-snapshot.mjs berlayar-rise
 node scripts/osm-snapshot.mjs kebun-baru-breeze
+node scripts/osm-snapshot.mjs kebun-baru-ridge
 ```
+
+`sites.test.ts` checks every site: each window on its block outline and facing out, a Flat Studio layout
+for each unit type, and storeys within each stack.
 
 `*.local.test.ts` files run only where the git-ignored brochures are present (`brochures/`): they
 check the PDF importer on a real block plan.

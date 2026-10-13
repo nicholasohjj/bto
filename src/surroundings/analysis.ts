@@ -5,7 +5,8 @@
  */
 
 export type Pt = [number, number]
-export interface Unit { no: string; type: string; win: Pt; n: Pt }
+/** A unit stack; `from` is its lowest storey when that isn't the 2nd (lower floors may be void decks, shops or roofs). */
+export interface Unit { no: string; type: string; win: Pt; n: Pt; from?: number }
 export interface Block { id: string; storeys: number; footprint: Pt[]; units: Unit[] }
 export interface Building { name: string; h: number; poly?: Pt[]; ellipse?: [number, number, number, number] }
 export interface Zone { name: string; kind: 'future' | 'park'; poly: Pt[] }
@@ -24,6 +25,8 @@ export interface Pick { block: string; unit: string; storey: number }
 /** OpenStreetMap snapshot around the site (sites/<id>.osm.json). */
 export interface Osm {
   fetched: string; attribution: string
+  /** The estate's outline (site metres), where OpenStreetMap has it as a construction site. */
+  estate?: Pt[]
   /** h: height in metres; a: height assumed (no data); n: name; p: x,y pairs. */
   buildings: { h: number; a?: number; n?: string; p: number[] }[]
   walk: { nodes: number[]; ways: number[][] }
@@ -124,7 +127,7 @@ export interface UnitPos { block: Block; unit: Unit; storey: number; floorZ: num
 export function unitPos(site: Site, p: Pick): UnitPos | null {
   const block = site.blocks.find((b) => b.id === p.block), unit = block?.units.find((u) => u.no === p.unit)
   if (!block || !unit) return null
-  const storey = Math.max(2, Math.min(block.storeys, Math.round(p.storey)))
+  const storey = Math.max(unit.from ?? 2, Math.min(block.storeys, Math.round(p.storey)))
   const floorZ = (storey - 1) * site.storeyM
   return { block, unit, storey, floorZ, eye: [unit.win[0] + unit.n[0] * 0.3, unit.win[1] + unit.n[1] * 0.3, floorZ + 1.5], n: unit.n, facing: compass(unit.n) }
 }
