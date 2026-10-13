@@ -3,12 +3,16 @@ import { KEY_DAYS, obstacles, roadDistances, sunDay, unitPos, view, yearSun, typ
 import { createMap, KIND } from './map'
 import { createScene } from './scene'
 import berlayar from './sites/berlayar-rise.json'
+import kebunBaru from './sites/kebun-baru-breeze.json'
 import { saveChosenUnit, studioUnitUrl, unitLabel } from '../state/unit'
 import { buildGraph, estateStarts, fromStarts, hull, routeTo, type Graph, type Route } from './walk'
 
-const SITES: Record<string, Site> = { 'berlayar-rise': berlayar as unknown as Site }
+const SITES: Record<string, Site> = { 'berlayar-rise': berlayar as unknown as Site, 'kebun-baru-breeze': kebunBaru as unknown as Site }
 /** OpenStreetMap snapshots load after the page is up (they're the bulk of the data). */
-const OSM: Record<string, () => Promise<Osm>> = { 'berlayar-rise': () => import('./sites/berlayar-rise.osm.json').then((m) => m.default as unknown as Osm) }
+const OSM: Record<string, () => Promise<Osm>> = {
+  'berlayar-rise': () => import('./sites/berlayar-rise.osm.json').then((m) => m.default as unknown as Osm),
+  'kebun-baru-breeze': () => import('./sites/kebun-baru-breeze.osm.json').then((m) => m.default as unknown as Osm),
+}
 const TYPE: Record<string, string> = { '2R-1': '2-room Flexi (Type 1)', '2R-2': '2-room Flexi (Type 2)', '3R': '3-room', '4R': '4-room' }
 
 const $ = <T extends HTMLElement = HTMLElement>(s: string) => document.querySelector(s) as T
@@ -124,6 +128,7 @@ function update() {
     map.setAmenities(places().map((a) => ({ a, label: walkLabel(u, a) })))
     scene?.labelText((a) => walkLabel(u, a))
   }
+  $('#futureSec').hidden = !site.zones.some((z) => z.kind === 'future')
   $('#timeLbl').textContent = `${clock(time)} ${dayText(d)}`
   // The money plan and Flat Studio pick this unit up from here.
   saveChosenUnit({ site: siteId, block: u.block.id, unit: u.unit.no, storey: u.storey, type: u.unit.type, facing: u.facing })
@@ -162,9 +167,9 @@ function renderResults(u: UnitPos, obs: ReturnType<typeof obstacles>) {
   h += `<div class="sec"><h3>View</h3><div class="big">${v.farPct}% <small>of the view clear for 300 m or more</small></div>
     <div class="kv"><span>Clear for 100 m or more</span><b>${v.openPct}%</b></div>
     <div class="kv"><span>Nearest building in front</span><b>${v.nearest ? `${esc(v.nearest.name.replace(/:.*/, ''))}, ${Math.round(v.nearest.dist)} m` : 'none within 1 km'}</b></div>
-    <p class="note">Looking out across 140° at eye level. Only buildings taller than your floor block the view.${future > 0 ? ` Reserved land is assumed to get ${future}-storey blocks.` : ''} ${osm ? `Buildings around the estate are from OpenStreetMap (${guessed} of ${osm.buildings.length} have no height there and are taken as 2 storeys).` : '<b>Loading the buildings around the estate…</b>'}</p></div>`
+    <p class="note">Looking out across 140° at eye level. Only buildings taller than your floor block the view.${future > 0 && site.zones.some((z) => z.kind === 'future') ? ` Reserved land is assumed to get ${future}-storey blocks.` : ''} ${osm ? `Buildings around the estate are from OpenStreetMap (${guessed} of ${osm.buildings.length} have no height there and are taken as 2 storeys).` : '<b>Loading the buildings around the estate…</b>'}</p></div>`
   h += `<div class="sec"><h3>Roads and noise</h3>${roads.slice(0, 4).map((r) => `<div class="kv"><span>${esc(r.name)}${r.faces ? ' <span class="pill warn">faces it</span>' : ''}</span><b>${r.dist} m</b></div>`).join('')}
-    <p class="note">Distance from the window to the road's edge, counting height. ${roads[0].dist < 80 && roads[0].faces ? 'Close to a road and facing it, so expect traffic noise; check at different times.' : 'Visit at peak hour to judge noise.'} The Circle Line runs underground here.</p></div>`
+    <p class="note">Distance from the window to the road's edge, counting height. ${roads[0].dist < 80 && roads[0].faces ? 'Close to a road and facing it, so expect traffic noise; check at different times.' : 'Visit at peak hour to judge noise.'}${site.rail.filter((r) => r.underground).map((r) => ` The ${esc(r.name.replace(/ \(.*\)$/, ''))} runs underground nearby.`).join('')}</p></div>`
   const kinds: [string, string][] = [['mrt', 'MRT'], ['bus', 'Bus interchange'], ['shops', 'Shops and food'], ['park', 'Park'], ['community', 'Community'], ['health', 'Clinic or hospital']]
   const near = kinds.map(([k]) => nearest(u, k)).filter((x): x is Place => !!x)
   h += `<div class="sec"><h3>Nearby</h3>${near.map((x) => `<button type="button" class="am link" data-am="${esc(x.a.name)}" title="Show the walking route on the map"><i aria-hidden="true" style="background:${KIND[x.a.kind].c}">${esc(KIND[x.a.kind].l)}</i><span>${esc(x.a.name)}</span><b>${km(x.dist)} · ${x.walkMin} min</b></button>`).join('')}
@@ -220,7 +225,7 @@ async function loadOsm() {
     update()
   } catch { toast('Could not load the buildings around the estate') }
 }
-$('#site').addEventListener('change', (e) => { siteId = (e.target as HTMLSelectElement).value; site = SITES[siteId]; compare = []; shown = { future: -1, places: '' }; pick = { block: site.blocks[0].id, unit: site.blocks[0].units[0].no, storey: 10 }; scene?.setSite(site); map.setSite(site); update(); loadOsm() })
+$('#site').addEventListener('change', (e) => { siteId = (e.target as HTMLSelectElement).value; site = SITES[siteId]; compare = []; shown = { future: -1, places: '' }; pick = { block: site.blocks[0].id, unit: site.blocks[0].units[0].no, storey: Math.round(site.blocks[0].storeys / 2) }; scene?.setSite(site); map.setSite(site); update(); loadOsm() })
 $('#block').addEventListener('change', (e) => { pick.block = (e.target as HTMLSelectElement).value; update(); scene?.reset() })
 $('#unit').addEventListener('change', (e) => { pick.unit = (e.target as HTMLSelectElement).value; update() })
 for (const id of ['#storey', '#storeyR']) $(id).addEventListener('input', (e) => { const v = parseInt((e.target as HTMLInputElement).value); if (isFinite(v)) { pick.storey = v; updateSoon() } })
@@ -231,6 +236,7 @@ $('#time').addEventListener('input', (e) => {
   time = +(e.target as HTMLInputElement).value
   const d = DAYS[dayIdx], now = document.getElementById('tlNow')
   scene?.setSun(today.getFullYear(), d.m, d.d, time)
+  $('#futureSec').hidden = !site.zones.some((z) => z.kind === 'future')
   $('#timeLbl').textContent = `${clock(time)} ${dayText(d)}`
   if (now) now.style.left = pct(time)
 })

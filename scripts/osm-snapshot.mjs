@@ -68,6 +68,7 @@ for (const w of W) {
 // Amenities.
 const A = await overpass(`[out:json][timeout:120];(
   node["railway"="subway_entrance"](${box(2600)});
+  nwr["railway"="station"]["station"="subway"]["name"](${box(3000)});
   nwr["amenity"="school"]["name"](${box(2600)});
   nwr["leisure"="park"]["name"](${box(2600)});
   nwr["shop"~"^(supermarket|mall)$"]["name"](${box(2600)});
@@ -87,15 +88,29 @@ const kindOf = (t) => {
   if (t.amenity === 'bus_station') return 'bus'
   return 'shops'
 }
+// Exits are often unnamed or named "<Station> (<line>) Exit A": name them "<Station> MRT (<line>), exit A",
+// taking the station from the nearest station node when the exit has no name.
+const stations = A.filter((e) => e.tags?.railway === 'station').map((e) => ({ at: toSite(e.lat ?? e.center.lat, e.lon ?? e.center.lon), name: e.tags.name.replace(/\s+station$/i, ''), line: e.tags.name.match(/\(([^)]+)\)/)?.[1] }))
+const mrtName = (t, at) => {
+  const m = (t.name || '').match(/^(.*?)\s*\(([^)]+)\)\s*(?:Exit\s*)?([A-Z0-9]{0,3})$/i)
+  if (m) return `${m[1].replace(/\s*MRT$/i, '')} MRT (${m[2]})${m[3] ? `, exit ${m[3]}` : ''}`
+  // Station areas can be long, so their centre may be a few hundred metres from an exit.
+  const st = stations.map((s) => ({ ...s, d: Math.hypot(s.at[0] - at[0], s.at[1] - at[1]) })).sort((a, b) => a.d - b.d)[0]
+  const base = st && st.d < 400 ? st.name.replace(/\s*\(.*\)$/, '').replace(/\s*MRT( Station)?$/i, '') + ' MRT' + (st.line ? ` (${st.line})` : '') : 'MRT'
+  return `${base}${t.ref ? `, exit ${t.ref}` : t.name ? `, ${t.name}` : ''}`
+}
 const amenities = [], seen = new Set()
 for (const e of A) {
+  if (e.tags?.railway === 'station') continue
   const t = e.tags || {}, lat = e.lat ?? e.center?.lat, lon = e.lon ?? e.center?.lon
   if (lat == null) continue
   let name = t.name || ''
   const kind = kindOf(t)
-  if (kind === 'mrt') name = name.replace(/\s*\((\w+)\)\s*([A-Z0-9]*)$/, (_m, line, exit) => ` MRT (${line})${exit ? `, exit ${exit}` : ''}`) || 'MRT exit'
+  const at = toSite(lat, lon)
+  if (kind === 'mrt') name = mrtName(t, at)
   if (!name) continue
-  const at = toSite(lat, lon), key = kind + name
+  // Unnamed exits of one station stay apart (each is a way in); named places are listed once.
+  const key = kind + name + (kind === 'mrt' && !/exit/i.test(name) ? at.join() : '')
   if (seen.has(key)) continue
   seen.add(key)
   // Schools: primary and secondary matter most (Primary 1 registration uses distance from home).

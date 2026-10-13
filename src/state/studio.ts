@@ -86,7 +86,7 @@ export const BROCHURE_LAYOUTS: Record<string, { key: string; label: string; type
 }
 
 /** Projects with a Surroundings page (view, sun, roads and amenities per unit). */
-export const SURROUNDINGS = new Set(['berlayar-rise'])
+export const SURROUNDINGS = new Set(['berlayar-rise', 'kebun-baru-breeze'])
 export const surroundingsUrl = (projectId: string) => `/surroundings/?site=${encodeURIComponent(projectId)}`
 
 /** Brochure layouts for this plan's project, if it was picked from a launch that has them. */

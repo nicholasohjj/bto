@@ -30,7 +30,8 @@ export function simplifyWalk(walk, tol = 2) {
   return { nodes: outNodes, ways: outWays.map((w) => w.map(id)) }
 }
 
-if (process.argv[2]) {
+// Run directly (not when imported by osm-snapshot.mjs): simplify an existing snapshot in place.
+if (process.argv[2] && import.meta.url === new URL(`file://${process.argv[1]}`).href) {
   const f = `src/surroundings/sites/${process.argv[2]}.osm.json`, d = JSON.parse(readFileSync(f, 'utf8'))
   const before = d.walk.nodes.length / 2
   d.walk = simplifyWalk(d.walk)
