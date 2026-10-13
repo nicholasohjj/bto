@@ -31,6 +31,43 @@ export function nearestNodes(g: Graph, p: Pt, k = 4, max = 250): { i: number; d:
   return out.filter((e) => e.d <= out[0].d + 40).slice(0, k)
 }
 
+/** Convex hull of points (monotone chain), counter-clockwise. */
+export function hull(pts: Pt[]): Pt[] {
+  const p = [...pts].sort((a, b) => a[0] - b[0] || a[1] - b[1])
+  if (p.length < 3) return p
+  const cross = (o: Pt, a: Pt, b: Pt) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
+  const lo: Pt[] = [], hi: Pt[] = []
+  for (const q of p) { while (lo.length >= 2 && cross(lo[lo.length - 2], lo[lo.length - 1], q) <= 0) lo.pop(); lo.push(q) }
+  for (const q of p.reverse()) { while (hi.length >= 2 && cross(hi[hi.length - 2], hi[hi.length - 1], q) <= 0) hi.pop(); hi.push(q) }
+  return [...lo.slice(0, -1), ...hi.slice(0, -1)]
+}
+function distToPoly(p: Pt, poly: Pt[]) {
+  let inside = false, d = Infinity
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const a = poly[j], b = poly[i]
+    if ((b[1] > p[1]) !== (a[1] > p[1]) && p[0] < (a[0] - b[0]) * (p[1] - b[1]) / (a[1] - b[1]) + b[0]) inside = !inside
+    const dx = b[0] - a[0], dy = b[1] - a[1], t = Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / (dx * dx + dy * dy || 1)))
+    d = Math.min(d, Math.hypot(a[0] + t * dx - p[0], a[1] + t * dy - p[1]))
+  }
+  return inside ? 0 : d
+}
+
+/** Detour factor for walking across the estate on its own paths (not mapped while it's being built). */
+export const ESTATE_DETOUR = 1.3
+/**
+ * Start points for a walk from a block: any path point in or within `margin` metres of the estate,
+ * reached across the estate at straight-line distance × ESTATE_DETOUR. Falls back to the nearest points.
+ */
+export function estateStarts(g: Graph, from: Pt, estate: Pt[], margin = 40): { i: number; d: number }[] {
+  const out: { i: number; d: number }[] = []
+  for (let i = 0; i < g.adj.length; i++) {
+    if (!g.adj[i].length) continue
+    const q: Pt = [g.xy[2 * i], g.xy[2 * i + 1]]
+    if (distToPoly(q, estate) <= margin) out.push({ i, d: Math.hypot(q[0] - from[0], q[1] - from[1]) * ESTATE_DETOUR })
+  }
+  return out.length ? out : nearestNodes(g, from, 4, 400).map((e) => ({ ...e, d: e.d * ESTATE_DETOUR }))
+}
+
 /** Shortest walking distance from the start points to every node (Dijkstra with a binary heap). */
 export function fromStarts(g: Graph, starts: { i: number; d: number }[]) {
   const n = g.adj.length, dist = new Float64Array(n).fill(Infinity), prev = new Int32Array(n).fill(-1)

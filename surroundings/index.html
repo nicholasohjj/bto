@@ -19,8 +19,8 @@
     <select id="site" class="btn" aria-label="Project"></select>
     <div class="spacer"></div>
     <div class="seg" role="tablist" aria-label="View">
-      <button role="tab" data-v="3d" aria-selected="true">3D</button>
-      <button role="tab" data-v="map" aria-selected="false">Map</button>
+      <button role="tab" data-v="3d" aria-selected="true" aria-controls="p3d">3D</button>
+      <button role="tab" data-v="map" aria-selected="false" aria-controls="pmap">Map</button>
     </div>
   </header>
   <main id="main">
@@ -47,8 +47,8 @@
       </div>
     </aside>
     <section id="stage">
-      <div class="pane" id="p3d">
-        <canvas id="gl"></canvas>
+      <div class="pane" id="p3d" role="tabpanel" aria-label="3D view">
+        <canvas id="gl" aria-label="3D model of the estate. Drag to turn, scroll or pinch to zoom."></canvas>
         <div class="bar">
           <button class="chip" id="winView" aria-pressed="false">View from window</button>
           <button class="chip" id="reset">Reset view</button>
@@ -56,7 +56,7 @@
         </div>
         <div class="hint" id="hint3"></div>
       </div>
-      <div class="pane" id="pmap" hidden><div id="map" role="region" aria-label="Map of the estate and amenities"></div></div>
+      <div class="pane" id="pmap" role="tabpanel" aria-label="Map" hidden><div id="map" role="region" aria-label="Map of the estate and amenities"></div></div>
     </section>
     <aside id="right" class="panel" aria-label="Results"><div id="results"></div></aside>
   </main>

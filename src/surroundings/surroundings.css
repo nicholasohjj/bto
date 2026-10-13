@@ -38,6 +38,7 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 .note{color:var(--ink2);font-size:12px;margin:8px 0 0}
 .acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
 .kv{display:flex;justify-content:space-between;gap:10px;padding:4px 0;border-bottom:1px dotted var(--line)}
+.kv>span{flex:1 0 42%}
 .kv b{font:500 12px var(--f-mono);text-align:right}
 .big{font:700 22px/1.1 var(--f-display)}
 .big small{font:500 12px var(--f-body);color:var(--ink2)}
@@ -54,12 +55,18 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 .chip.north{margin-left:auto}
 .hint{position:absolute;left:12px;bottom:10px;right:12px;pointer-events:none;color:var(--ink2);font-size:12px}
 .hint:not(:empty){background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:3px 8px;width:fit-content}
-.tl{display:block;width:100%;height:34px;margin-top:6px}
+.tlw{position:relative;margin:8px 0 4px;padding-bottom:16px}
+.tl{display:block;width:100%;height:16px;border-radius:3px}
+.tl3{position:absolute;top:-3px;height:22px;border-left:1px dashed var(--ink2)}
+.tlnow{position:absolute;top:-5px;height:26px;width:2px;margin-left:-1px;background:var(--ink);border-radius:1px}
+.tlx{position:absolute;left:0;right:0;bottom:0;height:13px;font-size:10px;color:var(--ink2)}
+.tlx span{position:absolute;transform:translateX(-50%);white-space:nowrap}
 .cmp{width:100%;border-collapse:collapse;font-size:12px}
 .cmp th,.cmp td{padding:5px 4px;border-bottom:1px dotted var(--line);text-align:right;vertical-align:top}
 .cmp th:first-child,.cmp td:first-child{text-align:left;color:var(--ink2);font-weight:400}
 .cmp td.best{color:var(--good);font-weight:600}
 .am{display:grid;grid-template-columns:18px minmax(0,1fr) auto;gap:6px;align-items:baseline;padding:4px 0;border-bottom:1px dotted var(--line)}
+button.am{width:100%;background:none;border:0;border-bottom:1px dotted var(--line);border-radius:0;text-align:left;padding:5px 2px;min-height:32px}
 .am i{font-style:normal;font-weight:700;font-size:10px;width:18px;height:18px;border-radius:50%;display:grid;place-items:center;color:#fff}
 .am b{font:500 12px var(--f-mono);white-space:nowrap}
 #map text{font-family:var(--f-body);pointer-events:none}
@@ -81,5 +88,6 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 .leaflet-tooltip.ring{background:rgba(255,255,255,.85);border:0;color:#17707a;font-size:11px;padding:1px 5px}
 .leaflet-tooltip.ring::before{display:none}
 .amk i{display:grid;place-items:center;width:20px;height:20px;border-radius:50%;color:#fff;font:700 10px var(--f-body);font-style:normal;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.35)}
-.am.link{cursor:pointer}.am.link:hover span{text-decoration:underline}
+.am.link{cursor:pointer}.am.link:hover span{text-decoration:underline}.am.link:hover{background:color-mix(in srgb,var(--accent) 7%,transparent)}
+.cmp .rm{padding:0 7px;margin-top:3px;line-height:1.4}
 .am.on span{font-weight:600;color:var(--accent)}

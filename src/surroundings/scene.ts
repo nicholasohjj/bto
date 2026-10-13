@@ -2,7 +2,7 @@
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
-import { azDir, ellipsePoly, sunPosition, sgTime, type Osm, type Pt, type Site, type UnitPos } from './analysis'
+import { azDir, ellipsePoly, sunPosition, sgTime, type Amenity, type Osm, type Pt, type Site, type UnitPos } from './analysis'
 
 export interface SceneApi {
   setSite(site: Site): void
@@ -14,6 +14,8 @@ export interface SceneApi {
   windowView(on: boolean): void
   /** Called each frame with the camera's heading (degrees clockwise from north) for a compass. */
   onHeading(fn: (deg: number) => void): void
+  /** The distance line under each place's label (e.g. walking time); straight-line distance otherwise. */
+  labelText(fn: (a: Amenity) => string): void
   reset(): void
   resize(): void
 }
@@ -40,6 +42,7 @@ export function createScene(canvas: HTMLCanvasElement): SceneApi | null {
   const world = new THREE.Group(), futureG = new THREE.Group(), unitG = new THREE.Group(), labelG = new THREE.Group(), osmG = new THREE.Group()
   scene.add(world, futureG, unitG, labelG, osmG)
   let osmData: Osm | null = null
+  let labelFn: ((a: Amenity) => string) | null = null
 
   let site: Site | null = null, centre: Pt = [200, 180], future = 40, unit: UnitPos | null = null, winMode = false
   const look = { yaw: 0, pitch: 0 }
@@ -125,22 +128,47 @@ export function createScene(canvas: HTMLCanvasElement): SceneApi | null {
     const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace
     const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, sizeAttenuation: false, depthTest: false, transparent: true }))
     sp.scale.set(c.width / c.height * 0.045, 0.045, 1); sp.center.set(0.5, 0)
+    sp.userData.base = sp.scale.clone()
     sp.renderOrder = 10
     return sp
   }
   const KIND_COL: Record<string, string> = { mrt: '#d22f45', bus: '#7a5aa6', school: '#2f6db5', park: '#3f8f4e', shops: '#c07a14', community: '#5a7380', health: '#c0392b' }
+  /** Labels in priority order (your unit, then nearest first) for hiding the ones that would overlap. */
+  let sprites: THREE.Sprite[] = []
   function buildLabels() {
     labelG.clear()
+    sprites = []
     if (!site) return
+    const ranked: [number, THREE.Sprite][] = []
     for (const a of site.amenities) {
       const dist = unit ? Math.hypot(a.at[0] - unit.eye[0], a.at[1] - unit.eye[1]) : 0
-      const sp = label(a.name.replace(/ \(.*\)$/, ''), unit ? (dist < 1000 ? `${Math.round(dist / 10) * 10} m` : `${(dist / 1000).toFixed(1)} km`) : '', KIND_COL[a.kind] ?? '#5a7380')
+      const sub = !unit ? '' : labelFn ? labelFn(a) : dist < 1000 ? `${Math.round(dist / 10) * 10} m` : `${(dist / 1000).toFixed(1)} km`
+      const sp = label(a.name.replace(/ \(.*\)$/, ''), sub, KIND_COL[a.kind] ?? '#5a7380')
       sp.position.copy(V(a.at, 25))
       const pin = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.2, 25, 6), new THREE.MeshBasicMaterial({ color: KIND_COL[a.kind] ?? '#5a7380' }))
       pin.position.copy(V(a.at, 12.5))
       labelG.add(sp, pin)
+      ranked.push([dist, sp])
     }
-    if (unit) { const sp = label('Your unit', `#${String(unit.storey).padStart(2, '0')}-${unit.unit.no}, faces ${unit.facing}`, '#ff8a00'); sp.position.copy(V(unit.unit.win, unit.floorZ + site.storeyM + 2)); labelG.add(sp) }
+    if (unit) { const sp = label('Your unit', `#${String(unit.storey).padStart(2, '0')}-${unit.unit.no}, faces ${unit.facing}`, '#ff8a00'); sp.position.copy(V(unit.unit.win, unit.floorZ + site.storeyM + 2)); labelG.add(sp); ranked.push([-1, sp]) }
+    sprites = ranked.sort((p, q) => p[0] - q[0]).map((r) => r[1])
+  }
+  /** Show labels greedily by priority, skipping any that would overlap a shown one or sit under the top buttons. */
+  const ndc = new THREE.Vector3()
+  function declutter() {
+    const t = Math.tan(camera.fov * Math.PI / 360), H = canvas.clientHeight || 1, top = 1 - 2 * 48 / H
+    // Same size on screen whatever the field of view (the window view is wider).
+    const k = t / Math.tan(45 * Math.PI / 360)
+    const shown: number[][] = []
+    for (const sp of sprites) {
+      sp.scale.copy(sp.userData.base).multiplyScalar(k)
+      ndc.copy(sp.position).project(camera)
+      const w = sp.scale.x / (t * camera.aspect), h = sp.scale.y / t
+      const r = [ndc.x - w / 2, ndc.y, ndc.x + w / 2, ndc.y + h]
+      const ok = ndc.z < 1 && r[3] < top && r[1] > -1 && r[2] > -1 && r[0] < 1 && !shown.some((o) => r[0] < o[2] && r[2] > o[0] && r[1] < o[3] && r[3] > o[1])
+      sp.visible = ok
+      if (ok) shown.push(r)
+    }
   }
   /** OpenStreetMap buildings as two merged meshes (known heights, guessed heights) and streets as lines. */
   function buildOsm() {
@@ -229,6 +257,7 @@ export function createScene(canvas: HTMLCanvasElement): SceneApi | null {
   function frame() {
     requestAnimationFrame(frame)
     if (!winMode) controls.update()
+    declutter()
     renderer.render(scene, camera)
     // Heading: north is -z.
     camera.getWorldDirection(fwd)
@@ -269,6 +298,7 @@ export function createScene(canvas: HTMLCanvasElement): SceneApi | null {
     },
     reset,
     onHeading(fn) { heading = fn },
+    labelText(fn) { labelFn = fn; buildLabels() },
     resize() {
       const w = canvas.clientWidth, h = canvas.clientHeight
       if (!w || !h) return

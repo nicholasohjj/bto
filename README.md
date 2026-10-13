@@ -122,7 +122,7 @@ the site plan to latitude and longitude.
 
 Around the estate, the page uses an OpenStreetMap snapshot (© OpenStreetMap contributors, ODbL):
 existing buildings go into the 3D model and the sun and view checks (a building with no height is taken
-as 2 storeys), walking times follow real footpaths and streets, and amenities such as MRT exits, schools
+as 2 storeys), walking times follow real footpaths and streets (the estate's own paths aren't mapped while it's being built, so the walk across it is a straight line plus 30%), and amenities such as MRT exits, schools
 and clinics are added to the brochure's list. Primary schools are listed within 1 km and 1–2 km; for
 P1 registration, people still need to check distances on OneMap. To refresh a snapshot:
 

@@ -76,8 +76,11 @@ export function createMap(el: HTMLElement, onPick: (a: Amenity) => void) {
     showRoute(line: Pt[] | null, label = '') {
       routeL.clearLayers()
       if (!line) return
-      const pl = L.polyline(line.map(ll), { color: '#17707a', weight: 5, opacity: 0.85 }).bindTooltip(esc(label), { sticky: true }).addTo(routeL)
-      frame = pl.getBounds().pad(0.25)
+      // The first stretch (across the estate, or the whole of a straight-line estimate) is dashed: it isn't a mapped path.
+      const pts = line.map(ll), opts = { color: '#17707a', weight: 5, opacity: 0.85 }
+      L.polyline(pts.slice(0, 2), { ...opts, dashArray: '2 9', lineCap: 'round' }).bindTooltip(esc(label), { sticky: true }).addTo(routeL)
+      if (pts.length > 2) L.polyline(pts.slice(1), opts).bindTooltip(esc(label), { sticky: true }).addTo(routeL)
+      frame = L.latLngBounds(pts).pad(0.25)
       fit()
     },
     redraw() { map.invalidateSize(); fit() },
