@@ -9,6 +9,7 @@ import { CATALOG, GROUPS, FLOORS, WALLS, SW, WTYPES, DTYPES, FINS } from './cata
 import { importBrochure } from './importer'
 import { paintFloor, PRESETS, applyPreset } from './materials'
 import { renderPanorama } from './pano'
+import { designLink, sharedDesignCode, readSharedDesign } from './share'
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js'
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js'
 import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js'
@@ -1308,7 +1309,7 @@ const vstore=a=>{try{localStorage.setItem(VKEY,JSON.stringify(a.slice(0,30)));re
 const fmtT=t=>new Date(t).toLocaleString(undefined,{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
 function versHtml(){const v=vers();return v.length?v.map(x=>`<div class="kv"><span>${esc(x.name)}<br><small style="color:var(--ink2)">${fmtT(x.t)}</small></span><span class="vb"><button class="btn" data-f="vload" data-id="${x.id}">Restore</button><button class="btn danger" data-f="vdel" data-id="${x.id}" aria-label="Delete version">×</button></span></div>`).join(''):'<p class="note" style="margin:6px 0">No saved versions yet. Save one before a big change so you can come back to it.</p>';}
 function openFiles(){
-  dialog(`<h2>Files</h2><h4 class="dh">Versions</h4><div class="vrow"><input id="vn" type="text" maxlength="40" placeholder="Name this version"><button class="btn primary" data-f="vsave">Save version</button></div><div id="vl">${versHtml()}</div>
+  dialog(`<h2>Files</h2><h4 class="dh">Share</h4><p class="note" style="margin:0 0 8px">A link that opens a copy of this design. Your prices, budget and quotes are left out. The tracing image and imported 3D models are not included.</p><div class="acts" style="margin:0"><button class="btn primary" data-f="slink">Copy share link</button></div><h4 class="dh">Versions</h4><div class="vrow"><input id="vn" type="text" maxlength="40" placeholder="Name this version"><button class="btn primary" data-f="vsave">Save version</button></div><div id="vl">${versHtml()}</div>
     <div id="cloudSec" hidden><h4 class="dh">My account</h4><div id="cl"><p class="note">Loading…</p></div></div>
     <h4 class="dh">Text</h4><p class="note" style="margin:0 0 8px">Copy this to keep a backup. Paste a saved design and press Load to bring it back. Imported 3D models and the traced image are not included.</p>
     <textarea id="jt" spellcheck="false" aria-label="Design data"></textarea><p id="jerr" class="note" style="color:var(--danger)"></p>
@@ -1324,6 +1325,8 @@ async function cloudRender(){const c=await cloudInit(),sec=$('#cloudSec');if(!se
   }catch(e){el.innerHTML=`<p class="note">Cloud saving is not available right now (${esc(e&&e.code||'error')}).</p>`;}}
 $('#dcard').addEventListener('click',async e=>{const b=e.target.closest('[data-f]');if(!b||!S)return;const f=b.dataset.f,id=b.dataset.id;
   if(f==='vsave'){const n=($('#vn').value||'').trim()||S.name+' '+fmtT(Date.now()),v=vers();v.unshift({id:'v'+Date.now().toString(36),name:n.slice(0,40),t:Date.now(),json:JSON.stringify(S)});if(!vstore(v))toast('Could not save, browser storage is full.');$('#vl').innerHTML=versHtml();$('#vn').value='';return;}
+  if(f==='slink'){try{const url=await designLink(S);if(navigator.share&&COARSE){try{await navigator.share({title:S.name,url});return;}catch(er){if(er&&er.name==='AbortError')return;}}
+      await navigator.clipboard.writeText(url);toast(url.length>12000?'Link copied. It is long, so some apps may cut it off: send it as a file instead if it fails.':'Share link copied',4000);}catch(er){toast('Could not make the link. Use Export → Design file instead.');}return;}
   if(f==='vdel'){vstore(vers().filter(x=>x.id!==id));$('#vl').innerHTML=versHtml();return;}
   if(f==='vload'){const x=vers().find(q=>q.id===id);if(x){try{newDesign(loadState(JSON.parse(x.json)));closeDlg();toast('Restored '+x.name);}catch(er){toast('That version could not be read.');}}return;}
   const c=await cloudInit();if(!c)return;
@@ -1445,6 +1448,11 @@ $('#dcard').addEventListener('click',e=>{const b=e.target.closest('[data-ph]');i
   if(b.dataset.ph==='go')photoRun();else{if(photoJob)photoJob.stop=true;closeDlg();}});
 // Development-only hooks for checking the 3D output in a browser (not in production builds).
 if(import.meta.env.DEV)window.__studio={design:()=>S,pano:(w=1024)=>{setMode('walk');sync3D();ceilG.visible=true;wallsG.scale.y=1;return renderPanorama(renderer,scene,new THREE.Vector3(walk.x,1.5,walk.y),walk.yaw,w).toDataURL('image/jpeg',.8);}};
+/* opening a shared design link (#d=…): keep the current design as a version, then open the copy */
+async function openShared(){const code=sharedDesignCode(location.hash);if(!code)return;history.replaceState(null,'',location.pathname+location.search);
+  try{const o=await readSharedDesign(code);if(S&&S.walls.length){const v=vers();v.unshift({id:'v'+Date.now().toString(36),name:('Before shared '+String(o.name||'design')).slice(0,40),t:Date.now(),json:JSON.stringify(S)});vstore(v);}
+    newDesign(o);toast(`Opened “${S.name}” from a shared link. Your previous design is under Files → Versions.`,5000);}catch(e){toast('Could not open the shared link: '+(e&&e.message||e),5000);}}
+addEventListener('hashchange',openShared);
 /* ───────── boot ───────── */
 (function boot(){
   let st=null;try{const raw=localStorage.getItem('flatstudio.v1');if(raw)st=loadState(JSON.parse(raw));}catch(e){}
@@ -1457,7 +1465,8 @@ if(import.meta.env.DEV)window.__studio={design:()=>S,pano:(w=1024)=>{setMode('wa
   requestAnimationFrame(()=>{fit();resize3D();resetOrbit();if(camera)updateOrbit();changed();
     // ?layout= from the money plan: open that brochure unit, keeping any other design as a saved version first.
     const L=ql&&BRO[ql];if(L&&S.name!==L.design.name){if(S.walls.length){const v=vers();v.unshift({id:'v'+Date.now().toString(36),name:('Before '+L.label).slice(0,40),t:Date.now(),json:JSON.stringify(S)});vstore(v);}loadBrochure(ql);}
-    try{if(!localStorage.getItem('flatstudio.tour')){localStorage.setItem('flatstudio.tour','1');if(!ql)setTimeout(()=>tour(0),700);}}catch(e){}
+    const fromLink=!!sharedDesignCode(location.hash);openShared();
+    try{if(!localStorage.getItem('flatstudio.tour')){localStorage.setItem('flatstudio.tour','1');if(!ql&&!fromLink)setTimeout(()=>tour(0),700);}}catch(e){}
     if(innerWidth<760){try{if(!localStorage.getItem('flatstudio.phoneTip')){localStorage.setItem('flatstudio.phoneTip','1');setTimeout(()=>toast('Flat Studio is easier on a computer or a tablet in landscape. On a phone, use the tabs at the bottom.',6000),1200);}}catch(e){}}
     requestAnimationFrame(frame);});
 })();

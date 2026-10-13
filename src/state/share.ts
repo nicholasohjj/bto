@@ -8,19 +8,24 @@ import { isScenario } from './storage'
  */
 const PREFIX = 's='
 
-export async function encodeScenario(s: Scenario): Promise<string> {
-  const bytes = new TextEncoder().encode(JSON.stringify(s))
+/** Any JSON value → deflate → base64url (also used for Flat Studio design links). */
+export async function packJson(o: unknown): Promise<string> {
+  const bytes = new TextEncoder().encode(JSON.stringify(o))
   return toBase64Url(await pipe(bytes, new CompressionStream('deflate-raw')))
 }
-
-export async function decodeScenario(code: string): Promise<Scenario> {
-  let json: unknown
+export async function unpackJson(code: string): Promise<unknown> {
   try {
     const bytes = await pipe(fromBase64Url(code), new DecompressionStream('deflate-raw'))
-    json = JSON.parse(new TextDecoder().decode(bytes))
+    return JSON.parse(new TextDecoder().decode(bytes))
   } catch {
     throw new Error('The link looks cut off or damaged.')
   }
+}
+
+export const encodeScenario = (s: Scenario) => packJson(s)
+
+export async function decodeScenario(code: string): Promise<Scenario> {
+  const json = await unpackJson(code)
   if (!isScenario(json)) throw new Error('The link doesn’t contain a plan.')
   return json
 }

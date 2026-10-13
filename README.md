@@ -55,9 +55,41 @@ src/
     launch.ts           Fills the flat from a picked launch project; "which projects fit?" check across a launch
     policyOverrides.ts  Applies per-scenario "Advanced settings" overrides to the policy
     __tests__/          Vitest tests
-  state/                Seed scenarios, localStorage, JSON export/import
-  ui/                   React components (wizard, editors, charts, tables, glossary tooltips)
+  state/                Seed scenarios, localStorage, JSON export/import, share links, renovation stages,
+                        Flat Studio summary reader
+  ui/                   React components (wizard, editors, charts, tables, glossary tooltips, Renovation tab)
+  studio/               Flat Studio (/studio/): renovation planner, see below
+studio/index.html       Flat Studio page (a second Vite entry)
 ```
+
+## Flat Studio (`/studio/`)
+
+A 2D/3D floor plan and renovation planner. The money plan's Renovation tab opens it with the plan's
+renovation budget, and reads its priced budget back (localStorage `flatstudio.summary`).
+
+```
+src/studio/
+  legacy.js       UI, 2D plan and 3D view (three.js). Older, dense code; new logic goes in the modules below.
+  catalog.ts      Furniture and fittings, floor/wall finishes, window and door types
+  model.ts        Design types, loading with validation, geometry, room flood fill, mirror
+  budget.ts       Priced lines from the design's quantities; the summary the money plan reads
+  checks.ts       Changes vs the original layout, clashes, clearances, lighting guide
+  carpentry.ts    Made-to-measure carpentry (config, 3D builder, foot-run pricing)
+  ceiling.ts      False ceilings and cove lighting
+  electrical.ts   Electrical points, checks and the electrical plan sheet
+  quotes.ts       Pasted contractor quotes: parsing, categories, comparison
+  materials.ts    Painted floor materials (colour + bump) and style presets
+  brochure.ts     Reading HDB brochure PDFs with pdf.js (vector paths, text, scale bar)
+  vectorize.ts    Brochure drawing → walls, doors, windows, rooms
+  importer.ts     The brochure import dialog
+  files.ts        ZIP, PDF and DXF writers
+  pano.ts         360° panorama export
+  share.ts        Design share links (#d=…, without prices, budget or quotes)
+  layouts.json    Unit layouts redrawn from brochures (the Layout menu)
+```
+
+`*.local.test.ts` files run only where the git-ignored brochures are present (`brochures/`): they
+check the PDF importer on a real block plan.
 
 ## How the simulation works
 

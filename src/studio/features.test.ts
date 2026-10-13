@@ -87,3 +87,21 @@ describe('style presets', async () => {
     for (const p of Object.values(PRESETS)) { expect(FLOOR_SPECS[p.dry]).toBeTruthy(); expect(FLOOR_SPECS[p.wet]?.wet).toBe(true) }
   })
 })
+
+describe('design share links', async () => {
+  const { designLink, readSharedDesign, sharedDesignCode, shareable } = await import('./share')
+  it('round-trips a design without its prices, budget or quotes', async () => {
+    const S = flat()
+    S.prices = { 'f:oak': 100 }; S.budget = 50000; S.quotes = [{ id: 'q', name: 'ABC', lines: [] }]
+    S.items.push({ id: 'i1', type: 'sofa', x: 1, y: 1, rot: 0, w: 2.2, d: 0.95, color: '#fff', g: 0, h: 0, mt: '', nm: 'Castlery', pr: 1999 })
+    const url = await designLink(S, 'https://example.test/studio/')
+    const back = loadState(await readSharedDesign(sharedDesignCode(new URL(url).hash)!), (i) => CATALOG[i.type])
+    expect(back.walls).toEqual(S.walls)
+    expect(back.prices).toEqual({}); expect(back.budget).toBe(0); expect(back.quotes).toEqual([])
+    expect(back.items[0].pr).toBe(0); expect(back.items[0].nm).toBe('')
+    expect(JSON.stringify(shareable(S))).not.toContain('Castlery')
+  })
+  it('rejects a damaged link', async () => {
+    await expect(readSharedDesign('not-a-real-code')).rejects.toThrow()
+  })
+})
