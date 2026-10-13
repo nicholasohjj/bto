@@ -42,9 +42,10 @@ export interface CatalogItem {
 }
 
 export const CATALOG: Record<string, CatalogItem> = {
-  bed_q:{n:'Queen bed',g:'Bedroom',w:1.6,d:2.05,c:'#d9d3c5',b:'bed'},
-  bed_k:{n:'King bed',g:'Bedroom',w:1.9,d:2.05,c:'#8a9a7b',b:'bed'},
-  bed_s:{n:'Single bed',g:'Bedroom',w:1.0,d:2.0,c:'#8aa0ad',b:'bed'},
+  bed_q:{n:'Queen bed',g:'Bedroom',w:1.52,d:1.9,c:'#d9d3c5',b:'bed'},
+  bed_k:{n:'King bed',g:'Bedroom',w:1.83,d:1.9,c:'#8a9a7b',b:'bed'},
+  bed_s:{n:'Single bed',g:'Bedroom',w:.91,d:1.9,c:'#8aa0ad',b:'bed'},
+  bed_ss:{n:'Super single bed',g:'Bedroom',w:1.07,d:1.9,c:'#8aa0ad',b:'bed'},
   ward:{n:'Wardrobe',g:'Bedroom',w:2.0,d:.6,c:'#b9a58a',b:'ward',k:1},
   bside:{n:'Bedside table',g:'Bedroom',w:.45,d:.4,c:'#b9a58a',b:'bside'},
   desk:{n:'Desk',g:'Bedroom',w:1.2,d:.6,c:'#b9a58a',b:'desk'},

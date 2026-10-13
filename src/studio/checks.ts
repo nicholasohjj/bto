@@ -79,11 +79,11 @@ export function runChecks(S: Design, cat: Catalog, extra: ((S: Design) => Check[
   }
   for (const it of its) {
     const at = `near (${f1(it.x)}, ${f1(it.y)})`
-    if (['bed_q', 'bed_k', 'bed_s'].includes(it.type)) {
+    if (['bed_q', 'bed_k', 'bed_s', 'bed_ss'].includes(it.type)) {
       const L = sideOpen(it, -1, 0, 0.6), R = sideOpen(it, 1, 0, 0.6), F = sideOpen(it, 0, 1, 0.6)
       if (!L && !R && !F) add('warn', `${nm(it.type)} ${at} has less than 60 cm of free space on every side. There is no way to get into the bed.`, 'clear')
-      else if (it.type !== 'bed_s' && !L && !R) add('info', `${nm(it.type)} ${at} can only be reached from the foot. Leave 60 cm on at least one long side.`, 'clear')
-      else if (it.type !== 'bed_s' && (+!L + +!R) === 1 && !F) add('info', `${nm(it.type)} ${at} is tight on two sides. A 60 cm walkway on one long side is the usual minimum.`, 'clear')
+      else if (it.type !== 'bed_s' && it.type !== 'bed_ss' && !L && !R) add('info', `${nm(it.type)} ${at} can only be reached from the foot. Leave 60 cm on at least one long side.`, 'clear')
+      else if (it.type !== 'bed_s' && it.type !== 'bed_ss' && (+!L + +!R) === 1 && !F) add('info', `${nm(it.type)} ${at} is tight on two sides. A 60 cm walkway on one long side is the usual minimum.`, 'clear')
     }
     if (['ward', 'wardS', 'dress', 'ctall'].includes(it.type) && !sideOpen(it, 0, 1, it.type === 'dress' ? 0.5 : 0.6)) add('warn', `${nm(it.type)} ${at} has less than ${it.type === 'dress' ? 50 : 60} cm in front, so doors and drawers will be hard to use.`, 'clear')
   }

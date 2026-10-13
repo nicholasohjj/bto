@@ -254,10 +254,12 @@ function addRoomFromPts(pts){
 const svg=$('#plan');
 let view={cx:5.5,cy:4,s:60}, ghost=null, draft=null;
 const COARSE=(()=>{try{return matchMedia('(pointer:coarse)').matches;}catch(e){return false;}})(),HR=COARSE?.2:.11,HW=COARSE?.55:.3;
+/** Alignment guides shown while dragging: lines through the wall ends, wall midpoints and room corners being snapped to. */
+let guides=[];
 function snapC(v,ax){let best=null,bd=Math.min(.15,9/view.s);const chk=c=>{const d=Math.abs(c-v);if(d<bd){bd=d;best=c;}};
-  for(const w of S.walls){chk(ax==='x'?w.x1:w.y1);chk(ax==='x'?w.x2:w.y2);}
+  for(const w of S.walls){chk(ax==='x'?w.x1:w.y1);chk(ax==='x'?w.x2:w.y2);chk(ax==='x'?(w.x1+w.x2)/2:(w.y1+w.y2)/2);}
   for(const r of S.rooms){if(ax==='x'){chk(r.x);chk(r.x+r.w);}else{chk(r.y);chk(r.y+r.h);}}
-  return best!==null?best:sn(v,snapG);}
+  if(best!==null){if(!guides.some(g=>g.ax===ax&&g.v===best))guides.push({ax,v:best});return best;}return sn(v,snapG);}
 function autoRoom(p){let L=-1e9,R=1e9,U=-1e9,D=1e9;
   for(const w of S.walls){const wi=wallInfo(w);
     if(wi.axis==='v'){if(p.y>wi.a&&p.y<wi.b){if(wi.c<=p.x)L=Math.max(L,wi.c);else R=Math.min(R,wi.c);}}
@@ -339,13 +341,14 @@ function planMarkup(ex){
     h+=`<circle class="handle" data-t="rm" data-id="${sr.id}" cx="${cc.x}" cy="${cc.y}" r=".16"/><path d="M${cc.x-.08} ${cc.y}H${cc.x+.08}M${cc.x} ${cc.y-.08}V${cc.y+.08}" stroke="var(--sel)" stroke-width="1.5" style="pointer-events:none"/>`;}
   // drafts
   if(!ex&&draft&&draft.k!=='dim'){h+=draft.k==='wall'?`<line class="draft" x1="${draft.x1}" y1="${draft.y1}" x2="${draft.x2}" y2="${draft.y2}" style="stroke-width:${T}px;vector-effect:none;stroke-dasharray:none;stroke-opacity:.5"/>`:`<rect class="draft" x="${Math.min(draft.x1,draft.x2)}" y="${Math.min(draft.y1,draft.y2)}" width="${Math.abs(draft.x2-draft.x1)}" height="${Math.abs(draft.y2-draft.y1)}"/>`;
-    const len=draft.k==='wall'?Math.hypot(draft.x2-draft.x1,draft.y2-draft.y1):0;if(len||draft.typed)h+=`<text class="dimt" x="${(draft.x1+draft.x2)/2}" y="${(draft.y1+draft.y2)/2-.2}">${draft.typed?draft.typed+' m (Enter)':len.toFixed(2)+' m'}</text>`;}
+    const len=draft.k==='wall'?Math.hypot(draft.x2-draft.x1,draft.y2-draft.y1):0;if(len||draft.typed)h+=`<text class="dimt" x="${(draft.x1+draft.x2)/2}" y="${(draft.y1+draft.y2)/2-.2}">${draft.typed?draft.typed.replace('@',' m @ ')+(draft.typed.includes('@')?'°':' m')+' (Enter)':len.toFixed(2)+' m'}</text>`;}
   if(!ex&&draft&&draft.k==='dim'){h+=dimSvg({x1:draft.x1,y1:draft.y1,x2:draft.x2,y2:draft.y2,o:.5,id:'dd'},false,true);}
   if(!ex&&polyDraft&&polyDraft.pts.length){const P=polyDraft.pts,cu=polyDraft.cur;
     h+=`<polyline class="draft" points="${P.map(q=>q[0]+','+q[1]).join(' ')}${cu?' '+cu[0]+','+cu[1]:''}" style="pointer-events:none;fill:none"/>`+P.map((q,i)=>`<circle class="walkc" cx="${q[0]}" cy="${q[1]}" r="${i===0?.13:.07}" style="pointer-events:none"/>`).join('');}
   if(!ex&&marq)h+=`<rect class="draft" x="${Math.min(marq.x1,marq.x2)}" y="${Math.min(marq.y1,marq.y2)}" width="${Math.abs(marq.x2-marq.x1)}" height="${Math.abs(marq.y2-marq.y1)}" style="pointer-events:none"/>`;
   if(!ex&&calib&&calib.length){calib.forEach(c=>{h+=`<circle class="walkc" cx="${c.x}" cy="${c.y}" r=".1" style="pointer-events:none"/>`;});
     if(calib.length===2)h+=`<line class="draft" x1="${calib[0].x}" y1="${calib[0].y}" x2="${calib[1].x}" y2="${calib[1].y}" style="pointer-events:none"/>`;}
+  if(!ex&&guides.length&&drag)for(const g of guides)h+=g.ax==='x'?`<line class="guide" x1="${g.v}" y1="${y0}" x2="${g.v}" y2="${y0+vh}"/>`:`<line class="guide" x1="${x0}" y1="${g.v}" x2="${x0+vw}" y2="${g.v}"/>`;
   // walk marker
   if(!ex&&mode==='walk'){const fx=-Math.sin(walk.yaw),fy=-Math.cos(walk.yaw),fov=1.0,r=1.1;
     const a1=Math.atan2(fy,fx)-fov/2,a2=Math.atan2(fy,fx)+fov/2;
@@ -468,6 +471,7 @@ svg.addEventListener('pointerdown',e=>{
   else {drag=pan;drag.click=t==='room'?id:null;}
 });
 svg.addEventListener('pointermove',e=>{
+  guides=[];
   if(ptrs.has(e.pointerId))ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
   if(pinch&&ptrs.size===2){const [a,b]=[...ptrs.values()],r=svg.getBoundingClientRect(),mx=(a.x+b.x)/2,my=(a.y+b.y)/2;view.s=clamp(pinch.s*(Math.hypot(a.x-b.x,a.y-b.y)||1)/pinch.d,15,300);view.cx=pinch.wx-(mx-r.left-r.width/2)/view.s;view.cy=pinch.wy-(my-r.top-r.height/2)/view.s;render2D();return;}
   const p=toM(e);
@@ -506,6 +510,7 @@ svg.addEventListener('pointermove',e=>{
   }
 });
 function endPtr(e){
+  guides=[];
   ptrs.delete(e.pointerId);if(ptrs.size<2)pinch=null;
   if(!drag)return;const d=drag;drag=null;
   if(d.k==='pan'&&!d.moved){if(d.calib)addCalib(d.calib);else if(d.click)select('room',d.click);else if(d.click===null)select(null);}
@@ -750,11 +755,12 @@ $$('#pad button').forEach(b=>{const k=b.dataset.k;b.addEventListener('pointerdow
 /* ───────── left panel ───────── */
 const TOOLS=[['select','Select'],['wall','Wall'],['room','Room'],['poly','Polygon'],['dim','Dimension'],['door','Door'],['window','Window']];
 const HINTS={select:'Click to select. Shift-click adds to the selection, Shift-drag draws a box. Drag handles to reshape; drag furniture to move it. Hold Alt to skip wall snapping.',wall:'Drag to draw a wall, and type a length such as 3.2 then Enter to set it exactly. Locks to 90 degrees unless Free angle is on.',poly:'Click each corner of the room. Click the first point or double-click to finish.',dim:'Drag between two points to add a dimension line.',room:'Click inside a closed set of walls to fill a room, or drag a rectangle.',calib:'Click two points on the image whose real distance you know, such as the ends of a printed dimension. Zoom in first for accuracy.',imove:'Drag to move the image. Pick Select when it sits where you want it.',door:'Click on a wall to place a door.',window:'Click on a wall to place a window.'};
-$('#left').addEventListener('input',e=>{if(e.target.id==='uop'&&under){under.op=e.target.value/100;renderUnder();saveUnder();}});
+$('#left').addEventListener('input',e=>{if(e.target.id==='catq'){const q=e.target.value.trim().toLowerCase();$$('#left .cg').forEach(sec=>{let any=false;sec.querySelectorAll('.ci').forEach(b=>{const on=!q||b.textContent.toLowerCase().includes(q);b.hidden=!on;any=any||on;});sec.hidden=!any;});return;}if(e.target.id==='uop'&&under){under.op=e.target.value/100;renderUnder();saveUnder();}});
 $('#left').addEventListener('change',e=>{if(e.target.id==='urot'&&under){const v=parseFloat(e.target.value);if(isFinite(v)){under.rot=clamp(v,-180,180);renderUnder();saveUnder();}}});
 function buildLeft(){
   let h='<div class="sec"><h3>Draw</h3><div class="tools">'+TOOLS.map(([k,n])=>`<button class="tool" data-tool="${k}" aria-pressed="${k===tool}">${n}</button>`).join('')+'</div></div><div class="sec" id="opts"></div><div class="sec" id="trace"></div>';
-  for(const g of GROUPS){h+=`<div class="sec"><h3>${g}</h3><div class="cat">`+Object.entries(CAT).filter(([,v])=>v.g===g).map(([k,v])=>`<button class="ci" data-add="${k}"><span>${v.n}</span><em>${Math.round(v.w*1000)}×${Math.round(v.d*1000)}</em></button>`).join('')+'</div></div>';}
+  h+='<div class="sec" style="padding-bottom:8px"><input id="catq" type="search" placeholder="Search furniture and fittings" aria-label="Search the catalogue" style="width:100%;background:var(--field);border:1px solid var(--line);border-radius:6px;padding:6px 8px"></div>';
+  for(const g of GROUPS){h+=`<div class="sec cg"><h3>${g}</h3><div class="cat">`+Object.entries(CAT).filter(([,v])=>v.g===g).map(([k,v])=>`<button class="ci" data-add="${k}"><span>${v.n}</span><em>${Math.round(v.w*1000)}×${Math.round(v.d*1000)}</em></button>`).join('')+'</div></div>';}
   const mods=Object.entries(CAT).filter(([,v])=>v.g==='My models'&&!v.missing);
   h+=`<div class="sec"><h3>My models</h3>${mods.length?'<div class="cat">'+mods.map(([k,v])=>`<button class="ci" data-add="${k}"><span>${esc(v.n)}</span><em>${Math.round(v.w*1000)}×${Math.round(v.d*1000)}</em></button>`).join('')+'</div>':''}
     <p class="note" style="margin:8px 0 10px">Import a GLB, GLTF or OBJ file. It is scaled to real size and kept in this browser.</p><button class="btn" data-model="load" style="width:100%">Import 3D model</button>${mods.length?'<button class="btn" data-model="manage" style="width:100%;margin-top:8px">Remove a model…</button>':''}</div>`;
@@ -872,7 +878,7 @@ function renderRight(){try{fillViews();}catch(e){}
       <div style="margin:12px 0 6px;color:var(--ink2)">Finish</div><div class="floors">${Object.entries(FINS).map(([k,n])=>`<button data-act="fin" data-v="${k}" aria-pressed="${(e.fin||'paint')===k}">${n}</button>`).join('')}</div>
       ${(e.fin||'paint')==='paint'?`<div style="margin:12px 0 6px;color:var(--ink2)">Paint for this wall</div>${sw('wcol',WALLS,e.col||S.wallColor)}<div class="acts"><button class="btn" data-act="wcolclear">Same as flat</button></div>`:''}
       <label class="chk" style="margin-top:12px"><input type="checkbox" data-act="str"${e.str?' checked':''}> Structural wall (do not alter)</label>
-      <div class="acts"><button class="btn danger" data-act="del">Delete wall</button></div><p class="note">Mark walls you know are structural. This tool cannot tell which are. Removing or moving a real wall needs an HDB permit.</p></div>`;
+      <div class="acts" style="align-items:center"><input type="number" id="wpar" value="1.00" step="0.05" style="width:70px" aria-label="Distance for a parallel copy (m)"><button class="btn" data-act="wpar">Copy parallel (m)</button><button class="btn danger" data-act="del">Delete wall</button></div><p class="note">A positive distance copies right or down the plan. Mark walls you know are structural. This tool cannot tell which are. Removing or moving a real wall needs an HDB permit.</p></div>`;
   }else if(sel.t==='dim'){
     h=`<div class="sec"><h3>Dimension</h3><div class="kv"><span>Length</span><b>${Math.hypot(e.x2-e.x1,e.y2-e.y1).toFixed(3)} m</b></div>${row('Line offset (m)',num('o',e.o,.1,-5,5))}<div class="acts"><button class="btn" data-act="flipdim">Flip side</button><button class="btn danger" data-act="del">Delete</button></div></div>`;
   }else if(sel.t==='open'){
@@ -921,6 +927,7 @@ $('#rbody').addEventListener('click',ev=>{
     else if(act==='flipdim')e.o=-e.o;
     else if(act==='topoly'){e.pts=rpts(e).map(q=>[q[0],q[1]]);}
     else if(act==='torect'){syncBox(e);delete e.pts;}
+    else if(act==='wpar'){const dd=parseFloat($('#wpar').value);if(!isFinite(dd)||!dd)return;const L=Math.hypot(e.x2-e.x1,e.y2-e.y1)||1,nx=-(e.y2-e.y1)/L,ny=(e.x2-e.x1)/L,sg=(Math.abs(nx)>Math.abs(ny)?Math.sign(nx):Math.sign(ny))||1,ox=nx*dd*sg,oy=ny*dd*sg;const c={...e,id:uid(),x1:+(e.x1+ox).toFixed(3),y1:+(e.y1+oy).toFixed(3),x2:+(e.x2+ox).toFixed(3),y2:+(e.y2+oy).toFixed(3),str:false};S.walls.push(c);sel={t:'wall',id:c.id};}
     else if(act==='dup'){const c=Object.assign({},e,{id:uid(),x:e.x+.3,y:e.y+.3});S.items.push(c);sel={t:'item',id:c.id};}
     else if(act==='del')delSel();
   });
@@ -1050,6 +1057,12 @@ async function runImport(f){
   under={src:r.image,x:0,y:0,w:x.w,h:x.h,rot:0,op:.5,show:true};underSrc='';saveUnder();renderTrace();changed();fit();
   dialog(`<h2>Imported ${esc(r.name)}</h2><p class="note" style="margin:0 0 10px">Found ${x.stats.structural} structural walls, ${x.stats.partitions} other walls, ${x.stats.doors} doors, ${x.stats.windows} windows and ${x.stats.rooms} rooms. The brochure drawing is underneath, to scale.</p>
     <p class="note">This is a first draft read from the drawing, so check it: fix or add walls where they differ, and use the Room tool (click inside a space) for rooms it missed. Solid walls in the brochure are marked structural, and the layout is saved as the original for the Checks tab.</p><div class="acts"><button class="btn primary" data-d="close">Start checking</button></div>`);}
+const KEYS=[['Esc','Back to Select, or clear the selection'],['Delete / Backspace','Delete the selection'],['Ctrl/⌘ Z, Ctrl/⌘ Shift Z','Undo, redo'],['Ctrl/⌘ C, V','Copy, paste'],['Ctrl/⌘ D','Duplicate'],['Ctrl/⌘ A','Select all furniture'],['Ctrl/⌘ G, Shift G','Group, ungroup'],['R, Shift R','Rotate 90°, or 15°'],['Arrows, Shift arrows','Nudge 5 cm, or 25 cm'],['Shift-click, Shift-drag','Add to the selection, select a box'],['Alt while dragging','Skip snapping to walls'],['Typing while drawing a wall','3.2 then Enter for 3.2 m; 3.2@45 for 45° (0° right, 90° up)'],['W A S D, arrows','Walk in walk mode'],['?','This list']];
+function shortcuts(){dialog(`<h2>Keyboard shortcuts</h2><div>${KEYS.map(([k,v])=>`<div class="kv"><span>${esc(v)}</span><b>${esc(k)}</b></div>`).join('')}</div><div class="acts"><button class="btn" data-d="close">Close</button></div>`);}
+/* first visit: a short tour */
+const TOUR=[['Start from your flat','Pick Layout to start from a brochure unit, import your HDB brochure PDF, or trace a photo of your plan.'],['Shape the layout','Use Wall, Room, Door and Window to change the plan. Drag walls and corners; solid red dashes mark structural walls.'],['Furnish and build in','Add furniture from the left. Carpentry is made to measure: pick a unit and set its height, doors and inside.'],['Ceilings, lights and power','Select a room for a false ceiling; add lights, switches and sockets from Lighting and Services, then export the electrical plan.'],['Price it and check it','Enter prices in Budget, paste contractors\' quotes to compare, and see Checks for clashes and changes to structural walls. The money plan reads your total.']];
+function tour(i=0){const t=TOUR[i];dialog(`<p class="note" style="margin:0 0 4px">${i+1} of ${TOUR.length}</p><h2>${esc(t[0])}</h2><p class="note" style="margin:0 0 6px">${esc(t[1])}</p><div class="acts">${i<TOUR.length-1?`<button class="btn primary" data-tour="${i+1}">Next</button>`:'<button class="btn primary" data-d="close">Start</button>'}<button class="btn" data-d="close">Skip</button></div><p class="note">Press ? any time for keyboard shortcuts.</p>`);}
+$('#dcard').addEventListener('click',e=>{const b=e.target.closest('[data-tour]');if(b)tour(+b.dataset.tour);});
 /* ───────── dialogs / header ───────── */
 function dialog(html){$('#dcard').innerHTML=html;$('#dlg').classList.add('on');const f=$('#dcard input,#dcard textarea');if(f)f.focus();}
 function closeDlg(){$('#dlg').classList.remove('on');}
@@ -1114,10 +1127,12 @@ $$('.mtabs button').forEach(b=>b.addEventListener('click',()=>setTab(b.dataset.t
 /* keyboard */
 addEventListener('keydown',e=>{
   if(drag&&drag.k==='wall'&&draft){
-    if(/^[0-9.]$/.test(e.key)){e.preventDefault();draft.typed=(draft.typed||'')+e.key;render2D();return;}
+    if(/^[0-9.@-]$/.test(e.key)){e.preventDefault();draft.typed=(draft.typed||'')+e.key;render2D();return;}
     if(e.key==='Backspace'&&draft.typed){e.preventDefault();draft.typed=draft.typed.slice(0,-1);render2D();return;}
-    if(e.key==='Enter'&&draft.typed){e.preventDefault();const L=parseFloat(draft.typed),dx=draft.x2-draft.x1,dy=draft.y2-draft.y1,cur=Math.hypot(dx,dy)||1;
-      if(L>=.1&&L<=80){const ux=dx/cur,uy=dy/cur;if(cur<.05){draft.x2=draft.x1+L;draft.y2=draft.y1;}else{draft.x2=+(draft.x1+ux*L).toFixed(3);draft.y2=+(draft.y1+uy*L).toFixed(3);}
+    if(e.key==='Enter'&&draft.typed){e.preventDefault();const [ls,as]=draft.typed.split('@'),L=parseFloat(ls),A=parseFloat(as),dx0=draft.x2-draft.x1,dy0=draft.y2-draft.y1;
+      // "3.2@45": 3.2 m at 45° (0° = right, 90° = up the plan).
+      const dx=isFinite(A)?Math.cos(A*Math.PI/180):dx0,dy=isFinite(A)?-Math.sin(A*Math.PI/180):dy0,cur=isFinite(A)?1:(Math.hypot(dx,dy)||1);
+      if(L>=.1&&L<=80){const ux=dx/cur,uy=dy/cur;if(!isFinite(A)&&Math.hypot(dx0,dy0)<.05){draft.x2=draft.x1+L;draft.y2=draft.y1;}else{draft.x2=+(draft.x1+ux*L).toFixed(3);draft.y2=+(draft.y1+uy*L).toFixed(3);}
         checkpoint();S.walls.push({id:uid(),x1:draft.x1,y1:draft.y1,x2:draft.x2,y2:draft.y2,fin:'paint',col:'',str:false,th:0});toast(`Wall ${L} m added`);}
       draft=null;drag=null;changed();return;}
     if(e.key==='Escape'){draft=null;drag=null;render2D();return;}
@@ -1125,6 +1140,7 @@ addEventListener('keydown',e=>{
   const tg=e.target.tagName;if(tg==='INPUT'||tg==='TEXTAREA'||tg==='SELECT')return;
   if(e.key==='Escape'){if($('#dlg').classList.contains('on'))closeDlg();else if(polyDraft){polyDraft=null;render2D();}else{if(tool!=='select')setTool('select');else select(null);}return;}
   const k=e.key.length===1?e.key.toLowerCase():e.key;
+  if(e.key==='?'){e.preventDefault();shortcuts();return;}
   if((e.ctrlKey||e.metaKey)&&k==='z'){e.preventDefault();e.shiftKey?redo():undo();return;}
   if((e.ctrlKey||e.metaKey)&&k==='y'){e.preventDefault();redo();return;}
   if(mode==='walk'&&['w','a','s','d','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(k)){e.preventDefault();keys.add(k);return;}
@@ -1233,8 +1249,19 @@ async function doExport(k){
 async function buildPdf(){
   const a3=($('#exp')&&$('#exp').value)!=='a4',pw=a3?1191:842,ph=a3?842:595,pages=[],date=new Date().toLocaleDateString(),M=36;
   const fitImg=(cv,top)=>{const u=cv.toDataURL('image/jpeg',.9),aw=pw-2*M,ah=ph-M-top,k=Math.min(aw/cv.width,ah/cv.height),dw=cv.width*k,dh=cv.height*k;return {url:u,w:cv.width,h:cv.height,x:(pw-dw)/2,y:M+(ah-dh)/2,dw,dh};};
-  const pr=planSvgString(2600),pc=await svgToCanvas(pr.svg,pr.w,pr.h),im=fitImg(pc,M+34),ratio=Math.round(pr.vw*1000/(im.dw/72*25.4));
-  pages.push({w:pw,h:ph,img:im,text:[{x:M,y:ph-M-14,s:16,t:S.name,b:1},{x:M,y:ph-M-28,s:9,t:`Floor plan. About 1:${ratio} at this paper size. ${date}`}]});
+  // Floor plan at a true scale (1:50, 1:100 or 1:200, whichever fits), with a title block, scale bar and north arrow.
+  const pr=planSvgString(3000),pc=await svgToCanvas(pr.svg,pr.w,pr.h),TB=176,aw=pw-2*M-TB-12,ah=ph-2*M,PT=72/25.4;
+  const scale=[50,100,200,500].find(sc=>pr.vw*1000/sc*PT<=aw&&pr.vh*1000/sc*PT<=ah)||500,dw=pr.vw*1000/scale*PT,dh=pr.vh*1000/scale*PT;
+  const im={url:pc.toDataURL('image/jpeg',.92),w:pc.width,h:pc.height,x:M+(aw-dw)/2,y:M+(ah-dh)/2,dw,dh};
+  const tx=pw-M-TB,ty=M,f=n=>n.toFixed(2);let ops=`0.5 w ${f(tx)} ${f(ty)} ${TB} ${f(ph-2*M)} re S ${f(tx)} ${f(ty+150)} m ${f(tx+TB)} ${f(ty+150)} l S\n`;
+  // Scale bar: 0 to 5 m in 1 m blocks.
+  const bm=1000/scale*PT,bx0=tx+12,by0=ty+118;for(let i=0;i<5;i++)ops+=`${f(bx0+i*bm)} ${f(by0)} ${f(bm)} 5 re ${i%2?'S':'f'}\n`;
+  // North arrow: plan top faces env.north degrees from north.
+  const na=-env.north*Math.PI/180,ncx=tx+TB-30,ncy=ty+ph-2*M-60,P=(r,a)=>`${f(ncx+r*Math.sin(na+a))} ${f(ncy+r*Math.cos(na+a))}`;
+  ops+=`${P(22,0)} m ${P(14,Math.PI*0.82)} l ${P(4,Math.PI)} l ${P(14,-Math.PI*0.82)} l f\n`;
+  const tl=(y,t,sz=9,b=0)=>({x:tx+10,y:ty+y,s:sz,t,b});
+  pages.push({w:pw,h:ph,img:im,ops,text:[{x:ncx-4,y:ncy+30,s:10,t:'N',b:1},tl(ph-2*M-20,S.name.slice(0,26),12,1),tl(ph-2*M-36,'Floor plan'),tl(ph-2*M-50,`Scale 1:${scale} at ${a3?'A3':'A4'}`),tl(ph-2*M-64,date),
+    tl(ph-2*M-92,'Check all dimensions on site.',7),tl(ph-2*M-102,'Planning drawing, not for construction.',7),{x:bx0-2,y:by0+9,s:7,t:'0'},{x:bx0+5*bm-6,y:by0+9,s:7,t:'5 m'},tl(100,`Floor area ${S.rooms.reduce((a,q)=>a+area(q),0).toFixed(1)} m2`,8),tl(88,`Ceiling ${S.H.toFixed(2)} m`,8),tl(20,'Flat Studio',8,1)]});
   if(Object.keys(electricalCounts(S)).length){const e2=electricalSvg(S,2600),c=await svgToCanvas(e2.svg,e2.w,e2.h);pages.push({w:pw,h:ph,img:fitImg(c,M+10),text:[{x:M,y:ph-M+2,s:9,t:`Electrical plan. ${S.name}. ${date}`}]});}
   const ps=elevPanels();for(let i=0;i<ps.length;i+=6){const sh=elevSheetSvg(ps.slice(i,i+6),2400),c=await svgToCanvas(sh.svg,sh.w,sh.h);pages.push({w:pw,h:ph,img:fitImg(c,M+10),text:[{x:M,y:ph-M+2,s:9,t:`Elevations, sheet ${i/6+1}. ${S.name}. ${date}`}]});}
   let txt=scheduleText();if(typeof budgetText==='function')txt+='\n\n'+budgetText();if(typeof checksText==='function')txt+='\n\n'+checksText();
@@ -1430,6 +1457,7 @@ if(import.meta.env.DEV)window.__studio={design:()=>S,pano:(w=1024)=>{setMode('wa
   requestAnimationFrame(()=>{fit();resize3D();resetOrbit();if(camera)updateOrbit();changed();
     // ?layout= from the money plan: open that brochure unit, keeping any other design as a saved version first.
     const L=ql&&BRO[ql];if(L&&S.name!==L.design.name){if(S.walls.length){const v=vers();v.unshift({id:'v'+Date.now().toString(36),name:('Before '+L.label).slice(0,40),t:Date.now(),json:JSON.stringify(S)});vstore(v);}loadBrochure(ql);}
+    try{if(!localStorage.getItem('flatstudio.tour')){localStorage.setItem('flatstudio.tour','1');if(!ql)setTimeout(()=>tour(0),700);}}catch(e){}
     if(innerWidth<760){try{if(!localStorage.getItem('flatstudio.phoneTip')){localStorage.setItem('flatstudio.phoneTip','1');setTimeout(()=>toast('Flat Studio is easier on a computer or a tablet in landscape. On a phone, use the tabs at the bottom.',6000),1200);}}catch(e){}}
     requestAnimationFrame(frame);});
 })();

@@ -198,3 +198,4 @@ button{cursor:pointer}
 #plan .ceilp.cove{stroke-width:2.5px}
 .qt{border-collapse:collapse;width:100%;font-size:12px}.qt th,.qt td{padding:5px 4px;border-bottom:1px dotted var(--line);text-align:right;vertical-align:top}.qt th:first-child,.qt td:first-child{text-align:left}
 .qt small{color:var(--ink2)}.qt td.lo{color:var(--accent);font-weight:600}.qt tr.tot td{font-weight:600;border-top:1px solid var(--line)}
+#plan .guide{stroke:var(--sel);stroke-width:1px;stroke-dasharray:4 4;opacity:.8;pointer-events:none}
