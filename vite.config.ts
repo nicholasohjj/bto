@@ -14,7 +14,8 @@ function swAssets(): Plugin {
     name: 'sw-assets',
     apply: 'build',
     configResolved(config) { outDir = config.build.outDir },
-    generateBundle(_, bundle) { assets = Object.keys(bundle).filter((f) => f.startsWith('assets/')).map((f) => `/${f}`).sort() },
+    // Flat Studio's files are cached when it's first opened, so money-plan visitors don't download them.
+    generateBundle(_, bundle) { assets = Object.keys(bundle).filter((f) => f.startsWith('assets/') && !f.startsWith('assets/studio-')).map((f) => `/${f}`).sort() },
     closeBundle() {
       const file = join(outDir, 'sw.js')
       const hash = createHash('sha256').update(assets.join('\n')).digest('hex').slice(0, 10)
@@ -29,6 +30,10 @@ function swAssets(): Plugin {
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), tailwindcss(), swAssets()],
+  build: {
+    // Two pages: the money plan (/) and Flat Studio (/studio/).
+    rolldownOptions: { input: { main: 'index.html', studio: 'studio/index.html' } },
+  },
   test: {
     include: ['src/**/*.test.ts'],
   },

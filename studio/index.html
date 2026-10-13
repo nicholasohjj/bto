@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Flat Studio</title>
+<meta name="description" content="Plan your HDB flat's layout and renovation in 2D and 3D.">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="/src/studio/studio.css">
+</head>
+<body>
+<input type="file" id="modelIn" accept=".glb,.gltf,.obj" hidden>
+<div id="toast" role="status" aria-live="polite"></div>
+<div id="app" data-tab="plan">
+  <header class="top">
+    <a class="btn" href="/" title="Back to your BTO money plan">← Money plan</a>
+    <div class="brand"><span class="mark" aria-hidden="true"></span>Flat Studio</div>
+    <input id="pname" class="pname" type="text" aria-label="Project name" maxlength="60">
+    <div class="spacer"></div>
+    <div class="grp">
+      <button class="btn" id="bUndo" title="Undo (Ctrl+Z)">Undo</button>
+      <button class="btn" id="bRedo" title="Redo (Ctrl+Shift+Z)">Redo</button>
+    </div>
+    <select id="tpl" class="btn" aria-label="Start from a layout">
+      <option value="">Layout…</option>
+      <option value="s4">4-room sample</option>
+      <option value="p3">3-room flat, generic layout</option>
+      <option value="p5">5-room flat, generic layout</option>
+      <optgroup label="From HDB brochures" id="tplBro"></optgroup>
+      <option value="mirror">Mirror this layout (left ↔ right)</option>
+      <option value="blank">Blank flat…</option>
+      <option value="empty">Empty, to trace a plan</option>
+    </select>
+    <button class="btn" id="bComment" hidden>Comment</button>
+    <button class="btn" id="bExport">Export</button>
+    <button class="btn" id="bShare">Files</button>
+    <div class="seg" id="viewSeg" role="group" aria-label="Panes">
+      <button data-v="split" aria-pressed="true">Split</button>
+      <button data-v="plan" aria-pressed="false">Plan</button>
+      <button data-v="3d" aria-pressed="false">3D</button>
+    </div>
+  </header>
+
+  <div id="main">
+    <aside id="left" class="panel" aria-label="Tools and furniture"></aside>
+
+    <section id="stage" data-view="split">
+      <div class="pane" id="planPane">
+        <svg id="planUnder" aria-hidden="true"></svg>
+        <svg id="plan" role="img" aria-label="Floor plan"></svg>
+        <div class="bar">
+          <span class="chip btnlike" id="zIn" role="button" tabindex="0" aria-label="Zoom in">＋</span>
+          <span class="chip btnlike" id="zOut" role="button" tabindex="0" aria-label="Zoom out">－</span>
+          <span class="chip btnlike" id="zFit" role="button" tabindex="0">Fit</span>
+          <span class="chip btnlike" id="snapChip" role="button" tabindex="0" title="Grid snapping">Snap 10 cm</span>
+        </div>
+        <div class="hint"><span id="hint"></span></div>
+      </div>
+      <div class="pane" id="viewPane">
+        <canvas id="gl"></canvas>
+        <div id="noGL">The 3D view could not start. It needs a browser with WebGL turned on.</div>
+        <div class="bar">
+          <div class="seg" id="modeSeg" role="group" aria-label="Camera">
+            <button data-m="orbit" aria-pressed="true">Orbit</button>
+            <button data-m="walk" aria-pressed="false">Walk</button>
+          </div>
+          <label class="chip" id="cutChip"><input type="checkbox" id="cut" checked> Cutaway walls</label>
+          <span class="chip btnlike" id="rView" role="button" tabindex="0">Reset view</span>
+          <select class="chip" id="viewSel" aria-label="Saved views and rooms"></select>
+          <span class="chip btnlike" id="rPhoto" role="button" tabindex="0" title="High quality render of this view">Render photo</span>
+          <label class="chip" id="todChip" title="Time of day">Sun <input type="range" id="tod" min="5" max="21" step="0.25" value="14" aria-label="Time of day"> <b id="todT">14:00</b></label>
+          <label class="chip" id="northChip" title="Compass: which way the top of the plan faces. 0 = north, 90 = east.">Plan faces <input type="range" id="north" min="0" max="355" step="5" value="0" aria-label="Direction the top of the plan faces"> <b id="northT">N</b></label>
+          <select class="chip" id="lampSel" aria-label="Lamps"><option value="auto">Lamps: auto</option><option value="on">Lamps: on</option><option value="off">Lamps: off</option></select>
+        </div>
+        <div id="pad" hidden>
+          <span></span><button data-k="w" aria-label="Walk forward">▲</button><span></span>
+          <button data-k="ArrowLeft" aria-label="Turn left">◀</button><button data-k="s" aria-label="Walk back">▼</button><button data-k="ArrowRight" aria-label="Turn right">▶</button>
+        </div>
+        <div class="hint"><span id="hint3"></span></div>
+      </div>
+    </section>
+
+    <aside id="right" class="panel" aria-label="Inspector">
+      <div class="tabs" role="tablist">
+        <button role="tab" data-rt="inspect" aria-selected="true">Inspect</button>
+        <button role="tab" data-rt="schedule" aria-selected="false">Schedule</button>
+        <button role="tab" data-rt="budget" aria-selected="false">Budget</button>
+        <button role="tab" data-rt="checks" aria-selected="false">Checks</button>
+      </div>
+      <div id="rbody"></div>
+    </aside>
+  </div>
+
+  <nav class="mtabs" role="tablist" aria-label="Sections">
+    <button role="tab" data-t="plan" aria-selected="true">Plan</button>
+    <button role="tab" data-t="view" aria-selected="false">3D</button>
+    <button role="tab" data-t="add" aria-selected="false">Add</button>
+    <button role="tab" data-t="edit" aria-selected="false">Edit</button>
+  </nav>
+</div>
+
+<input type="file" id="imgIn" accept="image/*" hidden>
+<div id="dlg" role="dialog" aria-modal="true"><div class="card" id="dcard"></div></div>
+<script type="module" src="/src/studio/legacy.js"></script>
+</body>
+</html>

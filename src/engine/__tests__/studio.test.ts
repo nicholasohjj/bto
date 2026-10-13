@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { BROCHURE_LAYOUTS, parseStudioSummary, studioUrl } from '../../state/studio'
 import { seedScenario } from '../../state/defaults'
-import layoutsJs from '../../../public/studio/layouts.js?raw'
+import layouts from '../../studio/layouts.json'
 
 describe('Flat Studio link', () => {
   it('reads the studio summary and ignores bad values', () => {
@@ -30,8 +30,7 @@ describe('Brochure layouts', () => {
     expect(new URLSearchParams(studioUrl(s).split('?')[1]).get('layout')).toBeNull()
   })
   it('lists only layouts that exist in the studio', () => {
-    const src = layoutsJs
-    const data = JSON.parse(src.slice(src.indexOf('=') + 1).trim().replace(/;$/, ''))
+    const data: Record<string, unknown> = layouts
     for (const list of Object.values(BROCHURE_LAYOUTS)) for (const l of list) expect(data[l.key], l.key).toBeDefined()
   })
 })

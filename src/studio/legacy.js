@@ -1,303 +1,15 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><style>*,*::before,*::after{box-sizing:border-box}[hidden]{display:none!important}body{margin:0}</style></head><body>
-<title>Flat Studio</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
-<style>
-/* Layout: drafting workbench. Left = draw tools + furniture catalogue, centre = 2D plan beside live 3D view, right = inspector / schedule.
-   Look: blueprint-grey paper, ink linework, petrol accent, amber only for "selected". */
-:root{
-  --bg:#e8eded; --panel:#f6f9f8; --line:#ccd6d6; --ink:#14242a; --ink2:#54686f;
-  --accent:#17707a; --accent-ink:#ffffff; --sel:#d98c00; --danger:#b3372f;
-  --paper:#fafcfb; --grid:#e3eaea; --grid2:#d3dddd; --wall:#14242a; --room-op:.62;
-  --scene:#dde6e6; --slab:#c2cccc; --field:#ffffff;
-  --f-display:'Archivo',system-ui,sans-serif; --f-body:'IBM Plex Sans',system-ui,sans-serif; --f-mono:'IBM Plex Mono',ui-monospace,monospace;
-}
-@media (prefers-color-scheme: dark){
-  :root:not([data-theme="light"]){
-    --bg:#0d1416; --panel:#151e21; --line:#273337; --ink:#e3eded; --ink2:#8ea2a8;
-    --accent:#4cc3cf; --accent-ink:#04181b; --sel:#f0b53b; --danger:#ff7a70;
-    --paper:#10191c; --grid:#18242a; --grid2:#223037; --wall:#dfe9e9; --room-op:.3;
-    --scene:#182226; --slab:#27343a; --field:#0f1719; color-scheme:dark;
-  }
-}
-:root[data-theme="dark"]{
-  --bg:#0d1416; --panel:#151e21; --line:#273337; --ink:#e3eded; --ink2:#8ea2a8;
-  --accent:#4cc3cf; --accent-ink:#04181b; --sel:#f0b53b; --danger:#ff7a70;
-  --paper:#10191c; --grid:#18242a; --grid2:#223037; --wall:#dfe9e9; --room-op:.3;
-  --scene:#182226; --slab:#27343a; --field:#0f1719; color-scheme:dark;
-}
-*{box-sizing:border-box}
-html,body{height:100%}
-body{background:var(--bg);color:var(--ink);font:13px/1.4 var(--f-body);overflow:hidden}
-button,input,select,textarea{font:inherit;color:inherit}
-button{cursor:pointer}
-:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-#app{display:grid;grid-template-rows:auto minmax(0,1fr) auto;height:100%}
+// Flat Studio: 2D plan + 3D view of an HDB flat. Moved from a single HTML file; new, testable
+// pieces live in TypeScript modules next to this one.
+import * as THREE from 'three'
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
+import { OBJLoader } from 'three/addons/loaders/OBJLoader.js'
+import LAYOUTS from './layouts.json'
 
-/* header */
-.top{display:flex;align-items:center;gap:8px 10px;padding:8px 16px;background:var(--panel);border-bottom:1px solid var(--line);flex-wrap:wrap}
-.brand{display:flex;align-items:center;gap:9px;font:700 15px/1 var(--f-display);letter-spacing:.01em}
-.mark{width:18px;height:18px;border:2px solid var(--ink);position:relative;display:inline-block}
-.mark::before{content:"";position:absolute;left:5px;top:-2px;width:2px;height:9px;background:var(--ink)}
-.mark::after{content:"";position:absolute;left:-2px;top:6px;width:9px;height:2px;background:var(--ink)}
-.pname{background:transparent;border:1px solid transparent;border-radius:6px;padding:5px 8px;min-width:0;width:clamp(120px,22vw,230px);font-weight:500}
-.pname:hover,.pname:focus{border-color:var(--line);background:var(--field)}
-.spacer{flex:1}
-.btn{background:var(--field);border:1px solid var(--line);border-radius:6px;padding:5px 10px;line-height:1.3}
-.btn:hover:not(:disabled){border-color:var(--accent)}
-.btn:disabled{opacity:.4;cursor:default}
-.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
-.btn.danger{color:var(--danger)}
-.grp{display:flex;gap:6px}
-.seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:var(--field)}
-.seg button{border:0;background:transparent;padding:5px 11px;border-right:1px solid var(--line)}
-.seg button:last-child{border-right:0}
-.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);font-weight:600}
+// Keep the look the design had on three.js r128: no colour management, and light intensities
+// scaled by PI (three.js now uses physical light units).
+THREE.ColorManagement.enabled=false;
+const LI=Math.PI;
 
-/* main grid */
-#main{display:grid;grid-template-columns:236px minmax(0,1fr) 286px;min-height:0}
-.panel{overflow:auto;background:var(--panel);min-height:0;min-width:0}
-#left{border-right:1px solid var(--line)}
-#right{border-left:1px solid var(--line)}
-.sec{padding:14px 16px;border-bottom:1px solid var(--line)}
-.sec h3{margin:0 0 9px;font:600 11px/1 var(--f-display);letter-spacing:.09em;text-transform:uppercase;color:var(--ink2)}
-.tools{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
-.tool{border:1px solid var(--line);background:var(--field);border-radius:6px;padding:7px 4px;text-align:center;font-weight:500}
-.tool[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
-.cat{display:grid;gap:4px}
-.ci{display:flex;justify-content:space-between;align-items:baseline;gap:8px;text-align:left;border:1px solid transparent;background:transparent;border-radius:6px;padding:5px 8px;margin:0 -8px}
-.ci:hover{background:var(--field);border-color:var(--line)}
-.ci em{font:400 11px var(--f-mono);color:var(--ink2);font-style:normal;white-space:nowrap}
-
-/* stage */
-#stage{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);background:var(--line);gap:1px;min-height:0;min-width:0}
-#stage[data-view="plan"]{grid-template-columns:minmax(0,1fr)} #stage[data-view="plan"] #viewPane{display:none}
-#stage[data-view="3d"]{grid-template-columns:minmax(0,1fr)} #stage[data-view="3d"] #planPane{display:none}
-.pane{position:relative;min-width:0;min-height:0;overflow:hidden;background:var(--paper)}
-#plan,#gl{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;user-select:none;-webkit-user-select:none}
-#gl{background:var(--scene)}
-.bar{position:absolute;top:10px;left:12px;right:12px;display:flex;gap:6px;flex-wrap:wrap;pointer-events:none;z-index:2}
-.bar>*{pointer-events:auto}
-.chip{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:4px 9px;display:inline-flex;align-items:center;gap:6px}
-.chip.btnlike{cursor:pointer}
-.chip input{accent-color:var(--accent)}
-.hint{position:absolute;left:12px;bottom:10px;right:12px;pointer-events:none;z-index:2;color:var(--ink2);font-size:12px}
-.hint span{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:3px 8px;display:inline-block}
-#pad{position:absolute;left:12px;bottom:44px;display:grid;grid-template-columns:repeat(3,44px);grid-template-rows:repeat(2,44px);gap:6px;z-index:3}
-#pad[hidden]{display:none}
-#pad button{border:1px solid var(--line);background:var(--panel);border-radius:8px;font-size:16px;touch-action:none}
-#pad button:active{background:var(--accent);color:var(--accent-ink)}
-#noGL{position:absolute;inset:0;display:none;place-items:center;text-align:center;padding:24px;color:var(--ink2)}
-
-/* plan svg */
-#plan{background:transparent;cursor:default}
-#planUnder{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
-#plan *{vector-effect:non-scaling-stroke}
-#plan text{font-family:var(--f-mono);fill:var(--ink);pointer-events:none}
-#plan .gl{stroke:var(--grid);stroke-width:1px;fill:none}
-#plan .gl5{stroke:var(--grid2);stroke-width:1px;fill:none}
-#plan .room{fill-opacity:var(--room-op)}
-#plan .room.on{stroke:var(--sel);stroke-width:2px;stroke-dasharray:6 4}
-#plan .rname,#plan .rarea{paint-order:stroke;stroke:var(--paper);stroke-width:4px;stroke-linejoin:round}
-#plan .rname{font-family:var(--f-display);font-weight:600;letter-spacing:.02em}
-#plan .rarea{fill:var(--ink2)}
-#plan .wall{fill:var(--wall)}
-#plan .wall.on{fill:var(--sel)}
-#plan .hit{fill:rgba(0,0,0,.001);stroke:rgba(0,0,0,.001)}
-#plan .item{stroke:var(--wall);stroke-width:1.3px;fill-opacity:.88}
-#plan .item.elev{stroke-dasharray:4 3}
-#plan .front{fill:var(--wall);opacity:.55}
-#plan .ilab{font-size:.14px;text-anchor:middle;dominant-baseline:central}
-#plan .selbox{fill:none;stroke:var(--sel);stroke-width:2px;stroke-dasharray:5 3}
-#plan .handle{fill:var(--paper);stroke:var(--sel);stroke-width:2px;cursor:grab}
-#plan .rotline{stroke:var(--sel);stroke-width:1.5px}
-#plan .dleaf{stroke:var(--accent);stroke-width:2px;fill:none}
-#plan .darc{stroke:var(--ink2);stroke-width:1px;stroke-dasharray:3 3;fill:none}
-#plan .wbg{fill:var(--paper);stroke:var(--wall);stroke-width:1px}
-#plan .wglass{stroke:var(--accent);stroke-width:2px}
-#plan .sel-o .dleaf,#plan .sel-o .wglass{stroke:var(--sel)}
-#plan .dim{stroke:var(--ink2);stroke-width:1px;fill:none}
-#plan .dimt{font-size:.2px;fill:var(--ink2);text-anchor:middle;paint-order:stroke;stroke:var(--paper);stroke-width:3px}
-#plan .dim.on{stroke:var(--sel);stroke-width:2px}
-#plan .rdim{fill:var(--ink2);text-anchor:middle;paint-order:stroke;stroke:var(--paper);stroke-width:3px}
-#plan .strw{stroke:var(--danger);stroke-width:2px;stroke-dasharray:5 4;opacity:.8;pointer-events:none;fill:none}
-/* toast */
-#toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%) translateY(20px);background:var(--ink);color:var(--paper);padding:9px 16px;border-radius:8px;font-size:13px;opacity:0;pointer-events:none;transition:.2s;z-index:60;max-width:90vw}#toast.on{opacity:1;transform:translateX(-50%)}
-.ci .x{margin-left:6px;color:var(--ink2);cursor:pointer;padding:0 4px}
-/* budget + files */
-.bl{display:grid;grid-template-columns:minmax(0,1fr) 74px 66px;gap:6px;align-items:center;padding:6px 0;border-bottom:1px dotted var(--line);font-size:12.5px}.bl span small{display:block;color:var(--ink2);font-size:11px}.bl b{text-align:right;font-weight:600}.bl.x{grid-template-columns:minmax(0,1fr) 74px 32px}.bl input{width:100%;min-width:0}
-.dh{margin:18px 0 8px;font:600 11px var(--f-display);letter-spacing:.08em;text-transform:uppercase;color:var(--ink2)}.vrow{display:flex;gap:8px;margin-bottom:6px}.vrow input{flex:1;min-width:0}.vb{display:flex;gap:6px}
-/* checks */
-.chk-i{display:flex;gap:9px;padding:8px 0;border-bottom:1px dotted var(--line);font-size:12.5px;line-height:1.4}.chk-i i{flex:none;width:8px;height:8px;border-radius:50%;margin-top:5px;background:var(--ink2)}.chk-i.warn i{background:var(--sel)}
-/* export */
-.exg{display:grid;grid-template-columns:1fr 1fr;gap:8px}.exg .btn{text-align:left}
-/* layers */
-.chk{display:flex;gap:8px;align-items:center;margin-top:10px;cursor:pointer;font-size:13px}.chk input{accent-color:var(--accent)}
-.lays{display:grid;grid-template-columns:1fr 1fr;gap:6px 8px;font-size:12.5px}.lays label{display:flex;gap:6px;align-items:center;cursor:pointer}.lays input{accent-color:var(--accent)}
-#plan .wbay{fill:none;stroke:var(--ink);stroke-width:1.5px;vector-effect:non-scaling-stroke}
-#plan .handle.add{opacity:.55;stroke-width:1.5px}
-#plan .ghost{fill:var(--accent);fill-opacity:.35;stroke:var(--accent);stroke-width:1px}
-#plan .draft{fill:var(--accent);fill-opacity:.2;stroke:var(--accent);stroke-width:2px;stroke-dasharray:6 4}
-#plan .walkc{fill:var(--accent);stroke:var(--paper);stroke-width:2px;cursor:grab}
-#plan .walkw{fill:var(--accent);fill-opacity:.22}
-
-/* inspector */
-.tabs{display:flex;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--panel);z-index:2}
-.tabs button{flex:1;border:0;background:transparent;padding:11px 3px;font:600 10px/1 var(--f-display);letter-spacing:.05em;text-transform:uppercase;color:var(--ink2);border-bottom:2px solid transparent}
-.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
-.row{display:grid;grid-template-columns:92px minmax(0,1fr);gap:8px;align-items:center;margin-bottom:8px}
-.row>span{color:var(--ink2)}
-.row input,.row select{width:100%;min-width:0;background:var(--field);border:1px solid var(--line);border-radius:6px;padding:5px 8px;font-family:var(--f-mono);font-size:12px}
-.row input[type="text"]{font-family:var(--f-body);font-size:13px}
-.row input[type="range"]{padding:0;border:0;background:none;accent-color:var(--accent)}
-.pair{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.pair .row{grid-template-columns:minmax(0,1fr);gap:4px}
-.sw{display:flex;gap:6px;flex-wrap:wrap}
-.sw button{width:26px;height:26px;border-radius:50%;border:2px solid var(--line);padding:0}
-.sw button[aria-pressed="true"]{border-color:var(--sel);box-shadow:0 0 0 2px var(--panel) inset}
-.floors{display:grid;grid-template-columns:1fr 1fr;gap:6px}
-.floors button{display:flex;align-items:center;gap:7px;border:1px solid var(--line);background:var(--field);border-radius:6px;padding:5px 7px;text-align:left;font-size:12px}
-.floors button[aria-pressed="true"]{border-color:var(--sel);outline:1px solid var(--sel)}
-.floors i{width:16px;height:16px;border-radius:3px;border:1px solid var(--line);flex:none}
-.acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:12px}
-.note{color:var(--ink2);font-size:12px;margin:10px 0 0}
-.kv{display:flex;justify-content:space-between;gap:10px;padding:3px 0;border-bottom:1px dotted var(--line)}
-.kv b{font:500 12px var(--f-mono)}
-.kv span{min-width:0}
-.sch h4{margin:14px 0 6px;font:600 11px/1 var(--f-display);letter-spacing:.09em;text-transform:uppercase;color:var(--ink2)}
-.sch h4:first-child{margin-top:0}
-.mono{font-family:var(--f-mono)}
-
-/* dialog */
-#dlg{position:fixed;inset:0;display:none;place-items:center;background:rgba(5,12,14,.5);z-index:20;padding:16px}
-#dlg.on{display:grid}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px;width:min(520px,100%);max-height:90%;overflow:auto}
-.card h2{margin:0 0 6px;font:700 17px var(--f-display)}
-.card textarea{width:100%;height:170px;background:var(--field);border:1px solid var(--line);border-radius:6px;padding:8px;font:11px/1.4 var(--f-mono);resize:vertical}
-
-.mtabs{display:none;border-top:1px solid var(--line);background:var(--panel);padding-bottom:env(safe-area-inset-bottom,0px)}
-.mtabs button{flex:1;border:0;background:transparent;padding:12px 4px;font:600 11px/1 var(--f-display);letter-spacing:.08em;text-transform:uppercase;color:var(--ink2);border-top:2px solid transparent}
-.mtabs button[aria-selected="true"]{color:var(--ink);border-top-color:var(--accent)}
-
-@media (max-width:1180px){
-  #main{grid-template-columns:214px minmax(0,1fr) 250px}
-  #stage{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1.1fr) minmax(0,1fr)}
-  #stage[data-view="plan"],#stage[data-view="3d"]{grid-template-rows:minmax(0,1fr)}
-}
-@media (max-width:860px){
-  #main{grid-template-columns:minmax(0,1fr)}
-  #left,#right{display:none;border:0}
-  #app[data-tab="add"] #left,#app[data-tab="edit"] #right{display:block}
-  #app[data-tab="add"] #stage,#app[data-tab="edit"] #stage{display:none}
-  #stage{grid-template-rows:minmax(0,1fr)}
-  #app[data-tab="plan"] #viewPane,#app[data-tab="view"] #planPane{display:none}
-  #viewSeg{display:none}
-  .mtabs{display:flex}
-  .pname{width:100%;order:5}
-  .hint span{font-size:11px}
-}
-</style>
-
-<input type="file" id="modelIn" accept=".glb,.gltf,.obj" hidden>
-<div id="toast" role="status" aria-live="polite"></div>
-<div id="app" data-tab="plan">
-  <header class="top">
-    <a class="btn" href="/" title="Back to your BTO money plan">← Money plan</a>
-    <div class="brand"><span class="mark" aria-hidden="true"></span>Flat Studio</div>
-    <input id="pname" class="pname" type="text" aria-label="Project name" maxlength="60">
-    <div class="spacer"></div>
-    <div class="grp">
-      <button class="btn" id="bUndo" title="Undo (Ctrl+Z)">Undo</button>
-      <button class="btn" id="bRedo" title="Redo (Ctrl+Shift+Z)">Redo</button>
-    </div>
-    <select id="tpl" class="btn" aria-label="Start from a layout">
-      <option value="">Layout…</option>
-      <option value="s4">4-room sample</option>
-      <option value="p3">3-room flat, generic layout</option>
-      <option value="p5">5-room flat, generic layout</option>
-      <optgroup label="From HDB brochures" id="tplBro"></optgroup>
-      <option value="mirror">Mirror this layout (left ↔ right)</option>
-      <option value="blank">Blank flat…</option>
-      <option value="empty">Empty, to trace a plan</option>
-    </select>
-    <button class="btn" id="bComment" hidden>Comment</button>
-    <button class="btn" id="bExport">Export</button>
-    <button class="btn" id="bShare">Files</button>
-    <div class="seg" id="viewSeg" role="group" aria-label="Panes">
-      <button data-v="split" aria-pressed="true">Split</button>
-      <button data-v="plan" aria-pressed="false">Plan</button>
-      <button data-v="3d" aria-pressed="false">3D</button>
-    </div>
-  </header>
-
-  <div id="main">
-    <aside id="left" class="panel" aria-label="Tools and furniture"></aside>
-
-    <section id="stage" data-view="split">
-      <div class="pane" id="planPane">
-        <svg id="planUnder" aria-hidden="true"></svg>
-        <svg id="plan" role="img" aria-label="Floor plan"></svg>
-        <div class="bar">
-          <span class="chip btnlike" id="zIn" role="button" tabindex="0" aria-label="Zoom in">＋</span>
-          <span class="chip btnlike" id="zOut" role="button" tabindex="0" aria-label="Zoom out">－</span>
-          <span class="chip btnlike" id="zFit" role="button" tabindex="0">Fit</span>
-          <span class="chip btnlike" id="snapChip" role="button" tabindex="0" title="Grid snapping">Snap 10 cm</span>
-        </div>
-        <div class="hint"><span id="hint"></span></div>
-      </div>
-      <div class="pane" id="viewPane">
-        <canvas id="gl"></canvas>
-        <div id="noGL">The 3D view could not start. It needs an internet connection to load its graphics library, and a browser with WebGL.</div>
-        <div class="bar">
-          <div class="seg" id="modeSeg" role="group" aria-label="Camera">
-            <button data-m="orbit" aria-pressed="true">Orbit</button>
-            <button data-m="walk" aria-pressed="false">Walk</button>
-          </div>
-          <label class="chip" id="cutChip"><input type="checkbox" id="cut" checked> Cutaway walls</label>
-          <span class="chip btnlike" id="rView" role="button" tabindex="0">Reset view</span>
-          <select class="chip" id="viewSel" aria-label="Saved views and rooms"></select>
-          <span class="chip btnlike" id="rPhoto" role="button" tabindex="0" title="High quality render of this view">Render photo</span>
-          <label class="chip" id="todChip" title="Time of day">Sun <input type="range" id="tod" min="5" max="21" step="0.25" value="14" aria-label="Time of day"> <b id="todT">14:00</b></label>
-          <label class="chip" id="northChip" title="Compass: which way the top of the plan faces. 0 = north, 90 = east.">Plan faces <input type="range" id="north" min="0" max="355" step="5" value="0" aria-label="Direction the top of the plan faces"> <b id="northT">N</b></label>
-          <select class="chip" id="lampSel" aria-label="Lamps"><option value="auto">Lamps: auto</option><option value="on">Lamps: on</option><option value="off">Lamps: off</option></select>
-        </div>
-        <div id="pad" hidden>
-          <span></span><button data-k="w" aria-label="Walk forward">▲</button><span></span>
-          <button data-k="ArrowLeft" aria-label="Turn left">◀</button><button data-k="s" aria-label="Walk back">▼</button><button data-k="ArrowRight" aria-label="Turn right">▶</button>
-        </div>
-        <div class="hint"><span id="hint3"></span></div>
-      </div>
-    </section>
-
-    <aside id="right" class="panel" aria-label="Inspector">
-      <div class="tabs" role="tablist">
-        <button role="tab" data-rt="inspect" aria-selected="true">Inspect</button>
-        <button role="tab" data-rt="schedule" aria-selected="false">Schedule</button>
-        <button role="tab" data-rt="budget" aria-selected="false">Budget</button>
-        <button role="tab" data-rt="checks" aria-selected="false">Checks</button>
-      </div>
-      <div id="rbody"></div>
-    </aside>
-  </div>
-
-  <nav class="mtabs" role="tablist" aria-label="Sections">
-    <button role="tab" data-t="plan" aria-selected="true">Plan</button>
-    <button role="tab" data-t="view" aria-selected="false">3D</button>
-    <button role="tab" data-t="add" aria-selected="false">Add</button>
-    <button role="tab" data-t="edit" aria-selected="false">Edit</button>
-  </nav>
-</div>
-
-<input type="file" id="imgIn" accept="image/*" hidden>
-<div id="dlg" role="dialog" aria-modal="true"><div class="card" id="dcard"></div></div>
-
-<script src="lib/three.min.js"></script>
-<script src="lib/GLTFLoader.js"></script>
-<script src="lib/OBJLoader.js"></script>
-<script src="layouts.js"></script>
-<script>
-(()=>{
-'use strict';
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const T=0.12;                       // wall thickness (m)
 const DH=2.05;                      // door opening height (m)
@@ -305,7 +17,7 @@ const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const sn=(v,g=.1)=>+(Math.round(v/g)*g).toFixed(3);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let uidn=1; const uid=()=>'n'+(uidn++);
-const HAS3D=typeof THREE!=='undefined';
+const HAS3D=true;
 
 /* ───────── data tables ───────── */
 const FLOORS={
@@ -1007,15 +719,15 @@ function css(v){return getComputedStyle(document.documentElement).getPropertyVal
 function init3D(){
   if(!HAS3D){$('#noGL').style.display='grid';return;}
   try{renderer=new THREE.WebGLRenderer({canvas:$('#gl'),antialias:true});}catch(e){$('#noGL').style.display='grid';renderer=null;return;}
-  renderer.setPixelRatio(Math.min(devicePixelRatio||1,2));renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+  renderer.outputColorSpace=THREE.LinearSRGBColorSpace;renderer.setPixelRatio(Math.min(devicePixelRatio||1,2));renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
   scene=new THREE.Scene();camera=new THREE.PerspectiveCamera(40,1,.05,120);
   try{const es=new THREE.Scene(),sph=new THREE.Mesh(new THREE.SphereGeometry(10,24,16),new THREE.MeshBasicMaterial({side:THREE.BackSide,vertexColors:true})),pos=sph.geometry.attributes.position,cols=[];
     for(let i=0;i<pos.count;i++){const y=pos.getY(i)/10,t=(y+1)/2,c=new THREE.Color('#9aa7ab').lerp(new THREE.Color('#f4f7f8'),Math.pow(t,.8));cols.push(c.r,c.g,c.b);}
     sph.geometry.setAttribute('color',new THREE.Float32BufferAttribute(cols,3));es.add(sph);
     for(const [x,z] of [[-6,-3],[6,-2],[0,7]]){const pn=new THREE.Mesh(new THREE.PlaneGeometry(5,3),new THREE.MeshBasicMaterial({color:'#ffffff',side:THREE.DoubleSide}));pn.position.set(x,5,z);pn.lookAt(0,0,0);es.add(pn);}
     const pm=new THREE.PMREMGenerator(renderer);ENVMAP=pm.fromScene(es,.04).texture;pm.dispose();}catch(e){ENVMAP=null;}
-  hemi=new THREE.HemisphereLight(0xffffff,0xb9c3c3,.62);scene.add(hemi);
-  sun=new THREE.DirectionalLight(0xfff3e2,.62);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);sun.shadow.bias=-.0006;sun.shadow.normalBias=.02;scene.add(sun,sun.target);
+  hemi=new THREE.HemisphereLight(0xffffff,0xb9c3c3,.62*LI);scene.add(hemi);
+  sun=new THREE.DirectionalLight(0xfff3e2,.62*LI);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);sun.shadow.bias=-.0006;sun.shadow.normalBias=.02;scene.add(sun,sun.target);
   for(let i=0;i<8;i++){const l=new THREE.PointLight(0xffd9a0,0,7,1.6);l.visible=false;scene.add(l);lampPool.push(l);}
   wallsG=new THREE.Group();floorG=new THREE.Group();itemsG=new THREE.Group();ceilG=new THREE.Group();ceilG.visible=false;
   scene.add(floorG,wallsG,itemsG,ceilG);
@@ -1028,15 +740,15 @@ function init3D(){
 }
 function lampsOn(){return env.lamps==='on'||(env.lamps==='auto'&&(env.hour<6.5||env.hour>18.5));}
 function syncLamps(){const on=lampsOn();let i=0;
-  for(const it of S.items){const k=CAT[it.type];if(!k||!k.lamp)continue;if(i>=lampPool.length)break;const l=lampPool[i++];l.visible=on;l.intensity=on?1.15:0;l.position.set(it.x,k.ly(S.H),it.y);
+  for(const it of S.items){const k=CAT[it.type];if(!k||!k.lamp)continue;if(i>=lampPool.length)break;const l=lampPool[i++];l.visible=on;l.intensity=on?1.15*LI:0;l.position.set(it.x,k.ly(S.H),it.y);
     if(k.elev&&!k.top){const a=it.rot*Math.PI/180;l.position.x+=-Math.sin(a)*.25;l.position.z+=Math.cos(a)*.25;}}
   for(;i<lampPool.length;i++){lampPool[i].visible=false;lampPool[i].intensity=0;}
   if(LAMPMAT)LAMPMAT.emissiveIntensity=on?1.3:.05;}
 function applyEnv(){if(!renderer)return;const h=env.hour,el=Math.max(0,Math.sin((h-6)/12*Math.PI)),az=((h-6)/12)*Math.PI,night=h<6||h>18;
   const rb=(90+(h-6)/12*180-env.north)*Math.PI/180,dir=[Math.sin(rb)*.9,Math.max(.18,el),-Math.cos(rb)*.9],rad=sunC.rad;sun.position.set(sunC.x+rad*dir[0]*1.1,rad*(.2+1.1*Math.max(.15,el)),sunC.z+rad*dir[2]);sun.target.position.set(sunC.x,0,sunC.z);
   const warm=new THREE.Color('#ffb070').lerp(new THREE.Color('#fff4e5'),clamp(el*2.2,0,1));
-  sun.color.copy(night?new THREE.Color('#8fa4d8'):warm);sun.intensity=(night?.12:.12+.8*el)*(mode==='walk'?.85:1);
-  hemi.intensity=(night?.28:.3+.4*el)*(mode==='walk'?1.35:1);hemi.color.set(night?'#6e7fa8':'#ffffff');
+  sun.color.copy(night?new THREE.Color('#8fa4d8'):warm);sun.intensity=(night?.12:.12+.8*el)*(mode==='walk'?.85:1)*LI;
+  hemi.intensity=(night?.28:.3+.4*el)*(mode==='walk'?1.35:1)*LI;hemi.color.set(night?'#6e7fa8':'#ffffff');
   const day=new THREE.Color(css('--scene')||'#dde6e6'),nt=new THREE.Color('#161d2e'),dusk=new THREE.Color('#e7b793');
   let bg=day;if(h<6||h>18.5)bg=nt;else if(h<7||h>17.5){bg=day.clone().lerp(dusk,.6);}scene.background=bg.clone();
   syncLamps();dirty=true;}
@@ -1233,10 +945,10 @@ function registerModel(id,name,proto,dims){
 function parseModel(name,buf){return new Promise((res,rej)=>{
   const ext=name.split('.').pop().toLowerCase();
   try{
-    if(ext==='obj'){if(!THREE.OBJLoader)throw new Error('The OBJ loader did not load. Check your connection.');
-      const o=new THREE.OBJLoader().parse(new TextDecoder().decode(buf));o.traverse(m=>{if(m.isMesh&&(!m.material||!m.material.map)){m.material=new THREE.MeshStandardMaterial({color:'#c9c3b8',roughness:.8});}});res(protoFrom(o));}
-    else{if(!THREE.GLTFLoader)throw new Error('The GLTF loader did not load. Check your connection.');
-      new THREE.GLTFLoader().parse(ext==='gltf'?new TextDecoder().decode(buf):buf,'',g=>{try{res(protoFrom(g.scene));}catch(e){rej(e);}},err=>rej(new Error('Could not read that file. GLTF files with separate texture or bin files are not supported, use a GLB.')));}
+    if(ext==='obj'){
+      const o=new OBJLoader().parse(new TextDecoder().decode(buf));o.traverse(m=>{if(m.isMesh&&(!m.material||!m.material.map)){m.material=new THREE.MeshStandardMaterial({color:'#c9c3b8',roughness:.8});}});res(protoFrom(o));}
+    else{
+      new GLTFLoader().parse(ext==='gltf'?new TextDecoder().decode(buf):buf,'',g=>{try{res(protoFrom(g.scene));}catch(e){rej(e);}},err=>rej(new Error('Could not read that file. GLTF files with separate texture or bin files are not supported, use a GLB.')));}
   }catch(e){rej(e);}});}
 $('#modelIn').addEventListener('change',async e=>{const f=e.target.files&&e.target.files[0];e.target.value='';if(!f)return;
   if(f.size>40*1024*1024){toast('That file is over 40 MB. Use a lighter model.');return;}
@@ -1475,7 +1187,7 @@ function newDesign(o){checkpoint();S=loadState(o);sel=null;ms=[];structSig='';$(
   resetOrbit();fit();changed();setMode(mode);}
 $('#dcard').addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.tagName==='INPUT'){const p=$('#dcard .btn.primary');if(p)p.click();}});
 /** Unit layouts redrawn from HDB brochures (layouts.js). Keeps the budget cap; the layout becomes the "original" for the Checks tab. */
-const BRO=window.BROCHURE_LAYOUTS||{};
+const BRO=LAYOUTS;
 {const g=$('#tplBro');const ks=Object.keys(BRO);if(ks.length)g.innerHTML=ks.map(k=>`<option value="b:${esc(k)}">${esc(BRO[k].label)}</option>`).join('');else g.remove();}
 /** Flip the whole design left to right (many HDB units are the mirror image of the brochure's layout). Undoable. */
 function mirrorDesign(){const xs=S.walls.flatMap(w=>[w.x1,w.x2]).concat(S.rooms.flatMap(r=>[r.x,r.x+r.w]));if(!xs.length){toast('Nothing to mirror yet.');return;}
@@ -1951,7 +1663,3 @@ $('#dcard').addEventListener('click',e=>{const b=e.target.closest('[data-ph]');i
     if(innerWidth<760){try{if(!localStorage.getItem('flatstudio.phoneTip')){localStorage.setItem('flatstudio.phoneTip','1');setTimeout(()=>toast('Flat Studio is easier on a computer or a tablet in landscape. On a phone, use the tabs at the bottom.',6000),1200);}}catch(e){}}
     requestAnimationFrame(frame);});
 })();
-})();
-</script>
-
-</body></html>

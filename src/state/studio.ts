@@ -70,7 +70,7 @@ export function readStudioSummary(): StudioSummary | null {
   try { return parseStudioSummary(localStorage.getItem(KEY)) } catch { return null }
 }
 
-/** Unit layouts redrawn from brochures, as listed in public/studio/layouts.js, by project id. */
+/** Unit layouts redrawn from brochures, as listed in src/studio/layouts.json, by project id. */
 export const BROCHURE_LAYOUTS: Record<string, { key: string; label: string; type: FlatType }[]> = {
   'berlayar-rise': [
     { key: 'berlayar-rise/2R-1', label: '2-room Flexi (Type 1)', type: '2R' },
