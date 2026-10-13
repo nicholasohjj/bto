@@ -3,7 +3,7 @@ import type { CostItem, Scenario } from '../engine/types'
 import { money } from '../engine/format'
 import { newId } from '../state/defaults'
 import { mergeRenoStages, splitRenoIntoStages, spreadTotal } from '../state/reno'
-import { brochureLayouts, readStudioSummary, studioUrl, type StudioSummary } from '../state/studio'
+import { brochureLayouts, readStudioSummary, studioUrl, SURROUNDINGS, surroundingsUrl, type StudioSummary } from '../state/studio'
 import { Button, Card, MoneyInput, NumberInput } from './controls'
 import type { Update } from './editors'
 
@@ -59,6 +59,9 @@ export function RenoView({ scenario, update, onEditCosts, onMessage }: {
                 </a>
               ))}
             </div>
+            {scenario.flat.project?.id && SURROUNDINGS.has(scenario.flat.project.id) && (
+              <p className="mt-1.5 text-xs"><a className="text-accent underline" href={surroundingsUrl(scenario.flat.project.id)}>Picking a unit? See each unit’s view, sun and distance to roads</a></p>
+            )}
             <p className="mt-1.5 text-[11px] text-muted">
               Redrawn from the brochure’s block plans, so it’s close but not exact. Your unit may be the mirror image. Check it against your unit’s plan before you get quotes.
               Opening one saves your current Flat Studio design as a version first.

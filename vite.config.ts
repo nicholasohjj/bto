@@ -15,8 +15,8 @@ function swAssets(): Plugin {
     name: 'sw-assets',
     apply: 'build',
     configResolved(config) { outDir = config.build.outDir },
-    // Only the money plan's files (its entry, imports, lazy chunks and CSS). Flat Studio's files,
-    // including the PDF reader, are cached when it's first opened.
+    // Only the money plan's files (its entry, imports, lazy chunks and CSS). Flat Studio's and the
+    // Surroundings page's files are cached when they're first opened.
     generateBundle(_, bundle) {
       const keep = new Set<string>()
       const walk = (f: string) => {
@@ -49,7 +49,7 @@ export default defineConfig({
   plugins: [react(), tailwindcss(), swAssets()],
   build: {
     // Two pages: the money plan (/) and Flat Studio (/studio/).
-    rolldownOptions: { input: { main: 'index.html', studio: 'studio/index.html' } },
+    rolldownOptions: { input: { main: 'index.html', studio: 'studio/index.html', surroundings: 'surroundings/index.html' } },
   },
   test: {
     include: ['src/**/*.test.ts'],

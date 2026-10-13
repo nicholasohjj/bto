@@ -94,6 +94,29 @@ src/studio/
   layouts.json    Unit layouts redrawn from brochures (the Layout menu)
 ```
 
+## Surroundings (`/surroundings/`)
+
+What's around a unit: pick a block, unit and storey to see a 3D model of the estate, the view out of
+the unit's main windows, direct sun on that facade through the day and year (and how much falls after
+3 pm), distances to roads, nearby amenities with walking estimates, and a side-by-side comparison of
+up to 3 units.
+
+```
+surroundings/index.html      the page (a third Vite entry)
+src/surroundings/
+  analysis.ts               sun position, shading, view, road and amenity distances (tested)
+  scene.ts                  the 3D estate (three.js)
+  map.ts                    the map with walking rings
+  main.ts                   the page: pickers, results, comparison
+  sites/<project>.json      one file per project
+```
+
+Each site file is redrawn from the project's HDB brochure: block outlines and unit positions from the
+vector block floor plans, placed on the site plan by its scale bar; roads, reserved land and buildings
+traced from the site plan; amenities from the town map. Storeys are taken as 2.8 m. Heights of
+reserved land are unknown, so the page lets people assume one. Existing buildings beyond the estate's
+roads aren't modelled.
+
 `*.local.test.ts` files run only where the git-ignored brochures are present (`brochures/`): they
 check the PDF importer on a real block plan.
 

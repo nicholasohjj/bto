@@ -1,3 +1,4 @@
+import { SURROUNDINGS, surroundingsUrl } from '../state/studio'
 import { useState, type ReactNode } from 'react'
 import type { FlatType, Policy } from '../config/policy'
 import { LAUNCHES, TYPICAL_WAIT_MONTHS, type Launch } from '../config/launches'
@@ -343,6 +344,7 @@ function ProjectPicker({ scenario, update }: { scenario: Scenario; update: Updat
                 : <>About {formatYm(addMonths(launch.applicationMonth, TYPICAL_WAIT_MONTHS))} <span className="text-muted">(a typical {years(TYPICAL_WAIT_MONTHS)}: HDB gave no waiting time; the Flat Portal project page usually does)</span></>)}
               {p.subsidyRecoveryPct !== undefined && row('On resale', `${p.subsidyRecoveryPct}% of the price goes back to HDB (subsidy recovery)`)}
               {p.fittingsIncluded && row('Included', 'Floor finishes, internal doors, sanitary fittings')}
+              {SURROUNDINGS.has(p.id) && row('Surroundings', <a className="text-accent underline" href={surroundingsUrl(p.id)}>See the view, sun, roads and amenities for each unit</a>)}
             </>
           ) : (
             <>
