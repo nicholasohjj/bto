@@ -73,6 +73,7 @@
           <span class="chip btnlike" id="rPhoto" role="button" tabindex="0" title="High quality render of this view">Render photo</span>
           <label class="chip" id="todChip" title="Time of day">Sun <input type="range" id="tod" min="5" max="21" step="0.25" value="14" aria-label="Time of day"> <b id="todT">14:00</b></label>
           <label class="chip" id="northChip" title="Compass: which way the top of the plan faces. 0 = north, 90 = east.">Plan faces <input type="range" id="north" min="0" max="355" step="5" value="0" aria-label="Direction the top of the plan faces"> <b id="northT">N</b></label>
+          <select class="chip" id="qSel" aria-label="Render quality" title="High adds soft shadows in corners and under furniture"><option value="high">Quality: high</option><option value="fast">Quality: fast</option></select>
           <select class="chip" id="lampSel" aria-label="Lamps"><option value="auto">Lamps: auto</option><option value="on">Lamps: on</option><option value="off">Lamps: off</option></select>
         </div>
         <div id="pad" hidden>

@@ -10,6 +10,7 @@ import { defineConfig, type Plugin } from 'vite'
 function swAssets(): Plugin {
   let assets: string[] = []
   let outDir = 'dist'
+  let wrote = false
   return {
     name: 'sw-assets',
     apply: 'build',
@@ -29,7 +30,10 @@ function swAssets(): Plugin {
       for (const [f, c] of Object.entries(bundle)) if (c.type === 'chunk' && c.isEntry && c.name === 'main') walk(f)
       assets = [...keep].filter((f) => f.startsWith('assets/')).map((f) => `/${f}`).sort()
     },
+    writeBundle() { wrote = true },
     closeBundle() {
+      // On a failed build nothing was written: leave the real error to be reported.
+      if (!wrote) return
       const file = join(outDir, 'sw.js')
       const hash = createHash('sha256').update(assets.join('\n')).digest('hex').slice(0, 10)
       const src = readFileSync(file, 'utf8')

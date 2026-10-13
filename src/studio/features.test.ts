@@ -72,3 +72,18 @@ describe('quotes', () => {
     expect(totals.floor / designQty(S).floor.qty).toBeCloseTo(1800 / 16)
   })
 })
+
+describe('style presets', async () => {
+  const { applyPreset, PRESETS, FLOOR_SPECS } = await import('./materials')
+  it('sets dry and wet floors, walls and carpentry laminate', () => {
+    const S = flat()
+    S.items.push({ id: 'c1', type: 'ctall', x: 1, y: 1, rot: 0, w: 2, d: 0.6, color: '#fff', g: 0, h: 0, mt: '', nm: '', pr: 0 })
+    S.walls[0].col = '#123456'
+    expect(applyPreset(S, 'industrial', new Set(['ctall']))).toBe(true)
+    expect(S.rooms.find((r) => r.name === 'Bathroom')!.floor).toBe(PRESETS.industrial.wet)
+    expect(S.rooms.find((r) => r.name === 'Master Bedroom')!.floor).toBe(PRESETS.industrial.dry)
+    expect(S.walls[0].col).toBe('')
+    expect(S.items[0].color).toBe(PRESETS.industrial.lam)
+    for (const p of Object.values(PRESETS)) { expect(FLOOR_SPECS[p.dry]).toBeTruthy(); expect(FLOOR_SPECS[p.wet]?.wet).toBe(true) }
+  })
+})

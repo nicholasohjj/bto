@@ -3,6 +3,7 @@
  * The 3D shapes are built in legacy.js from each item's `b` (builder) key.
  */
 import { CARP_CATALOG } from './carpentry'
+import { FLOOR_SPECS } from './materials'
 
 export interface CatalogItem {
   /** Display name. */
@@ -126,11 +127,7 @@ Object.assign(CATALOG, CARP_CATALOG)
 
 export const GROUPS = ['Carpentry', 'Bedroom', 'Living', 'Kitchen', 'Bathroom', 'Lighting', 'Services', 'Other']
 
-export const FLOORS={
-  oak:{n:'Oak plank',c:'#c6a47a',r:.7}, walnut:{n:'Walnut plank',c:'#7a5a43',r:.7},
-  vinyl:{n:'Ash vinyl',c:'#d6ccbb',r:.8}, tile:{n:'Grey tile',c:'#c9cecd',r:.35},
-  marble:{n:'White marble',c:'#e8e7e3',r:.25}
-};
+export const FLOORS = FLOOR_SPECS
 export const WALLS=['#f2f0eb','#dcd7cd','#cfd8c8','#cdd8dd','#e2cfc4','#6a7074'];
 export const SW=['#d9d3c5','#b9a58a','#8a9a7b','#8aa0ad','#c89a82','#4a4f52','#f0eee9','#7a5a43'];
 export const WTYPES={std:{n:'Standard',sill:.9,wh:1.2},slide:{n:'Sliding',sill:.9,wh:1.2},tall:{n:'Floor to ceiling',sill:.05,wh:2.4},high:{n:'High (bathroom)',sill:1.5,wh:.6},bay:{n:'Bay (projects out)',sill:.6,wh:1.5}};

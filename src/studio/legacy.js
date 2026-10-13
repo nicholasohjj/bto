@@ -7,6 +7,12 @@ import { OBJLoader } from 'three/addons/loaders/OBJLoader.js'
 import LAYOUTS from './layouts.json'
 import { CATALOG, GROUPS, FLOORS, WALLS, SW, WTYPES, DTYPES, FINS } from './catalog'
 import { importBrochure } from './importer'
+import { paintFloor, PRESETS, applyPreset } from './materials'
+import { renderPanorama } from './pano'
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js'
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js'
+import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js'
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js'
 import { buildCarp, carpHtml, setCfg } from './carpentry'
 import { ceilHtml, setCeil, ceilOf, inset, ceilingSvg, ceilingChecks } from './ceiling'
 import { electricalSvg, electricalChecks, electricalCounts } from './electrical'
@@ -19,9 +25,8 @@ const CHECKS=[ceilingChecks,electricalChecks];
 import { detectRoom as detectRoomOf } from './model'
 import { uid, clamp, sn, loadState as loadDesign, wallInfo as wallInfoOf, bounds as boundsOf, rpts, rarea, syncBox, rcent, pip, dpSimp, pruneOps as pruneOpsOf, wallCover, itemPoly, polyOverlap, snapBase as snapBaseOf, mirrorDesign as mirrorOf } from './model'
 
-// Keep the look the design had on three.js r128: no colour management, and light intensities
-// scaled by PI (three.js now uses physical light units).
-THREE.ColorManagement.enabled=false;
+// Light intensities scaled by PI (three.js now uses physical light units); colours are managed
+// (sRGB in and out) with neutral tone mapping so finishes keep their colour.
 const LI=Math.PI;
 
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
@@ -44,7 +49,7 @@ function cyl(g,r,h,x,y,z,c,o={}){const me=new THREE.Mesh(new THREE.CylinderGeome
 function sph(g,r,x,y,z,c,sx=1,sy=1,sz=1){const me=new THREE.Mesh(new THREE.SphereGeometry(r,14,10),mat(c,.9));me.position.set(x,y,z);me.scale.set(sx,sy,sz);me.castShadow=true;g.add(me);return me;}
 function legs(g,w,d,h,t,col,ins=.04){for(const sx of[-1,1])for(const sz of[-1,1])bx(g,t,h,t,sx*(w/2-ins),h/2,sz*(d/2-ins),col,.6);}
 const GLASS={transparent:true,opacity:.28};
-let CH=2.6;const env={hour:14,lamps:'auto',north:0};try{const n=+localStorage.getItem('flatstudio.north');if(n>=0&&n<360)env.north=n;}catch(e){}
+let CH=2.6;const env={hour:14,lamps:'auto',north:0,quality:'high'};try{const q=localStorage.getItem('flatstudio.quality');env.quality=q==='fast'||q==='high'?q:(matchMedia('(pointer:coarse)').matches?'fast':'high');}catch(e){}try{const n=+localStorage.getItem('flatstudio.north');if(n>=0&&n<360)env.north=n;}catch(e){}
 const LAMPMAT=HAS3D?new THREE.MeshStandardMaterial({color:'#fff4d8',emissive:'#ffcf8a',emissiveIntensity:.05,roughness:.4}):null;
 const STEEL='#9aa2a6', WOOD='#a88b6a';
 
@@ -529,36 +534,23 @@ svg.addEventListener('dblclick',()=>{if(tool==='poly'&&polyDraft)polyFinish();})
 svg.addEventListener('pointerleave',()=>{if(ghost){ghost=null;render2D();}});
 
 /* ───────── 3D ───────── */
-let renderer,scene,camera,hemi,sun,wallsG,floorG,itemsG,ceilG,slabM,selBox,solids=[],structSig='',itemMap=new Map();
+let composer=null,gtao=null,renderer,scene,camera,hemi,sun,wallsG,floorG,itemsG,ceilG,slabM,selBox,solids=[],structSig='',itemMap=new Map();
 let dirty=true,dirty3=true,last=0;const lampPool=[];let sunC={x:5,z:4,rad:10};
 const orb={az:.55,pol:.95,dist:16,tx:5.5,tz:4};
 const keys=new Set();
 const texBase={};
 function rng(seed){return ()=>{seed|=0;seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
-function makeTex(kind){
-  const N=512,cv=document.createElement('canvas');cv.width=cv.height=N;const x=cv.getContext('2d'),R=rng(kind.length*977+kind.charCodeAt(0));
-  const jit=(hex,a)=>{const c=new THREE.Color(hex);c.offsetHSL((R()-.5)*a*.3,0,(R()-.5)*a);return '#'+c.getHexString();};
-  if(kind==='oak'||kind==='walnut'||kind==='vinyl'){
-    const base=FLOORS[kind].c,rows=kind==='vinyl'?4:6,rh=N/rows;
-    for(let i=0;i<rows;i++){const off=R()*N;for(let k=0;k<2;k++){const x0=(off+256*k)%N;
-      const col=jit(base,.09);for(const sx of[x0,x0-N]){x.fillStyle=col;x.fillRect(sx,i*rh,256,rh);
-        x.strokeStyle='rgba(60,40,20,.10)';x.lineWidth=1;for(let g=0;g<9;g++){const gy=i*rh+R()*rh;x.beginPath();x.moveTo(sx,gy);x.bezierCurveTo(sx+80,gy+R()*4-2,sx+170,gy+R()*4-2,sx+256,gy+R()*2-1);x.stroke();}
-        x.strokeStyle='rgba(50,35,20,.35)';x.strokeRect(sx+.5,i*rh+.5,256,rh);}}}
-  }else{
-    const n=2,ts=N/n;x.fillStyle=kind==='marble'?'#f0efec':'#d3d7d6';x.fillRect(0,0,N,N);
-    for(let i=0;i<n;i++)for(let j=0;j<n;j++){x.fillStyle=jit(FLOORS[kind].c,.03);x.fillRect(i*ts+2,j*ts+2,ts-4,ts-4);
-      if(kind==='marble'){x.strokeStyle='rgba(110,118,125,.22)';for(let v=0;v<5;v++){x.lineWidth=.6+R()*2;x.beginPath();let px=i*ts+R()*ts,py=j*ts;x.moveTo(px,py);for(let q=0;q<4;q++){px+=R()*70-35;py+=ts/4;x.lineTo(clamp(px,i*ts+3,i*ts+ts-3),py);}x.stroke();}}}
-    x.strokeStyle=kind==='marble'?'#cfcdc8':'#8f9796';x.lineWidth=3;for(let i=0;i<=n;i++){x.beginPath();x.moveTo(i*ts,0);x.lineTo(i*ts,N);x.stroke();x.beginPath();x.moveTo(0,i*ts);x.lineTo(N,i*ts);x.stroke();}
-  }
-  const t=new THREE.CanvasTexture(cv);t.wrapS=t.wrapT=THREE.RepeatWrapping;return t;
-}
-function floorTex(k,w,h){if(!texBase[k])texBase[k]=makeTex(k);const t=texBase[k].clone();t.needsUpdate=true;t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(w/1.2,h/1.2);t.anisotropy=4;return t;}
+/** A floor material from the finishes library: painted colour and bump maps, repeated at the material's real size. */
+function floorMat(k,w,h,poly){const sp=FLOORS[k]||FLOORS.oak;if(!texBase[k]){const p=paintFloor(k),mk=(cv,srgb)=>{const t=new THREE.CanvasTexture(cv);t.wrapS=t.wrapT=THREE.RepeatWrapping;if(srgb)t.colorSpace=THREE.SRGBColorSpace;t.anisotropy=8;return t;};texBase[k]={map:mk(p.map,true),bump:mk(p.bump,false)};}
+  const rep=(t)=>{const c=t.clone();c.needsUpdate=true;c.repeat.set(poly?1/sp.size:w/sp.size,poly?1/sp.size:h/sp.size);return c;};
+  const m=new THREE.MeshStandardMaterial({map:rep(texBase[k].map),bumpMap:rep(texBase[k].bump),bumpScale:1.2,roughness:sp.r,side:THREE.DoubleSide});
+  if(ENVMAP&&sp.r<=.45){m.envMap=ENVMAP;m.envMapIntensity=.35;}return m;}
 const grainT={};
 function grainTex(kind){if(grainT[kind])return grainT[kind];const N=256,cv=document.createElement('canvas');cv.width=cv.height=N;const x=cv.getContext('2d'),R=rng(kind.length*131);x.fillStyle='#fff';x.fillRect(0,0,N,N);
   if(kind==='wood'){for(let i=0;i<70;i++){const y=R()*N;x.strokeStyle=`rgba(0,0,0,${.05+R()*.1})`;x.lineWidth=.5+R()*1.6;x.beginPath();x.moveTo(0,y);x.bezierCurveTo(N*.3,y+R()*8-4,N*.7,y+R()*8-4,N,y+R()*4-2);x.stroke();}}
   else if(kind==='fabric'){for(let i=0;i<N;i+=2){x.fillStyle=`rgba(0,0,0,${.06+R()*.05})`;x.fillRect(i,0,1,N);x.fillRect(0,i,N,1);}}
   else{for(let i=0;i<4000;i++){x.fillStyle=`rgba(0,0,0,${R()*.07})`;x.fillRect(R()*N,R()*N,1.5,1.5);}}
-  const t=new THREE.CanvasTexture(cv);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(2,2);return grainT[kind]=t;}
+  const t=new THREE.CanvasTexture(cv);t.colorSpace=THREE.SRGBColorSpace;t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(2,2);return grainT[kind]=t;}
 const MTP={wood:{r:.55,m:0,map:'wood'},fabric:{r:1,m:0,map:'fabric'},leather:{r:.5,m:0,map:'leather'},metal:{r:.25,m:.85,map:null},gloss:{r:.12,m:.05,map:null}};
 function applyMt(g,it){const p=MTP[it.mt];if(!p)return;const hex=new THREE.Color(it.color).getHexString(),cache={};
   g.traverse(m=>{if(!m.isMesh||!m.material||Array.isArray(m.material)||m.material.transparent)return;if(m.material.color.getHexString()!==hex)return;
@@ -570,7 +562,7 @@ function wallTexBase(kind){const N=512,cv=document.createElement('canvas');cv.wi
       x.strokeStyle='rgba(60,40,20,.12)';for(let g=0;g<14;g++){const gx=i*sw+R()*sw;x.beginPath();x.moveTo(gx,0);x.lineTo(gx+R()*4-2,N);x.stroke();}x.fillStyle='rgba(40,28,15,.55)';x.fillRect(i*sw,0,2,N);}}
   else{x.fillStyle='#9a9c9b';x.fillRect(0,0,N,N);for(let k=0;k<5000;k++){x.fillStyle=`rgba(${R()<.5?60:200},${R()<.5?60:200},${R()<.5?60:200},.06)`;x.fillRect(R()*N,R()*N,2+R()*3,2+R()*3);}
     x.strokeStyle='rgba(50,52,52,.35)';x.lineWidth=2;x.strokeRect(1,1,N-2,N-2);}
-  const t=new THREE.CanvasTexture(cv);t.wrapS=t.wrapT=THREE.RepeatWrapping;return t;}
+  const t=new THREE.CanvasTexture(cv);t.colorSpace=THREE.SRGBColorSpace;t.wrapS=t.wrapT=THREE.RepeatWrapping;return t;}
 function wallFaceMats(w,len,hh){
   const base=mat(w.col||S.wallColor,.95);if(!w.fin||w.fin==='paint')return base;
   if(!wtBase[w.fin])wtBase[w.fin]=wallTexBase(w.fin);const t=wtBase[w.fin].clone();t.needsUpdate=true;t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(Math.max(.2,len/1.2),Math.max(.2,hh/1.2));
@@ -581,7 +573,7 @@ function css(v){return getComputedStyle(document.documentElement).getPropertyVal
 function init3D(){
   if(!HAS3D){$('#noGL').style.display='grid';return;}
   try{renderer=new THREE.WebGLRenderer({canvas:$('#gl'),antialias:true});}catch(e){$('#noGL').style.display='grid';renderer=null;return;}
-  renderer.outputColorSpace=THREE.LinearSRGBColorSpace;renderer.setPixelRatio(Math.min(devicePixelRatio||1,2));renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+  renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.NeutralToneMapping;renderer.toneMappingExposure=1.05;renderer.setPixelRatio(Math.min(devicePixelRatio||1,2));renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFShadowMap;
   scene=new THREE.Scene();camera=new THREE.PerspectiveCamera(40,1,.05,120);
   try{const es=new THREE.Scene(),sph=new THREE.Mesh(new THREE.SphereGeometry(10,24,16),new THREE.MeshBasicMaterial({side:THREE.BackSide,vertexColors:true})),pos=sph.geometry.attributes.position,cols=[];
     for(let i=0;i<pos.count;i++){const y=pos.getY(i)/10,t=(y+1)/2,c=new THREE.Color('#9aa7ab').lerp(new THREE.Color('#f4f7f8'),Math.pow(t,.8));cols.push(c.r,c.g,c.b);}
@@ -589,8 +581,10 @@ function init3D(){
     for(const [x,z] of [[-6,-3],[6,-2],[0,7]]){const pn=new THREE.Mesh(new THREE.PlaneGeometry(5,3),new THREE.MeshBasicMaterial({color:'#ffffff',side:THREE.DoubleSide}));pn.position.set(x,5,z);pn.lookAt(0,0,0);es.add(pn);}
     const pm=new THREE.PMREMGenerator(renderer);ENVMAP=pm.fromScene(es,.04).texture;pm.dispose();}catch(e){ENVMAP=null;}
   hemi=new THREE.HemisphereLight(0xffffff,0xb9c3c3,.62*LI);scene.add(hemi);
-  sun=new THREE.DirectionalLight(0xfff3e2,.62*LI);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);sun.shadow.bias=-.0006;sun.shadow.normalBias=.02;scene.add(sun,sun.target);
+  sun=new THREE.DirectionalLight(0xfff3e2,.62*LI);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);sun.shadow.bias=-.0006;sun.shadow.radius=3;sun.shadow.normalBias=.02;scene.add(sun,sun.target);
   for(let i=0;i<8;i++){const l=new THREE.PointLight(0xffd9a0,0,7,1.6);l.visible=false;scene.add(l);lampPool.push(l);}
+  // Ambient occlusion: soft contact shadows in corners and under furniture.
+  try{composer=new EffectComposer(renderer);composer.addPass(new RenderPass(scene,camera));gtao=new GTAOPass(scene,camera,1,1);gtao.updateGtaoMaterial({radius:.35,distanceExponent:1.4,thickness:1,scale:1.1,samples:16});gtao.updatePdMaterial({lumaPhi:10,depthPhi:2,normalPhi:3,radius:4,rings:2,samples:16});composer.addPass(gtao);composer.addPass(new OutputPass());}catch(e){composer=null;}
   wallsG=new THREE.Group();floorG=new THREE.Group();itemsG=new THREE.Group();ceilG=new THREE.Group();ceilG.visible=false;
   scene.add(floorG,wallsG,itemsG,ceilG);
   slabM=new THREE.Mesh(new THREE.BoxGeometry(1,1,1),new THREE.MeshStandardMaterial({color:0xc2cccc,roughness:1}));slabM.receiveShadow=true;scene.add(slabM);
@@ -615,14 +609,16 @@ function applyEnv(){if(!renderer)return;const h=env.hour,el=Math.max(0,Math.sin(
   let bg=day;if(h<6||h>18.5)bg=nt;else if(h<7||h>17.5){bg=day.clone().lerp(dusk,.6);}scene.background=bg.clone();
   syncLamps();dirty=true;}
 function applyTheme3D(){if(!renderer)return;scene.background=new THREE.Color(css('--scene')||'#dde6e6');slabM.material.color.set(css('--slab')||'#c2cccc');if(sun)applyEnv();dirty=true;}
-function resize3D(){if(!renderer)return;const p=$('#viewPane'),w=p.clientWidth,h=p.clientHeight;if(!w||!h)return;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();dirty=true;}
+/** Draw the 3D view: with ambient occlusion on high quality. */
+function draw3D(){if(composer&&env.quality==='high')composer.render();else renderer.render(scene,camera);}
+function resize3D(){if(!renderer)return;const p=$('#viewPane'),w=p.clientWidth,h=p.clientHeight;if(!w||!h)return;renderer.setSize(w,h,false);if(composer)composer.setSize(w,h);camera.aspect=w/h;camera.updateProjectionMatrix();dirty=true;}
 function buildStructure(){
   clearG(wallsG);clearG(floorG);clearG(ceilG);solids.length=0;
   const H=S.H,wm=mat(S.wallColor,.95),b=bounds(),skM=mat(S.skirtCol||'#f4f2ee',.6);
   for(const r of S.rooms){let m;
-    if(r.pts){const sh=new THREE.Shape(r.pts.map(q=>new THREE.Vector2(q[0],-q[1])));m=new THREE.Mesh(new THREE.ShapeGeometry(sh),new THREE.MeshStandardMaterial({map:floorTex(r.floor,1.2,1.2),roughness:FLOORS[r.floor].r,side:THREE.DoubleSide}));
+    if(r.pts){const sh=new THREE.Shape(r.pts.map(q=>new THREE.Vector2(q[0],-q[1])));m=new THREE.Mesh(new THREE.ShapeGeometry(sh),floorMat(r.floor,1,1,true));
       m.rotation.x=-Math.PI/2;m.position.set(0,.001,0);}
-    else{m=new THREE.Mesh(new THREE.PlaneGeometry(r.w,r.h),new THREE.MeshStandardMaterial({map:floorTex(r.floor,r.w,r.h),roughness:FLOORS[r.floor].r}));
+    else{m=new THREE.Mesh(new THREE.PlaneGeometry(r.w,r.h),floorMat(r.floor,r.w,r.h,false));
       m.rotation.x=-Math.PI/2;m.position.set(r.x+r.w/2,.001,r.y+r.h/2);}
     m.receiveShadow=true;floorG.add(m);}
   const frameW=mat('#2d3336',.5,.4),frameD=mat('#b89b78',.7),leafM=mat('#d8c3a0',.7),mainM=mat('#6a5545',.7),glass=mat('#bcd8e2',.1,0,GLASS);
@@ -722,7 +718,7 @@ function frame(t){
   requestAnimationFrame(frame);const dt=Math.min(.05,(t-last)/1000||0);last=t;
   if(!renderer||!S)return;walkStep(dt);
   if(!dirty)return;const p=$('#viewPane');if(!p.clientWidth||!p.clientHeight)return;
-  dirty=false;if(dirty3){sync3D();dirty3=false;}renderer.render(scene,camera);
+  dirty=false;if(dirty3){sync3D();dirty3=false;}draw3D();
 }
 /* 3D pointer */
 const gl=$('#gl'),gp=new Map();let g3=null;
@@ -851,7 +847,8 @@ function renderRight(){try{fillViews();}catch(e){}
     h=`<div class="sec"><h3>Flat</h3>${row('Name',`<input type="text" data-k="name" value="${esc(S.name)}" maxlength="60">`)}${row('Ceiling (m)',num('H',S.H,.05,2.2,3.2))}
       <div style="margin-bottom:6px;color:var(--ink2)">Wall paint (all walls)</div>${sw('wallcol',WALLS,S.wallColor)}
       <div style="margin:12px 0 6px;color:var(--ink2)">Ceiling colour</div>${sw('ceilcol',['#f8f7f4','#ece8df','#dfe6ea','#f1e6df'],S.ceilCol||'#f8f7f4')}
-      <label class="chk"><input type="checkbox" data-act="skirt"${S.skirt?' checked':''}> Skirting boards</label>${S.skirt?sw('skirtcol',['#f4f2ee','#d9d3c5','#8a6f55','#3a3d3f'],S.skirtCol||'#f4f2ee'):''}</div>
+      <label class="chk"><input type="checkbox" data-act="skirt"${S.skirt?' checked':''}> Skirting boards</label>
+      <div style="height:10px"></div>${row('Style preset',`<select data-preset="1"><option value="">Choose a style…</option>${Object.entries(PRESETS).map(([k,p])=>`<option value="${k}">${p.n}</option>`).join('')}</select>`)}<p class="note" style="margin-top:0">Sets walls, floors, carpentry laminate and soft furnishings together. Undo to go back.</p>${S.skirt?sw('skirtcol',['#f4f2ee','#d9d3c5','#8a6f55','#3a3d3f'],S.skirtCol||'#f4f2ee'):''}</div>
       <div class="sec"><h3>Summary</h3><div class="kv"><span>Floor area</span><b>${tot.toFixed(1)} m²</b></div><div class="kv"><span>Rooms</span><b>${S.rooms.length}</b></div>
       <div class="kv"><span>Doors / windows</span><b>${S.openings.filter(o=>o.kind==='door').length} / ${S.openings.filter(o=>o.kind==='window').length}</b></div><div class="kv"><span>Furniture items</span><b>${S.items.length}</b></div>
       <p class="note">Click anything on the plan or in 3D to edit it. Hacking or moving a wall in an HDB flat needs an HDB permit and a registered renovation contractor. ${S.walls.some(w=>w.str)?'Walls with red dashes are marked structural (from the brochure plan, or by you). Check your unit\'s plan too.':'This tool does not know which walls are structural. Mark them in a wall\'s settings.'}</p></div>`;
@@ -983,6 +980,9 @@ function multiHtml(){
     <div class="acts" style="margin-top:12px"><button class="btn" data-act="m_group">Group</button>${grouped?'<button class="btn" data-act="m_ungroup">Ungroup</button>':''}</div>`:''}
     <p class="note">Drag any selected item to move them all. Ctrl or Cmd with C and V copies and pastes.</p></div>`;}
 $('#rbody').addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.tagName==='INPUT')e.target.blur();});
+/* style presets */
+$('#rbody').addEventListener('change',ev=>{const t=ev.target;if(!t.dataset||!t.dataset.preset||!t.value)return;const k=t.value;
+  mut(()=>{applyPreset(S,k,new Set(Object.keys(CAT).filter(x=>CAT[x].carp)));});toast(PRESETS[k].n+' style applied');});
 /* false ceiling settings */
 $('#rbody').addEventListener('change',ev=>{const t=ev.target,k=t.dataset&&(t.dataset.ceil||t.dataset.ceilck);if(!k||!sel||sel.t!=='room')return;const r=getE('room',sel.id);if(!r)return;
   mut(()=>{setCeil(r,k,t.dataset.ceilck?String(t.checked):t.value);if(ceilOf(r).type!=='none')S.layers.ceil=1;});renderOpts();});
@@ -1101,6 +1101,7 @@ function northLbl(){return COMP[Math.round(env.north/45)%8]+' '+env.north+'°';}
 $('#north').value=env.north;$('#northT').textContent=northLbl();
 $('#north').addEventListener('input',e=>{env.north=+e.target.value;$('#northT').textContent=northLbl();try{localStorage.setItem('flatstudio.north',env.north);}catch(x){}applyEnv();});
 $('#lampSel').addEventListener('change',e=>{env.lamps=e.target.value;applyEnv();});
+$('#qSel').value=env.quality;$('#qSel').addEventListener('change',e=>{env.quality=e.target.value;try{localStorage.setItem('flatstudio.quality',env.quality);}catch(x){}dirty=true;});
 $('#rView').addEventListener('click',()=>{resetOrbit();if(mode==='orbit')updateOrbit();});
 const act=(id,fn)=>{const el=$(id);el.addEventListener('click',fn);el.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();fn();}});};
 act('#zIn',()=>zoomAt(svg.getBoundingClientRect().left+svg.clientWidth/2,svg.getBoundingClientRect().top+svg.clientHeight/2,view.s*1.3));
@@ -1207,7 +1208,7 @@ function elevSheetSvg(panels,wpx){let x=.6,y=.9,rowH=0,maxW=0,body='';const WMAX
 /* export dialog */
 function openExport(){
   dialog(`<h2>Export</h2><p class="note" style="margin:0 0 12px">Drawings are made from the current design. Your browser asks you to confirm each save.</p>
-    <div class="exg"><button class="btn" data-ex="png">Plan image (PNG)</button><button class="btn" data-ex="svg">Plan drawing (SVG)</button><button class="btn" data-ex="pdf">Drawing pack (PDF)</button><button class="btn" data-ex="dxf">CAD file (DXF in ZIP)</button><button class="btn" data-ex="png3d">3D view (PNG)</button><button class="btn" data-ex="elev">View elevations</button><button class="btn" data-ex="elec">Electrical plan (PNG)</button><button class="btn" data-ex="elecsvg">Electrical plan (SVG)</button><button class="btn" data-ex="json">Design file (JSON)</button></div>
+    <div class="exg"><button class="btn" data-ex="png">Plan image (PNG)</button><button class="btn" data-ex="svg">Plan drawing (SVG)</button><button class="btn" data-ex="pdf">Drawing pack (PDF)</button><button class="btn" data-ex="dxf">CAD file (DXF in ZIP)</button><button class="btn" data-ex="png3d">3D view (PNG)</button><button class="btn" data-ex="pano">360° panorama (JPG)</button><button class="btn" data-ex="elev">View elevations</button><button class="btn" data-ex="elec">Electrical plan (PNG)</button><button class="btn" data-ex="elecsvg">Electrical plan (SVG)</button><button class="btn" data-ex="json">Design file (JSON)</button></div>
     <div class="pair" style="margin-top:14px"><label class="row" style="grid-template-columns:1fr"><span>SVG scale</span><select id="exs"><option value="50">1:50</option><option value="100">1:100</option></select></label><label class="row" style="grid-template-columns:1fr"><span>PDF paper</span><select id="exp"><option value="a3">A3 landscape</option><option value="a4">A4 landscape</option></select></label></div>
     <p class="note">The PDF has the plan, electrical plan, elevations, schedule${typeof budgetText==='function'?', budget':''}${typeof checksText==='function'?' and checks':''}. DXF units are millimetres.</p><div class="acts"><button class="btn" data-d="close">Close</button></div>`);}
 const safeName=()=>(S.name||'flat').replace(/[^\w\- ]+/g,'').trim().replace(/\s+/g,'-').slice(0,40)||'flat';
@@ -1216,7 +1217,11 @@ async function doExport(k){
     if(k==='json')return saveFile(safeName()+'.json',JSON.stringify(S,null,1));
     if(k==='svg'){const sc=+($('#exs')&&$('#exs').value||50),b=bounds();return saveFile(safeName()+'-plan.svg',planSvgString(2000,(b.w+3.6)*1000/sc).svg);}
     if(k==='png'){toast('Rendering…',1500);const r=planSvgString(2600),c=await svgToCanvas(r.svg,r.w,r.h);return saveFile(safeName()+'-plan.png',await cvBlob(c));}
-    if(k==='png3d'){if(!renderer){toast('The 3D view is not available.');return;}const w0=Math.round(1800),h0=Math.round(1800*(camera.aspect<1?1.3:.62));renderer.setSize(w0,h0,false);camera.aspect=w0/h0;camera.updateProjectionMatrix();renderer.render(scene,camera);const bl=await new Promise(r=>$('#gl').toBlob(r,'image/png'));resize3D();return saveFile(safeName()+'-3d.png',bl);}
+    if(k==='png3d'){if(!renderer){toast('The 3D view is not available.');return;}const w0=Math.round(1800),h0=Math.round(1800*(camera.aspect<1?1.3:.62));renderer.setSize(w0,h0,false);if(composer)composer.setSize(w0,h0);camera.aspect=w0/h0;camera.updateProjectionMatrix();draw3D();const bl=await new Promise(r=>$('#gl').toBlob(r,'image/png'));resize3D();return saveFile(safeName()+'-3d.png',bl);}
+    if(k==='pano'){if(!renderer){toast('The 3D view is not available.');return;}toast('Rendering panorama…',2500);await new Promise(r=>setTimeout(r,50));
+      const was=mode,wasCeil=ceilG.visible,wasScale=wallsG.scale.y;if(mode!=='walk')setMode('walk');sync3D();ceilG.visible=true;wallsG.scale.y=1;
+      const c=renderPanorama(renderer,scene,new THREE.Vector3(walk.x,1.5,walk.y),walk.yaw,4096);ceilG.visible=wasCeil;wallsG.scale.y=wasScale;if(was!=='walk')setMode(was);dirty=true;
+      return saveFile(safeName()+'-360.jpg',await cvBlob(c,'image/jpeg'));}
     if(k==='dxf'){const dx=dxfBuild();return saveFile(safeName()+'-cad.zip',zipStore([{name:safeName()+'.dxf',data:te.encode(dx)}]));}
     if(k==='elev'){const ps=elevPanels();if(!ps.length){toast('Add rooms first. Elevations are drawn for each room wall.');return;}const sh=elevSheetSvg(ps,1400);
       dialog(`<h2>Elevations</h2><div style="overflow:auto;max-height:62vh;border:1px solid var(--line);border-radius:8px">${sh.svg.replace(/width="\d+" height="\d+"/,'style="width:100%;min-width:900px;height:auto"')}</div><div class="acts"><button class="btn primary" data-ex="elevpng">Save as PNG</button><button class="btn" data-ex="elevsvg">Save as SVG</button><button class="btn" data-d="close">Close</button></div>`);return;}
@@ -1374,7 +1379,7 @@ async function photoRun(){
   const acc=document.createElement('canvas');acc.width=W;acc.height=H;const ax=acc.getContext('2d');
   const oldSize=renderer.getSize(new THREE.Vector2()),oldPR=renderer.getPixelRatio();
   const sp=sun.position.clone(),sm=sun.shadow.mapSize.clone(),lampBase=lampPool.map(l=>l.position.clone());
-  renderer.setPixelRatio(1);renderer.setSize(W,H,false);camera.aspect=W/H;camera.updateProjectionMatrix();
+  renderer.setPixelRatio(1);renderer.setSize(W,H,false);if(composer)composer.setSize(W,H);camera.aspect=W/H;camera.updateProjectionMatrix();
   sun.shadow.mapSize.set(4096,4096);if(sun.shadow.map){sun.shadow.map.dispose();sun.shadow.map=null;}
   const od=orb.dist;if(mode==='orbit'){const b=bounds();orb.dist=clamp(Math.max((b.w+2)/(.72*camera.aspect),(b.h+2)/.6),4,45);updateOrbit();}
   if(sync3D)sync3D();
@@ -1383,7 +1388,7 @@ async function photoRun(){
     for(let i=0;i<N&&!job.stop;i++){
       const a=i*2.399963,r=Math.sqrt((i+.5)/N)*rad;sun.position.set(sp.x+Math.cos(a)*r,sp.y+Math.sin(a*1.3)*r*.5,sp.z+Math.sin(a)*r);
       camera.setViewOffset(W,H,((i*.618034)%1)-.5,((i*.754877)%1)-.5,W,H);
-      renderer.render(scene,camera);
+      draw3D();
       ax.globalAlpha=1/(i+1);ax.drawImage(renderer.domElement,0,0);done=i+1;
       prog.style.width=(done/N*100)+'%';txt.textContent=`Pass ${done} of ${N}`;
       if(i%2===1)await new Promise(r=>setTimeout(r,0));
@@ -1411,6 +1416,8 @@ $('#dcard').addEventListener('click',e=>{const b=e.target.closest('[data-vw]');i
   $('#dlg').classList.remove('on');});
 $('#dcard').addEventListener('click',e=>{const b=e.target.closest('[data-ph]');if(!b)return;
   if(b.dataset.ph==='go')photoRun();else{if(photoJob)photoJob.stop=true;closeDlg();}});
+// Development-only hooks for checking the 3D output in a browser (not in production builds).
+if(import.meta.env.DEV)window.__studio={design:()=>S,pano:(w=1024)=>{setMode('walk');sync3D();ceilG.visible=true;wallsG.scale.y=1;return renderPanorama(renderer,scene,new THREE.Vector3(walk.x,1.5,walk.y),walk.yaw,w).toDataURL('image/jpeg',.8);}};
 /* ───────── boot ───────── */
 (function boot(){
   let st=null;try{const raw=localStorage.getItem('flatstudio.v1');if(raw)st=loadState(JSON.parse(raw));}catch(e){}
