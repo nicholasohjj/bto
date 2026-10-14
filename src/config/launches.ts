@@ -30,6 +30,17 @@ export interface LaunchProject {
   fittingsIncluded?: boolean
 }
 
+/** A site HDB has shown ahead of a launch (town map or preview), before its name and prices are out. */
+export interface LaunchPreview {
+  town: string
+  /** Where it is, in the words of the map. */
+  where: string
+  /** Flats by type, as HDB's flat mix gives them. */
+  flats: Partial<Record<FlatType, number>>
+  note?: string
+  source: string
+}
+
 export interface Launch {
   id: string
   name: string
@@ -42,6 +53,8 @@ export interface Launch {
   note?: string
   source: string
   verified: string
+  /** Sites HDB has shown before announcing the projects. */
+  previews?: LaunchPreview[]
   /** Empty until HDB announces the projects. */
   projects: LaunchProject[]
 }
@@ -99,6 +112,14 @@ const NOVEMBER_2026: Launch = {
   note: 'About 7,960 flats, plus Community Care Apartments in Toa Payoh. First planned for October 2026.',
   source: 'hdb.gov.sg news release, 17 June 2026, para 17 (towns and flat count); move to November not yet checked on hdb.gov.sg',
   verified: '2026-10-13',
+  previews: [
+    {
+      town: 'Yishun', where: 'Yishun Street 82 and Lorong Chencharu, next to Yishun Walk, about 500 m from Khatib MRT',
+      flats: { '2R': 390, '3R': 80, '4R': 460, '5R': 650 },
+      note: '1,580 flats in one rental block and four blocks mixing sold and rental flats; 2 preschools',
+      source: 'HDB Yishun town map, issued June 2026 (checked 2026-10-14)',
+    },
+  ],
   projects: [],
 }
 

@@ -112,3 +112,11 @@ describe('upcoming launch without projects', () => {
     expect(LAUNCHES.find((l) => l.id === '2026-11')!.projects).toEqual([])
   })
 })
+
+describe('sites shown before a launch', () => {
+  it('adds up the Yishun flat mix from the town map', () => {
+    const y = LAUNCHES.find((l) => l.id === '2026-11')!.previews!.find((v) => v.town === 'Yishun')!
+    // 390 2-room Flexi, 80 3-room, 460 4-room, 650 5-room (1,580 flats).
+    expect(Object.values(y.flats).reduce((a, b) => a + b!, 0)).toBe(1580)
+  })
+})

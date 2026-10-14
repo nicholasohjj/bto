@@ -1,7 +1,7 @@
 import { studioUrl, SURROUNDINGS, surroundingsUrl } from '../state/studio'
 import { CHOSEN_UNIT_KEY, readChosenUnit, surroundingsUnitUrl, unitFlatType, unitLabel, unitLayout } from '../state/unit'
 import { useStored } from './useStored'
-import { useState, type ReactNode } from 'react'
+import { Fragment, useState, type ReactNode } from 'react'
 import type { FlatType, Policy } from '../config/policy'
 import { LAUNCHES, TYPICAL_WAIT_MONTHS, type Launch } from '../config/launches'
 import { ageInMonths, estimatedLivingCosts, prYear, ratesFor } from '../engine/cpf'
@@ -363,6 +363,12 @@ function ProjectPicker({ scenario, update }: { scenario: Scenario; update: Updat
             <>
               {launch.towns && row('Towns', launch.towns.join(', '))}
               {launch.note && row('About', launch.note)}
+              {launch.previews?.map((v, i) => <Fragment key={i}>{row(i ? '' : 'Sites shown', <>
+                <b className="font-medium text-ink">{v.town}</b>: {v.where}.{' '}
+                {(Object.keys(v.flats) as FlatType[]).map((t) => `${v.flats[t]!.toLocaleString()} ${typeLabel(t)}`).join(' · ')}
+                {v.note && <span className="text-muted"> · {v.note}</span>}
+                <span className="text-muted"> ({v.source})</span>
+              </>)}</Fragment>)}
               {row('Dates', <>From {formatYm(launch.applicationMonth)}, with a typical wait of {years(TYPICAL_WAIT_MONTHS)}. Keep your own price and flat type, and pick the project once HDB announces it.</>)}
             </>
           )}
