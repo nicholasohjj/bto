@@ -6,6 +6,7 @@ import berlayar from './sites/berlayar-rise.json'
 import kebunBaru from './sites/kebun-baru-breeze.json'
 import kebunBaruRidge from './sites/kebun-baru-ridge.json'
 import lakeviewCascadia from './sites/lakeview-cascadia.json'
+import sembawangBrook from './sites/sembawang-brook.json'
 import { saveChosenUnit, studioUnitUrl, unitLabel } from '../state/unit'
 import { buildGraph, estateStarts, fromStarts, hull, routeTo, type Graph, type Route } from './walk'
 
@@ -14,6 +15,7 @@ const SITES: Record<string, Site> = {
   'kebun-baru-breeze': kebunBaru as unknown as Site,
   'kebun-baru-ridge': kebunBaruRidge as unknown as Site,
   'lakeview-cascadia': lakeviewCascadia as unknown as Site,
+  'sembawang-brook': sembawangBrook as unknown as Site,
 }
 /** OpenStreetMap snapshots load after the page is up (they're the bulk of the data). */
 const OSM: Record<string, () => Promise<Osm>> = {
@@ -21,8 +23,9 @@ const OSM: Record<string, () => Promise<Osm>> = {
   'kebun-baru-breeze': () => import('./sites/kebun-baru-breeze.osm.json').then((m) => m.default as unknown as Osm),
   'kebun-baru-ridge': () => import('./sites/kebun-baru-ridge.osm.json').then((m) => m.default as unknown as Osm),
   'lakeview-cascadia': () => import('./sites/lakeview-cascadia.osm.json').then((m) => m.default as unknown as Osm),
+  'sembawang-brook': () => import('./sites/sembawang-brook.osm.json').then((m) => m.default as unknown as Osm),
 }
-const TYPE: Record<string, string> = { '2R-1': '2-room Flexi (Type 1)', '2R-2': '2-room Flexi (Type 2)', '3R': '3-room', '4R': '4-room' }
+const TYPE: Record<string, string> = { '2R-1': '2-room Flexi (Type 1)', '2R-2': '2-room Flexi (Type 2)', '3R': '3-room', '4R': '4-room', '5R': '5-room', '3Gen': '3Gen' }
 
 const $ = <T extends HTMLElement = HTMLElement>(s: string) => document.querySelector(s) as T
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!)

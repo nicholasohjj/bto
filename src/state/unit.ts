@@ -65,5 +65,5 @@ export const surroundingsUnitUrl = (u: Pick<ChosenUnit, 'site' | 'block' | 'unit
 export function studioUnitUrl(u: Pick<ChosenUnit, 'site' | 'type'>): string | null {
   const l = unitLayout(u)
   if (!l) return null
-  return `/studio/?${new URLSearchParams({ flat: l.type === '4R' ? '4' : l.type === '5R' ? '5' : '3', layout: l.key })}`
+  return `/studio/?${new URLSearchParams({ flat: l.type === '4R' ? '4' : l.type === '2R' || l.type === '3R' ? '3' : '5', layout: l.key })}`
 }
