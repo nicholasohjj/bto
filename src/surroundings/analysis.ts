@@ -5,9 +5,23 @@
  */
 
 export type Pt = [number, number]
-/** A unit stack; `from` is its lowest storey when that isn't the 2nd (lower floors may be void decks, shops or roofs). */
-export interface Unit { no: string; type: string; win: Pt; n: Pt; from?: number }
-export interface Block { id: string; storeys: number; footprint: Pt[]; units: Unit[] }
+/**
+ * A unit stack; `from` is its lowest storey when that isn't the 2nd (lower floors may be void decks, shops or roofs),
+ * `to` its highest when that is below the top of the block (cascading blocks).
+ */
+export interface Unit { no: string; type: string; win: Pt; n: Pt; from?: number; to?: number }
+/** A part of a block that rises to its own height: blocks that step down, or unit groups joined by open corridors. */
+export interface Mass { storeys: number; poly: Pt[] }
+/** `storeys` is the block's highest; with `masses`, `footprint` is just their outer hull (for the block's centre). */
+export interface Block { id: string; storeys: number; footprint: Pt[]; masses?: Mass[]; units: Unit[] }
+export const blockMasses = (b: Block): Mass[] => b.masses ?? [{ storeys: b.storeys, poly: b.footprint }]
+/** Lowest and highest storey of a unit stack. */
+export const unitStoreys = (b: Block, u: Unit): [number, number] => [u.from ?? 2, u.to ?? b.storeys]
+/** "18 storeys", or "24–35 storeys" for a block that steps down. */
+export function storeysLabel(b: Block) {
+  const lo = Math.min(...blockMasses(b).map((m) => m.storeys))
+  return lo < b.storeys ? `${lo}–${b.storeys} storeys` : `${b.storeys} storeys`
+}
 export interface Building { name: string; h: number; poly?: Pt[]; ellipse?: [number, number, number, number] }
 export interface Zone { name: string; kind: 'future' | 'park'; poly: Pt[] }
 export interface Road { name: string; kind: 'major' | 'minor' | 'expressway'; w: number; line: Pt[] }
@@ -110,7 +124,7 @@ const nearRay = (o: Pt, d: Pt, c: [number, number, number]) => {
   return Math.abs(vx * d[1] - vy * d[0]) <= c[2]
 }
 export function obstacles(site: Site, futureStoreys: number, osm?: Osm | null): Obstacle[] {
-  const out: Obstacle[] = site.blocks.map((b) => ({ name: 'Block ' + b.id, poly: b.footprint, h: b.storeys * site.storeyM + 2, block: b.id }))
+  const out: Obstacle[] = site.blocks.flatMap((b) => blockMasses(b).map((m) => ({ name: 'Block ' + b.id, poly: m.poly, h: m.storeys * site.storeyM + 2, block: b.id })))
   for (const g of site.buildings) out.push({ name: g.name, h: g.h, poly: g.poly ?? ellipsePoly(...g.ellipse!) })
   if (futureStoreys > 0) for (const z of site.zones) if (z.kind === 'future') out.push({ name: z.name, poly: z.poly, h: futureStoreys * site.storeyM, assumed: true })
   for (const b of osm?.buildings ?? []) {
@@ -127,7 +141,8 @@ export interface UnitPos { block: Block; unit: Unit; storey: number; floorZ: num
 export function unitPos(site: Site, p: Pick): UnitPos | null {
   const block = site.blocks.find((b) => b.id === p.block), unit = block?.units.find((u) => u.no === p.unit)
   if (!block || !unit) return null
-  const storey = Math.max(unit.from ?? 2, Math.min(block.storeys, Math.round(p.storey)))
+  const [lo, hi] = unitStoreys(block, unit)
+  const storey = Math.max(lo, Math.min(hi, Math.round(p.storey)))
   const floorZ = (storey - 1) * site.storeyM
   return { block, unit, storey, floorZ, eye: [unit.win[0] + unit.n[0] * 0.3, unit.win[1] + unit.n[1] * 0.3, floorZ + 1.5], n: unit.n, facing: compass(unit.n) }
 }

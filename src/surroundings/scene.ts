@@ -2,7 +2,7 @@
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
-import { azDir, ellipsePoly, sunPosition, sgTime, type Amenity, type Osm, type Pt, type Site, type UnitPos } from './analysis'
+import { azDir, blockMasses, ellipsePoly, sunPosition, sgTime, type Amenity, type Osm, type Pt, type Site, type UnitPos } from './analysis'
 
 export interface SceneApi {
   setSite(site: Site): void
@@ -102,13 +102,13 @@ export function createScene(canvas: HTMLCanvasElement): SceneApi | null {
     for (const r of site.roads) world.add(ribbon(r.line, r.w, 0.1, r.kind === 'expressway' ? mats.exp : mats.road))
     for (const b of site.buildings) world.add(extrude(b.poly ?? ellipsePoly(...b.ellipse!), b.h, mats.bldg))
     const S = site
-    for (const b of S.blocks) {
-      const m = extrude(b.footprint, b.storeys * S.storeyM + 2, unit && unit.block.id === b.id ? mats.mine : mats.block)
+    for (const b of S.blocks) for (const part of blockMasses(b)) {
+      const m = extrude(part.poly, part.storeys * S.storeyM + 2, unit && unit.block.id === b.id ? mats.mine : mats.block)
       m.userData.block = b.id
       world.add(m)
       // Storey lines: thin rings every 5 storeys so heights read at a glance.
-      for (let s = 5; s < b.storeys; s += 5) {
-        const pts = b.footprint.map((p) => V(p, s * S.storeyM))
+      for (let s = 5; s < part.storeys; s += 5) {
+        const pts = part.poly.map((p) => V(p, s * S.storeyM))
         const line = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: '#b9b4aa' }))
         world.add(line)
       }

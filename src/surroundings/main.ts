@@ -1,19 +1,26 @@
 /** Surroundings page: pick a unit, see its view, sun, roads and amenities, and compare units. */
-import { KEY_DAYS, obstacles, roadDistances, sunDay, unitPos, view, yearSun, type Amenity, type Osm, type Pick, type Pt, type Site, type UnitPos } from './analysis'
+import { KEY_DAYS, obstacles, roadDistances, storeysLabel, sunDay, unitPos, unitStoreys, view, yearSun, type Amenity, type Osm, type Pick, type Pt, type Site, type UnitPos } from './analysis'
 import { createMap, KIND } from './map'
 import { createScene } from './scene'
 import berlayar from './sites/berlayar-rise.json'
 import kebunBaru from './sites/kebun-baru-breeze.json'
 import kebunBaruRidge from './sites/kebun-baru-ridge.json'
+import lakeviewCascadia from './sites/lakeview-cascadia.json'
 import { saveChosenUnit, studioUnitUrl, unitLabel } from '../state/unit'
 import { buildGraph, estateStarts, fromStarts, hull, routeTo, type Graph, type Route } from './walk'
 
-const SITES: Record<string, Site> = { 'berlayar-rise': berlayar as unknown as Site, 'kebun-baru-breeze': kebunBaru as unknown as Site, 'kebun-baru-ridge': kebunBaruRidge as unknown as Site }
+const SITES: Record<string, Site> = {
+  'berlayar-rise': berlayar as unknown as Site,
+  'kebun-baru-breeze': kebunBaru as unknown as Site,
+  'kebun-baru-ridge': kebunBaruRidge as unknown as Site,
+  'lakeview-cascadia': lakeviewCascadia as unknown as Site,
+}
 /** OpenStreetMap snapshots load after the page is up (they're the bulk of the data). */
 const OSM: Record<string, () => Promise<Osm>> = {
   'berlayar-rise': () => import('./sites/berlayar-rise.osm.json').then((m) => m.default as unknown as Osm),
   'kebun-baru-breeze': () => import('./sites/kebun-baru-breeze.osm.json').then((m) => m.default as unknown as Osm),
   'kebun-baru-ridge': () => import('./sites/kebun-baru-ridge.osm.json').then((m) => m.default as unknown as Osm),
+  'lakeview-cascadia': () => import('./sites/lakeview-cascadia.osm.json').then((m) => m.default as unknown as Osm),
 }
 const TYPE: Record<string, string> = { '2R-1': '2-room Flexi (Type 1)', '2R-2': '2-room Flexi (Type 2)', '3R': '3-room', '4R': '4-room' }
 
@@ -97,11 +104,11 @@ function showRoute(a: Amenity) {
 
 function fillPickers() {
   $<HTMLSelectElement>('#site').innerHTML = Object.entries(SITES).map(([k, s]) => `<option value="${k}"${k === siteId ? ' selected' : ''}>${esc(s.name)}</option>`).join('')
-  $<HTMLSelectElement>('#block').innerHTML = site.blocks.map((b) => `<option value="${b.id}"${b.id === pick.block ? ' selected' : ''}>${b.id} · ${b.storeys} storeys</option>`).join('')
+  $<HTMLSelectElement>('#block').innerHTML = site.blocks.map((b) => `<option value="${b.id}"${b.id === pick.block ? ' selected' : ''}>${b.id} · ${storeysLabel(b)}</option>`).join('')
   const b = site.blocks.find((x) => x.id === pick.block)!
   $<HTMLSelectElement>('#unit').innerHTML = b.units.map((u) => `<option value="${u.no}"${u.no === pick.unit ? ' selected' : ''}>Unit ${u.no} · ${TYPE[u.type] ?? u.type}</option>`).join('')
-  const lowest = b.units.find((u) => u.no === pick.unit)?.from ?? 2
-  for (const id of ['#storey', '#storeyR']) { const el = $<HTMLInputElement>(id); el.min = String(lowest); el.max = String(b.storeys); if (el !== document.activeElement || id === '#storeyR') el.value = String(pick.storey) }
+  const unit = b.units.find((u) => u.no === pick.unit), [lowest, highest] = unit ? unitStoreys(b, unit) : [2, b.storeys]
+  for (const id of ['#storey', '#storeyR']) { const el = $<HTMLInputElement>(id); el.min = String(lowest); el.max = String(highest); if (el !== document.activeElement || id === '#storeyR') el.value = String(pick.storey) }
   $<HTMLSelectElement>('#day').innerHTML = DAYS.map((d, i) => `<option value="${i}"${i === dayIdx ? ' selected' : ''}>${d.label}</option>`).join('')
 }
 
@@ -114,6 +121,15 @@ const getObstacles = () => {
 }
 let shown = { future: -1, places: '' }
 const walkLabel = (u: UnitPos, a: Amenity) => { const p = walkTo(u, a); return `${km(p.dist)} · ${p.walkMin} min walk${p.route ? '' : ' (estimate)'}` }
+
+/** Where the stack starts or stops, when that isn't the 2nd storey or the top of the block. */
+function stackNote(u: UnitPos) {
+  const { from, to } = u.unit
+  if (from && to) return ` This stack runs from storey ${from} to ${to}.`
+  if (from) return ` This stack starts at storey ${from}.`
+  if (to) return ` This stack stops at storey ${to}; other parts of the block rise to ${u.block.storeys}.`
+  return ''
+}
 
 function update() {
   const u = current()
@@ -138,7 +154,7 @@ function update() {
   const studio = studioUnitUrl({ site: siteId, type: u.unit.type }), toStudio = $<HTMLAnchorElement>('#toStudio')
   toStudio.hidden = !studio
   if (studio) { toStudio.href = studio; toStudio.title = `Open the ${TYPE[u.unit.type] ?? u.unit.type} layout, redrawn from HDB's brochure, for ${unitLabel({ block: u.block.id, unit: u.unit.no, storey: u.storey })}` }
-  $('#unitNote').textContent = `Unit #${String(u.storey).padStart(2, '0')}-${u.unit.no} is about ${Math.round(u.floorZ)} m above ground; its main windows face ${u.facing}.${u.unit.from ? ` This stack starts at storey ${u.unit.from}.` : ''}`
+  $('#unitNote').textContent = `Unit #${String(u.storey).padStart(2, '0')}-${u.unit.no} is about ${Math.round(u.floorZ)} m above ground; its main windows face ${u.facing}.${stackNote(u)}`
   renderResults(u, obs)
 }
 /** Sliders fire many times a frame; redo the results once per frame at most. */

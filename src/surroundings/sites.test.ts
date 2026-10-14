@@ -2,11 +2,12 @@ import { describe, expect, it } from 'vitest'
 import berlayar from './sites/berlayar-rise.json'
 import breeze from './sites/kebun-baru-breeze.json'
 import ridge from './sites/kebun-baru-ridge.json'
-import { rayPoly, unitPos, type Pt, type Site } from './analysis'
+import lakeview from './sites/lakeview-cascadia.json'
+import { blockMasses, rayPoly, unitPos, type Pt, type Site } from './analysis'
 import { unitLayout } from '../state/unit'
 import { SURROUNDINGS } from '../state/studio'
 
-const SITES = [berlayar, breeze, ridge] as unknown as Site[]
+const SITES = [berlayar, breeze, ridge, lakeview] as unknown as Site[]
 
 const onEdge = (poly: Pt[], p: Pt) => Math.min(...poly.map((a, i) => {
   const b = poly[(i + 1) % poly.length], dx = b[0] - a[0], dy = b[1] - a[1]
@@ -22,13 +23,17 @@ describe.each(SITES.map((s) => [s.name, s] as const))('%s', (_name, S) => {
   it('is offered from the money plan', () => {
     expect(SURROUNDINGS.has(S.id)).toBe(true)
   })
-  it('puts each window on its block outline, facing out', () => {
+  it('puts each window on the outline of a part that reaches its top storey, facing out', () => {
     for (const b of S.blocks) for (const u of b.units) {
-      expect(onEdge(b.footprint, u.win), `${b.id} ${u.no}`).toBeLessThan(0.3)
+      const top = u.to ?? b.storeys, parts = blockMasses(b), own = parts.filter((m) => m.storeys >= top && onEdge(m.poly, u.win) < 0.3)
+      expect(own.length, `${b.id} ${u.no}`).toBeGreaterThan(0)
       expect(Math.hypot(...u.n)).toBeCloseTo(1, 2)
-      expect(inside(b.footprint, [u.win[0] + u.n[0] * 2, u.win[1] + u.n[1] * 2]), `${b.id} ${u.no} faces out`).toBe(false)
-      expect(inside(b.footprint, [u.win[0] - u.n[0] * 2, u.win[1] - u.n[1] * 2]), `${b.id} ${u.no} has the flat behind`).toBe(true)
+      expect(parts.some((m) => inside(m.poly, [u.win[0] + u.n[0] * 2, u.win[1] + u.n[1] * 2])), `${b.id} ${u.no} faces out`).toBe(false)
+      expect(own.some((m) => inside(m.poly, [u.win[0] - u.n[0] * 2, u.win[1] - u.n[1] * 2])), `${b.id} ${u.no} has the flat behind`).toBe(true)
     }
+  })
+  it('gives each block its full height', () => {
+    for (const b of S.blocks) expect(Math.max(...blockMasses(b).map((m) => m.storeys)), b.id).toBe(b.storeys)
   })
   it('has a Flat Studio layout for every unit type', () => {
     for (const t of new Set(S.blocks.flatMap((b) => b.units.map((u) => u.type)))) expect(unitLayout({ site: S.id, type: t }), t).toBeTruthy()
@@ -36,7 +41,7 @@ describe.each(SITES.map((s) => [s.name, s] as const))('%s', (_name, S) => {
   it('keeps each unit between its lowest storey and the top of the block', () => {
     for (const b of S.blocks) for (const u of b.units) {
       expect(unitPos(S, { block: b.id, unit: u.no, storey: 1 })!.storey).toBe(u.from ?? 2)
-      expect(unitPos(S, { block: b.id, unit: u.no, storey: 99 })!.storey).toBe(b.storeys)
+      expect(unitPos(S, { block: b.id, unit: u.no, storey: 99 })!.storey).toBe(u.to ?? b.storeys)
     }
   })
   it('has the geo anchor and an amenity list', () => {

@@ -119,14 +119,18 @@ src/surroundings/
 scripts/osm-snapshot.mjs    refreshes a snapshot from the Overpass API
 ```
 
-Sites: Berlayar Rise, Kebun Baru Breeze and Kebun Baru Ridge (June 2026). Each site file is redrawn from the project's HDB
+Sites: Berlayar Rise, Kebun Baru Breeze, Kebun Baru Ridge and Lakeview Cascadia (June 2026). Each site file is redrawn from the project's HDB
 brochure: block outlines and unit positions from the vector block floor plans, placed on the site plan
 (blocks turned from north, as at both Kebun Baru projects, are fitted unit by unit); roads,
 reserved land and buildings traced from the site plan or taken from OpenStreetMap; amenities from the
 town map. Storeys are taken as 2.8 m. Heights of reserved land are unknown, so the page lets people
 assume one (the control hides where there is none). A unit stack can start above the 2nd storey (`from`, from the
-brochure's unit distribution). Each site has a `geo` anchor that ties the site plan
-to latitude and longitude, checked against OpenStreetMap's outline of the estate or its blocks.
+brochure's unit distribution) or stop below the top of the block (`to`). Blocks that step down, or are
+groups of units joined by open corridors (Lakeview Cascadia), list their parts in `masses`, each with
+its own height, traced from the plan for each storey range. Each site has a `geo` anchor that ties the
+site plan to latitude and longitude, checked against OpenStreetMap: the estate's blocks where they are
+mapped, otherwise existing buildings drawn on the site plan (Lakeview Cascadia: the HDB blocks and
+petrol station across Upper Thomson Road).
 
 A brochure's block-plan scale bar isn't always drawn at the plan's scale (Kebun Baru Breeze page 17 is
 off by a quarter): check unit areas against the brochure, or fit the plan to the site plan.
@@ -141,9 +145,10 @@ P1 registration, people still need to check distances on OneMap. To refresh a sn
 node scripts/osm-snapshot.mjs berlayar-rise
 node scripts/osm-snapshot.mjs kebun-baru-breeze
 node scripts/osm-snapshot.mjs kebun-baru-ridge
+node scripts/osm-snapshot.mjs lakeview-cascadia
 ```
 
-`sites.test.ts` checks every site: each window on its block outline and facing out, a Flat Studio layout
+`sites.test.ts` checks every site: each window on the outline of a block part that reaches its top storey, facing out, a Flat Studio layout
 for each unit type, and storeys within each stack.
 
 `*.local.test.ts` files run only where the git-ignored brochures are present (`brochures/`): they

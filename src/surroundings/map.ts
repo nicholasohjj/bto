@@ -1,7 +1,7 @@
 /** The real map (OneMap or OpenStreetMap) with the estate, your unit, walking rings, amenities and routes. */
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import { ellipsePoly, toLatLng, type Amenity, type Pt, type Site, type UnitPos } from './analysis'
+import { blockMasses, ellipsePoly, storeysLabel, toLatLng, type Amenity, type Pt, type Site, type UnitPos } from './analysis'
 
 export const KIND: Record<string, { c: string; l: string; n: string }> = {
   mrt: { c: '#d22f45', l: 'M', n: 'MRT' }, bus: { c: '#7a5aa6', l: 'B', n: 'Bus interchange' }, school: { c: '#2f6db5', l: 'S', n: 'School' },
@@ -41,7 +41,7 @@ export function createMap(el: HTMLElement, onPick: (a: Amenity) => void) {
     if (!site) return
     for (const b of site.blocks) {
       const mine = u?.block.id === b.id
-      L.polygon(poly(b.footprint), { color: mine ? '#d98c00' : '#6b6760', weight: mine ? 2.5 : 1, fillColor: mine ? '#f6e7b8' : '#efece6', fillOpacity: 0.95 }).bindPopup(`Block ${b.id}, ${b.storeys} storeys`)
+      L.polygon(blockMasses(b).map((m) => poly(m.poly)), { color: mine ? '#d98c00' : '#6b6760', weight: mine ? 2.5 : 1, fillColor: mine ? '#f6e7b8' : '#efece6', fillOpacity: 0.95 }).bindPopup(`Block ${b.id}, ${storeysLabel(b)}`)
         .bindTooltip(b.id, { permanent: true, direction: 'center', className: 'blk' }).addTo(unitL)
     }
     if (!u) return
