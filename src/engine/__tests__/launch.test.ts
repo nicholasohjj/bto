@@ -124,4 +124,9 @@ describe('sites shown before a launch', () => {
     // 260 Community Care Apartments, 590 2-room Flexi, 580 4-room (1,430 flats).
     expect(Object.values(t.flats).reduce((a, b) => a + b!, 0) + t.cca!).toBe(1430)
   })
+  it('adds up the Tengah flat mix', () => {
+    const t = LAUNCHES.find((l) => l.id === '2026-11')!.previews!.find((v) => v.town === 'Tengah')!
+    // 180 2-room Flexi, 80 3-room, 170 4-room, 250 5-room, 30 3Gen (710 flats).
+    expect(Object.values(t.flats).reduce((a, b) => a + b!, 0)).toBe(710)
+  })
 })

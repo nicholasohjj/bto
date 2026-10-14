@@ -127,6 +127,12 @@ const NOVEMBER_2026: Launch = {
       note: '1,430 flats including one rental block; food court, supermarket, fast food restaurant, 4 shops, preschool, Residents’ Network Centre and Active Ageing Centre',
       source: 'HDB Toa Payoh town map, issued June 2026 (checked 2026-10-14)',
     },
+    {
+      town: 'Tengah', where: 'Tengah Garden Avenue by the Pan-Island Expressway, about 450 m from the future JE2 station on the Jurong Region Line',
+      flats: { '2R': 180, '3R': 80, '4R': 170, '5R': 250, '3Gen': 30 },
+      note: '710 flats in five blocks mixing sold and rental flats; eating house, minimart, 4 shops, preschool, kidney dialysis centre',
+      source: 'HDB Tengah town map, issued June 2026 (checked 2026-10-14)',
+    },
   ],
   projects: [],
 }
