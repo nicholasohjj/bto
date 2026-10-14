@@ -1,7 +1,7 @@
 import { areaUrl, studioUrl, SURROUNDINGS, surroundingsUrl } from '../state/studio'
 import { CHOSEN_UNIT_KEY, readChosenUnit, surroundingsUnitUrl, unitFlatType, unitLabel, unitLayout } from '../state/unit'
 import { useStored } from './useStored'
-import { Fragment, useState, type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import type { FlatType, Policy } from '../config/policy'
 import { LAUNCHES, TYPICAL_WAIT_MONTHS, type Launch } from '../config/launches'
 import { ageInMonths, estimatedLivingCosts, prYear, ratesFor } from '../engine/cpf'
@@ -363,13 +363,21 @@ function ProjectPicker({ scenario, update }: { scenario: Scenario; update: Updat
             <>
               {launch.towns && row('Towns', launch.towns.join(', '))}
               {launch.note && row('About', launch.note)}
-              {launch.previews?.map((v, i) => <Fragment key={i}>{row(i ? '' : 'Sites shown', <>
-                <b className="font-medium text-ink">{v.town}</b>: {v.where}.{' '}
-                {[...(Object.keys(v.flats) as FlatType[]).map((t) => `${v.flats[t]!.toLocaleString()} ${typeLabel(t)}`), ...(v.cca ? [`${v.cca} Community Care Apartment`] : [])].join(' · ')}
-                {v.note && <span className="text-muted"> · {v.note}</span>}
-                <span className="text-muted"> ({v.source})</span>
-                {v.area && <><br /><a className="text-accent underline" href={areaUrl(v.area)}>Walk to the MRT, schools within 1 km and 2 km, and noise</a></>}
-              </>)}</Fragment>)}
+              {launch.previews?.length ? row('Sites shown', <>
+                <ul className="space-y-1">
+                  {launch.previews.map((v, i) => {
+                    const flats = Object.values(v.flats).reduce((t, n) => t + (n ?? 0), 0) + (v.cca ?? 0)
+                    const mix = [...(Object.keys(v.flats) as FlatType[]).map((t) => `${v.flats[t]!.toLocaleString()} ${typeLabel(t)}`), ...(v.cca ? [`${v.cca} Community Care Apartment`] : [])].join(', ')
+                    return (
+                      <li key={i} title={v.source}>
+                        {v.area ? <a className="font-medium text-accent underline" href={areaUrl(v.area)}>{v.town}</a> : <b className="font-medium text-ink">{v.town}</b>}: {v.where}.{' '}
+                        <span className="text-muted">{flats.toLocaleString()} flats ({mix}).</span>
+                      </li>
+                    )
+                  })}
+                </ul>
+                <p className="mt-1 text-muted">From HDB’s town maps. Open a town for walking times, primary schools within 1 km and 2 km, and the roads and trains near the site.</p>
+              </>) : null}
               {row('Dates', <>From {formatYm(launch.applicationMonth)}, with a typical wait of {years(TYPICAL_WAIT_MONTHS)}. Keep your own price and flat type, and pick the project once HDB announces it.</>)}
             </>
           )}

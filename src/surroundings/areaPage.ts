@@ -105,6 +105,9 @@ function showRoute(c: Ctx, a: Amenity) {
   const line = w.line ?? [lineDist(a.at, [...area.outline, area.outline[0]]).at, a.at]
   L.polyline(line.map(ll), { color: '#17707a', weight: 5, opacity: 0.85, dashArray: w.line ? undefined : '2 9' }).bindTooltip(esc(`${a.name}: ${km(w.dist)}, about ${w.walkMin} min walk${w.line ? '' : ' (straight line)'}`), { sticky: true }).addTo(routeL)
   map.fitBounds(L.latLngBounds([...line, ...area.outline].map(ll)).pad(0.2))
+  // On a phone the map sits above the results: bring it into view to show the route.
+  const stage = $('#stage'), r = stage.getBoundingClientRect()
+  if (Math.min(r.bottom, innerHeight) - Math.max(r.top, 0) < r.height * 0.6) stage.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 /** The nearest exit of each MRT station, by walking distance, nearest station first. */
 function stations(c: Ctx, open = false, reach = 2000): { a: Amenity; w: Walk }[] {
@@ -118,7 +121,8 @@ function stations(c: Ctx, open = false, reach = 2000): { a: Amenity; w: Walk }[]
   return [...best.values()].filter((x) => x.w.dist <= reach).sort((x, y) => x.w.dist - y.w.dist)
 }
 function nearestOf(c: Ctx, kind: string): { a: Amenity; w: Walk } | null {
-  const cands = c.osm.amenities.filter((a) => a.kind === kind).sort((x, y) => edgeDist(x.at, area.outline) - edgeDist(y.at, area.outline)).slice(0, 6)
+  // A playground tagged as a park isn't the park people mean.
+  const cands = c.osm.amenities.filter((a) => a.kind === kind && !(kind === 'park' && /playground/i.test(a.name))).sort((x, y) => edgeDist(x.at, area.outline) - edgeDist(y.at, area.outline)).slice(0, 6)
   return cands.map((a) => ({ a, w: walk(c, a) })).sort((x, y) => x.w.dist - y.w.dist)[0] ?? null
 }
 
@@ -159,6 +163,7 @@ function render(c: Ctx | null) {
   const noise = noiseSources(area, c.osm), under = undergroundNear(area, c.osm)
   const what = { expressway: 'expressway', major: 'main road', rail: 'train tracks above ground' } as const
   h += `<div class="sec"><h3>Roads and trains to listen for</h3>${noise.length ? noise.slice(0, 6).map((n) => `<div class="kv"><span>${esc(n.name)} <small style="color:var(--ink2)">(${what[n.kind]}, ${n.side} side)</small>${n.kind !== 'major' && n.dist < 100 ? ' <span class="pill warn">close</span>' : ''}</span><b>${n.dist ? `${n.dist} m` : 'next to it'}</b></div>`).join('') : '<p class="note" style="margin:0">No expressway, main road or above-ground train track within 300 m.</p>'}
+    ${noise.length ? `<p class="note key">On the map: ${[noise.some((n) => n.kind === 'expressway') && '<i style="background:#c0392b"></i>expressway', noise.some((n) => n.kind === 'major') && '<i style="background:#e8833a"></i>main road', noise.some((n) => n.kind === 'rail') && '<i class="dash"></i>train tracks'].filter(Boolean).join(' ')}</p>` : ''}
     <p class="note">The closest a block could be, from the edge of the site. ${noise.some((n) => n.kind !== 'major' && n.dist < 100) ? 'Blocks on that side will hear it, more so on upper floors facing it; once the site plan is out, see which stacks face it. ' : ''}Visit at peak hour${noise.some((n) => n.kind === 'rail') ? ', and when trains run early in the morning and late at night' : ''}.${under.map((n) => ` The ${esc(n)} runs underground nearby, so it adds no train noise.`).join('')}</p></div>`
   h += `<div class="sec"><p class="note" style="margin:0">Site: ${esc(area.source)}, to within about 20 m. Surroundings: ${esc(c.osm.attribution)}, snapshot of ${c.osm.fetched}. A planning aid, not a survey.</p></div>`
   $('#results').innerHTML = h

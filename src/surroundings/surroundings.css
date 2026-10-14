@@ -42,7 +42,7 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 .kv b{font:500 12px var(--f-mono);text-align:right}
 .big{font:700 22px/1.1 var(--f-display)}
 .big small{font:500 12px var(--f-body);color:var(--ink2)}
-.pill{display:inline-block;border-radius:999px;padding:1px 8px;font-size:11px;font-weight:600;background:var(--line)}
+.pill{display:inline-block;border-radius:999px;padding:1px 8px;font:600 11px/1.5 var(--f-body);background:var(--line)}
 .pill.good{background:color-mix(in srgb,var(--good) 20%,transparent);color:var(--good)}
 .pill.warn{background:color-mix(in srgb,var(--warn) 22%,transparent);color:var(--warn)}
 #stage{position:relative;min-width:0;min-height:0;background:var(--paper)}
@@ -95,6 +95,9 @@ button.am{width:100%;background:none;border:0;border-bottom:1px dotted var(--lin
 .am.on span{font-weight:600;color:var(--accent)}
 
 /* upcoming sites (/surroundings/area/): results beside the map */
+.note.key i{display:inline-block;width:16px;height:4px;border-radius:2px;margin:0 5px 2px 8px;vertical-align:middle}
+.note.key i:first-child{margin-left:4px}
+.note.key i.dash{background:repeating-linear-gradient(90deg,#7a3fa0 0 6px,transparent 6px 10px)}
 #main.area{grid-template-columns:380px minmax(0,1fr)}
 #main.area #results{border-right:1px solid var(--line)}
 @media (max-width:820px){

@@ -126,8 +126,8 @@ function walkTo(u: UnitPos, a: Amenity, c: Ctx = cx): Place {
 /** Nearest of a kind by walking distance (checks the 8 closest in a straight line). */
 function nearest(u: UnitPos, kind: string, filter: (a: Amenity) => boolean = () => true, cc: Ctx = cx): Place | null {
   const c = centre(u)
-  // A station still being built isn't one to walk to yet.
-  const cands = places(cc).filter((a) => a.kind === kind && a.sub !== 'future' && filter(a)).sort((p, q2) => Math.hypot(p.at[0] - c[0], p.at[1] - c[1]) - Math.hypot(q2.at[0] - c[0], q2.at[1] - c[1])).slice(0, 8)
+  // A station still being built isn't one to walk to yet, and a playground tagged as a park isn't the park people mean.
+  const cands = places(cc).filter((a) => a.kind === kind && a.sub !== 'future' && !(kind === 'park' && /playground/i.test(a.name)) && filter(a)).sort((p, q2) => Math.hypot(p.at[0] - c[0], p.at[1] - c[1]) - Math.hypot(q2.at[0] - c[0], q2.at[1] - c[1])).slice(0, 8)
   return cands.map((a) => walkTo(u, a, cc)).sort((p, q2) => p.dist - q2.dist)[0] ?? null
 }
 function showRoute(a: Amenity) {
@@ -136,6 +136,9 @@ function showRoute(a: Amenity) {
   const p = walkTo(u, a)
   const c = centre(u)
   if ($('#pmap').hidden) (document.querySelector('.seg [data-v=map]') as HTMLElement).click()
+  // On a phone the map sits above the results: bring it into view to show the route.
+  const stage = $('#stage'), r = stage.getBoundingClientRect()
+  if (Math.min(r.bottom, innerHeight) - Math.max(r.top, 0) < r.height * 0.6) stage.scrollIntoView({ behavior: 'smooth', block: 'start' })
   map.showRoute(p.route?.line ?? [c, a.at], `${a.name}: ${km(p.dist)}, about ${p.walkMin} min walk${p.route ? '' : ' (straight line)'}`)
 }
 
@@ -236,7 +239,7 @@ function renderResults(u: UnitPos, obs: ReturnType<typeof obstacles>) {
     <p class="note">${graph ? 'Walking distance from the block: across the estate (its paths aren\'t mapped yet, so straight line plus 30%), then along paths and streets (OpenStreetMap). Pick one to see the route on the map.' : 'Walking estimates for now (straight line plus 30%); routes along real paths load in a moment.'} 80 m a minute.</p></div>`
   // Primary schools by straight-line distance: Primary 1 registration gives priority within 1 km and 2 km.
   const c = centre(u), prim = places().filter((a) => a.kind === 'school' && (a.sub === 'primary' || /primary/i.test(a.name))).map((a) => ({ a, d: Math.round(Math.hypot(a.at[0] - c[0], a.at[1] - c[1])) })).filter((x) => x.d <= 2000).sort((p, q2) => p.d - q2.d)
-  h += `<div class="sec"><h3>Primary schools within 2 km</h3>${prim.length ? prim.map((x) => `<button type="button" class="am link" data-am="${esc(x.a.name)}" title="Show the walking route on the map"><i aria-hidden="true" style="background:${KIND.school.c}">S</i><span>${esc(x.a.name)}</span><b>${x.d <= 1000 ? 'within 1 km' : '1–2 km'} · ${km(x.d)}</b></button>`).join('') : '<p class="note" style="margin:0">None found.</p>'}
+  h += `<div class="sec"><h3>Primary schools within 2 km</h3>${prim.length ? prim.map((x) => `<button type="button" class="am link" data-am="${esc(x.a.name)}" title="Show the walking route on the map"><i aria-hidden="true" style="background:${KIND.school.c}">S</i><span>${esc(x.a.name)}</span><b>${x.d <= 1000 ? '<span class="pill good">within 1 km</span>' : '1–2 km'} · ${km(x.d)}</b></button>`).join('') : '<p class="note" style="margin:0">None found.</p>'}
     <p class="note">Primary 1 registration gives priority to homes within 1 km and 2 km of a school. These are rough straight-line distances to the school's map point; the official distance is measured by SLA from your address (OneMap's school query).</p></div>`
   h += compareHtml()
   h += `<div class="sec"><p class="note" style="margin:0">Estate: ${esc(site.source)}. ${osm ? `Surroundings: ${esc(osm.attribution)}, snapshot of ${osm.fetched}.` : ''} Blocks are placed to within a few metres; storeys are taken as ${site.storeyM} m. Heights of future buildings on reserved land are not known. A planning aid, not a survey.</p></div>`

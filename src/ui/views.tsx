@@ -7,6 +7,7 @@ import { launchFit, pickedLaunch, type ProjectFit } from '../engine/launch'
 import { LAUNCHES, type Launch, type LaunchProject } from '../config/launches'
 import type { FlatType } from '../config/policy'
 import { FLAT_TYPES } from './labels'
+import { areaUrl } from '../state/studio'
 import { money } from '../engine/format'
 import { monthlyInstalment } from '../engine/loan'
 import type { Scenario, SimResult, Warning } from '../engine/types'
@@ -588,6 +589,10 @@ export function LaunchFitCard({ scenario, onCompare }: { scenario: Scenario; onC
   const [filterTouched, setFilterTouched] = useState(false)
   const filter = filterTouched ? typeFilter : types.some((t) => t.value === scenario.flat.type) && types.length > 1 ? scenario.flat.type : 'all'
   if (!launch) return null
+  // The next launch's sites that have a page before their projects are announced.
+  const next = LAUNCHES.find((l) => !l.projects.length && l.previews?.some((v) => v.area))
+  const upcoming = next?.previews?.flatMap((v) => (v.area ? [v.area] : [])) ?? []
+  const upcomingName = next?.name ?? ''
   const key = (f: ProjectFit) => `${f.project.id}/${f.type}`
   const typeLabel = (t: FlatType) => FLAT_TYPES.find((x) => x.value === t)!.label
   const shown = fits.filter((f) => filter === 'all' || f.type === filter)
@@ -683,6 +688,10 @@ export function LaunchFitCard({ scenario, onCompare }: { scenario: Scenario; onC
           </Button>
         </div>
       </>}
+      <p className="mt-3 text-xs text-ink-2">
+        Before you choose: <a className="text-accent underline" href="/surroundings/">Surroundings</a> shows each unit’s view, sun and walk to the MRT
+        {upcoming.length > 0 && <>, and <a className="text-accent underline" href={areaUrl(upcoming[0])}>upcoming sites</a> shows walking, schools and noise around the {upcomingName} sites before their brochures are out</>}.
+      </p>
       {!planShort && <p className="mt-3 text-[11px] text-muted">
         Starting prices are the cheapest unit of each type, before grants. Keeps your loan, CPF slider, costs and grants; each project’s dates come from
         its stated waiting time (“about”: a typical one). {(scenario.buyers ?? 'couple') !== 'couple' && 'Singles can only buy 2-room Flexi flats. '}Source: {launch.source}.
