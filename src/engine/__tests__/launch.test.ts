@@ -119,4 +119,9 @@ describe('sites shown before a launch', () => {
     // 390 2-room Flexi, 80 3-room, 460 4-room, 650 5-room (1,580 flats).
     expect(Object.values(y.flats).reduce((a, b) => a + b!, 0)).toBe(1580)
   })
+  it('adds up the Toa Payoh flat mix, Community Care Apartments included', () => {
+    const t = LAUNCHES.find((l) => l.id === '2026-11')!.previews!.find((v) => v.town === 'Toa Payoh')!
+    // 260 Community Care Apartments, 590 2-room Flexi, 580 4-room (1,430 flats).
+    expect(Object.values(t.flats).reduce((a, b) => a + b!, 0) + t.cca!).toBe(1430)
+  })
 })

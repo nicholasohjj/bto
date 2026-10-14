@@ -37,6 +37,8 @@ export interface LaunchPreview {
   where: string
   /** Flats by type, as HDB's flat mix gives them. */
   flats: Partial<Record<FlatType, number>>
+  /** Community Care Apartments for seniors, which aren't a flat type here. */
+  cca?: number
   note?: string
   source: string
 }
@@ -118,6 +120,12 @@ const NOVEMBER_2026: Launch = {
       flats: { '2R': 390, '3R': 80, '4R': 460, '5R': 650 },
       note: '1,580 flats in one rental block and four blocks mixing sold and rental flats; 2 preschools',
       source: 'HDB Yishun town map, issued June 2026 (checked 2026-10-14)',
+    },
+    {
+      town: 'Toa Payoh', where: 'Toa Payoh Rise and Thomson Road, beside Caldecott MRT (Thomson–East Coast and Circle lines)',
+      flats: { '2R': 590, '4R': 580 }, cca: 260,
+      note: '1,430 flats including one rental block; food court, supermarket, fast food restaurant, 4 shops, preschool, Residents’ Network Centre and Active Ageing Centre',
+      source: 'HDB Toa Payoh town map, issued June 2026 (checked 2026-10-14)',
     },
   ],
   projects: [],

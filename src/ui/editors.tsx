@@ -365,7 +365,7 @@ function ProjectPicker({ scenario, update }: { scenario: Scenario; update: Updat
               {launch.note && row('About', launch.note)}
               {launch.previews?.map((v, i) => <Fragment key={i}>{row(i ? '' : 'Sites shown', <>
                 <b className="font-medium text-ink">{v.town}</b>: {v.where}.{' '}
-                {(Object.keys(v.flats) as FlatType[]).map((t) => `${v.flats[t]!.toLocaleString()} ${typeLabel(t)}`).join(' · ')}
+                {[...(Object.keys(v.flats) as FlatType[]).map((t) => `${v.flats[t]!.toLocaleString()} ${typeLabel(t)}`), ...(v.cca ? [`${v.cca} Community Care Apartment`] : [])].join(' · ')}
                 {v.note && <span className="text-muted"> · {v.note}</span>}
                 <span className="text-muted"> ({v.source})</span>
               </>)}</Fragment>)}
