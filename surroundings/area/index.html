@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Upcoming Sites</title>
+<meta name="description" content="Before the brochure is out: walking times to the MRT, primary schools within 1 km and 2 km, and the roads and trains near each upcoming BTO site.">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="/src/surroundings/surroundings.css">
+</head>
+<body>
+<div id="app">
+  <header class="top">
+    <a class="btn" href="/" title="Back to your BTO money plan">← Money plan</a>
+    <a class="btn" href="/surroundings/" title="Units, views and sun for projects with a brochure">Surroundings</a>
+    <div class="brand"><span class="mark" aria-hidden="true"></span>Upcoming sites</div>
+    <select id="site" class="btn" aria-label="Site"></select>
+  </header>
+  <main id="main" class="area">
+    <aside id="results" class="panel" aria-label="What's around the site"></aside>
+    <section id="stage"><div class="pane"><div id="map" role="region" aria-label="Map of the site and what's around it"></div></div></section>
+  </main>
+</div>
+<div id="toast" role="status" aria-live="polite"></div>
+<script type="module" src="/src/surroundings/areaPage.ts"></script>
+</body>
+</html>

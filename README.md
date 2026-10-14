@@ -152,7 +152,7 @@ node scripts/osm-snapshot.mjs lakeview-cascadia
 node scripts/osm-snapshot.mjs sembawang-brook
 node scripts/osm-snapshot.mjs sembawang-portico
 node scripts/osm-snapshot.mjs woodgrove-acres
-node scripts/osm-snapshot.mjs lakeview-cascadia --only rail   # redo some parts (estate, buildings, walk, amenities, rail)
+node scripts/osm-snapshot.mjs lakeview-cascadia --only rail   # redo some parts (estate, buildings, walk, amenities, rail, roads)
 ```
 
 Overpass is often busy: each answer is saved in `.osm-cache/<site>/` (git-ignored) as it arrives, so
@@ -164,6 +164,23 @@ takes up to three units from any of the projects, each worked out with its own s
 
 `sites.test.ts` checks every site: each window on the outline of a block part that reaches its top storey, facing out, a Flat Studio layout
 for each unit type, and storeys within each stack.
+
+### Upcoming sites (`/surroundings/area/`)
+
+Before a project's brochure is out, HDB's town map shows only where the site is and its flat mix. For
+those sites (`launches.ts` previews with an `area`), this page shows walking times from the edge of the
+site to the nearest MRT exits and other places, primary schools within 1 km and 2 km (of the whole site,
+or only part of it, since the blocks aren't known), and expressways, main roads and above-ground train
+tracks within 300 m. Each `src/surroundings/areas/<id>.json` holds the site outline, traced from the
+town map's yellow fill and placed on OpenStreetMap: first by the map's MRT stations, then shifted so
+OpenStreetMap's roads land on the roads the map draws (to within about 20 m). Snapshots have no buildings
+but do have main roads:
+
+```
+node scripts/osm-snapshot.mjs yishun-khatib --area
+```
+
+`area.ts` holds the geometry (tested in `area.test.ts`); `areaPage.ts` is the page.
 
 `*.local.test.ts` files run only where the git-ignored brochures are present (`brochures/`): they
 check the PDF importer on a real block plan.

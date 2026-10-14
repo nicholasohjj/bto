@@ -41,6 +41,8 @@ export interface LaunchPreview {
   cca?: number
   note?: string
   source: string
+  /** Its page under /surroundings/area/ (walking, schools, noise), when the site has been placed on the map. */
+  area?: string
 }
 
 export interface Launch {
@@ -116,43 +118,43 @@ const NOVEMBER_2026: Launch = {
   verified: '2026-10-13',
   previews: [
     {
-      town: 'Yishun', where: 'Yishun Street 82 and Lorong Chencharu, next to Yishun Walk, about 500 m from Khatib MRT',
+      area: 'yishun-khatib', town: 'Yishun', where: 'Yishun Street 82 and Lorong Chencharu, next to Yishun Walk, about a 5-minute walk from Khatib MRT',
       flats: { '2R': 390, '3R': 80, '4R': 460, '5R': 650 },
       note: '1,580 flats in one rental block and four blocks mixing sold and rental flats; 2 preschools',
       source: 'HDB Yishun town map, issued June 2026 (checked 2026-10-14)',
     },
     {
-      town: 'Toa Payoh', where: 'Toa Payoh Rise and Thomson Road, beside Caldecott MRT (Thomson–East Coast and Circle lines)',
+      area: 'toa-payoh-caldecott', town: 'Toa Payoh', where: 'Toa Payoh Rise and Thomson Road, beside Caldecott MRT (Thomson–East Coast and Circle lines)',
       flats: { '2R': 590, '4R': 580 }, cca: 260,
       note: '1,430 flats including one rental block; food court, supermarket, fast food restaurant, 4 shops, preschool, Residents’ Network Centre and Active Ageing Centre',
       source: 'HDB Toa Payoh town map, issued June 2026 (checked 2026-10-14)',
     },
     {
-      town: 'Tengah', where: 'Tengah Garden Avenue by the Pan-Island Expressway, about 450 m from the future JE2 station on the Jurong Region Line',
+      area: 'tengah-garden-avenue', town: 'Tengah', where: 'Tengah Garden Avenue by the Pan-Island Expressway, about a 10-minute walk from Tengah Plantation and Tengah Park stations on the Jurong Region Line (being built)',
       flats: { '2R': 180, '3R': 80, '4R': 170, '5R': 250, '3Gen': 30 },
       note: '710 flats in five blocks mixing sold and rental flats; eating house, minimart, 4 shops, preschool, kidney dialysis centre',
       source: 'HDB Tengah town map, issued June 2026 (checked 2026-10-14)',
     },
     {
-      town: 'Sembawang', where: 'Admiralty Lane and Sembawang Drive, by Jelutung Harbour Park, about 1 km from Sembawang MRT',
+      area: 'sembawang-admiralty-lane', town: 'Sembawang', where: 'Admiralty Lane and Sembawang Drive, by Jelutung Harbour Park, about a 16-minute walk from Sembawang MRT',
       flats: { '2R': 330, '3R': 100, '4R': 460, '5R': 420 },
       note: '1,310 flats, one block mixing sold and rental flats; eating house, supermarket, 5 shops, preschool',
       source: 'HDB Sembawang town map, issued June 2026 (checked 2026-10-14)',
     },
     {
-      town: 'Geylang', where: 'Aljunied Road and Jalan Raya, about 400 m from Mattar MRT (Downtown line)',
+      area: 'geylang-aljunied', town: 'Geylang', where: 'Aljunied Road and Jalan Raya, about a 4-minute walk from Mattar MRT (Downtown line)',
       flats: { '2R': 170, '4R': 270 },
       note: '440 flats; preschool',
       source: 'HDB Geylang town map, issued June 2026 (checked 2026-10-14)',
     },
     {
-      town: 'Bedok', where: 'Upper East Coast Road and Bayshore Road, beside Bayshore MRT (Thomson–East Coast line)',
+      area: 'bedok-upper-east-coast', town: 'Bedok', where: 'Upper East Coast Road and Bayshore Road, beside Bayshore MRT (Thomson–East Coast line)',
       flats: { '2R': 890, '3R': 90, '4R': 660 },
       note: '1,640 flats, one block mixing sold and rental flats; eating house, 2 shops, 2 preschools, Residents’ Network Centre, Active Ageing Centre (Care), kidney dialysis centre',
       source: 'HDB Bedok town map, issued June 2026 (checked 2026-10-14)',
     },
     {
-      town: 'Bedok', where: 'Bayshore Drive and Bayshore Walk, beside Bayshore MRT (Thomson–East Coast line), across Bayshore Drive from the other Bedok site and by East Coast Park',
+      area: 'bedok-bayshore-walk', town: 'Bedok', where: 'Bayshore Drive and Bayshore Walk, beside Bayshore MRT (Thomson–East Coast line), across Bayshore Drive from the other Bedok site and by East Coast Park',
       flats: { '2R': 350, '4R': 510 },
       note: '860 flats, one block mixing sold and rental flats; minimart, 2 shops, preschool',
       source: 'HDB Bedok town map for this site, issued June 2026 (checked 2026-10-14)',

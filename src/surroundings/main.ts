@@ -126,7 +126,8 @@ function walkTo(u: UnitPos, a: Amenity, c: Ctx = cx): Place {
 /** Nearest of a kind by walking distance (checks the 8 closest in a straight line). */
 function nearest(u: UnitPos, kind: string, filter: (a: Amenity) => boolean = () => true, cc: Ctx = cx): Place | null {
   const c = centre(u)
-  const cands = places(cc).filter((a) => a.kind === kind && filter(a)).sort((p, q2) => Math.hypot(p.at[0] - c[0], p.at[1] - c[1]) - Math.hypot(q2.at[0] - c[0], q2.at[1] - c[1])).slice(0, 8)
+  // A station still being built isn't one to walk to yet.
+  const cands = places(cc).filter((a) => a.kind === kind && a.sub !== 'future' && filter(a)).sort((p, q2) => Math.hypot(p.at[0] - c[0], p.at[1] - c[1]) - Math.hypot(q2.at[0] - c[0], q2.at[1] - c[1])).slice(0, 8)
   return cands.map((a) => walkTo(u, a, cc)).sort((p, q2) => p.dist - q2.dist)[0] ?? null
 }
 function showRoute(a: Amenity) {

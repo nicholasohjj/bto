@@ -48,8 +48,8 @@ function swAssets(): Plugin {
 export default defineConfig({
   plugins: [react(), tailwindcss(), swAssets()],
   build: {
-    // Two pages: the money plan (/) and Flat Studio (/studio/).
-    rolldownOptions: { input: { main: 'index.html', studio: 'studio/index.html', surroundings: 'surroundings/index.html' } },
+    // The money plan (/), Flat Studio (/studio/), Surroundings (/surroundings/) and upcoming sites (/surroundings/area/).
+    rolldownOptions: { input: { main: 'index.html', studio: 'studio/index.html', surroundings: 'surroundings/index.html', area: 'surroundings/area/index.html' } },
   },
   test: {
     include: ['src/**/*.test.ts'],

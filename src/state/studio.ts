@@ -119,6 +119,8 @@ export const BROCHURE_LAYOUTS: Record<string, { key: string; label: string; type
 /** Projects with a Surroundings page (view, sun, roads and amenities per unit). */
 export const SURROUNDINGS = new Set(['berlayar-rise', 'kebun-baru-breeze', 'kebun-baru-ridge', 'lakeview-cascadia', 'sembawang-brook', 'sembawang-portico', 'woodgrove-acres'])
 export const surroundingsUrl = (projectId: string) => `/surroundings/?site=${encodeURIComponent(projectId)}`
+/** An upcoming site's page (from its town map): walking, schools and noise before the brochure is out. */
+export const areaUrl = (id: string) => `/surroundings/area/?site=${encodeURIComponent(id)}`
 
 /** Brochure layouts for this plan's project, if it was picked from a launch that has them. */
 export function brochureLayouts(s: Scenario) {

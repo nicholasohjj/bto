@@ -51,8 +51,8 @@ export interface Osm {
   buildings: { h: number; a?: number; n?: string; p: number[] }[]
   walk: { nodes: number[]; ways: number[][] }
   amenities: Amenity[]
-  /** Railway tracks: n name, u underground, p x,y pairs. */
-  rail?: { n?: string; u?: 1; p: number[] }[]
+  /** Railway tracks: n name, u underground, f still being built, p x,y pairs. */
+  rail?: { n?: string; u?: 1; f?: 1; p: number[] }[]
 }
 
 /* map placement */
@@ -236,7 +236,7 @@ export function railDistances(u: UnitPos, osm?: Osm | null, within = 400): RailD
     const ld = lineDist(eye, line), under = !!r.u
     if (ld.d > within) continue
     const toward: Pt = [ld.at[0] - eye[0], ld.at[1] - eye[1]], L = Math.hypot(...toward) || 1
-    const d: RailDist = { name: r.n ?? 'A railway line', underground: under, dist: Math.round(under ? ld.d : Math.hypot(ld.d, u.eye[2])), faces: !under && (toward[0] * u.n[0] + toward[1] * u.n[1]) / L > 0.3 }
+    const d: RailDist = { name: (r.n ?? 'A railway line') + (r.f ? ' (being built)' : ''), underground: under, dist: Math.round(under ? ld.d : Math.hypot(ld.d, u.eye[2])), faces: !under && (toward[0] * u.n[0] + toward[1] * u.n[1]) / L > 0.3 }
     const key = d.name + (under ? '|u' : '')
     const old = best.get(key)
     if (!old || d.dist < old.dist) best.set(key, d)

@@ -27,9 +27,10 @@ self.addEventListener('fetch', (event) => {
   const req = event.request
   if (req.method !== 'GET' || new URL(req.url).origin !== self.location.origin) return
   if (req.mode === 'navigate') {
-    // Flat Studio (/studio/) and Surroundings (/surroundings/) are their own pages; everything else is the app at '/'.
+    // Flat Studio (/studio/), Surroundings (/surroundings/) and upcoming sites (/surroundings/area/) are their own
+    // pages; everything else is the app at '/'.
     const path = new URL(req.url).pathname
-    const page = ['/studio', '/surroundings'].find((p) => path === p || path.startsWith(p + '/'))?.concat('/') ?? '/'
+    const page = ['/studio', '/surroundings/area', '/surroundings'].find((p) => path === p || path.startsWith(p + '/'))?.concat('/') ?? '/'
     event.respondWith((async () => {
       try {
         const res = await fetch(req)

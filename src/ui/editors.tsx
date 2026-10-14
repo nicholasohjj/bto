@@ -1,4 +1,4 @@
-import { studioUrl, SURROUNDINGS, surroundingsUrl } from '../state/studio'
+import { areaUrl, studioUrl, SURROUNDINGS, surroundingsUrl } from '../state/studio'
 import { CHOSEN_UNIT_KEY, readChosenUnit, surroundingsUnitUrl, unitFlatType, unitLabel, unitLayout } from '../state/unit'
 import { useStored } from './useStored'
 import { Fragment, useState, type ReactNode } from 'react'
@@ -368,6 +368,7 @@ function ProjectPicker({ scenario, update }: { scenario: Scenario; update: Updat
                 {[...(Object.keys(v.flats) as FlatType[]).map((t) => `${v.flats[t]!.toLocaleString()} ${typeLabel(t)}`), ...(v.cca ? [`${v.cca} Community Care Apartment`] : [])].join(' · ')}
                 {v.note && <span className="text-muted"> · {v.note}</span>}
                 <span className="text-muted"> ({v.source})</span>
+                {v.area && <><br /><a className="text-accent underline" href={areaUrl(v.area)}>Walk to the MRT, schools within 1 km and 2 km, and noise</a></>}
               </>)}</Fragment>)}
               {row('Dates', <>From {formatYm(launch.applicationMonth)}, with a typical wait of {years(TYPICAL_WAIT_MONTHS)}. Keep your own price and flat type, and pick the project once HDB announces it.</>)}
             </>

@@ -3,24 +3,27 @@
 //   node scripts/osm-snapshot.mjs berlayar-rise
 //   node scripts/osm-snapshot.mjs berlayar-rise --only rail   (redo some parts, keep the rest of the snapshot)
 //   node scripts/osm-snapshot.mjs berlayar-rise --fresh       (ignore answers saved by an earlier, interrupted run)
+//   node scripts/osm-snapshot.mjs yishun-khatib --area        (a site from a town map, in areas/: no buildings, wider school search)
 // Each Overpass answer is saved in .osm-cache/<site>/ as it arrives, so a run that dies on a busy server
-// picks up where it stopped. Parts: estate, buildings, walk, amenities, rail.
+// picks up where it stopped. Parts: estate, buildings, walk, amenities, rail, roads.
 // Data © OpenStreetMap contributors, ODbL; the page credits this.
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { simplifyWalk } from './simplify-walk.mjs'
 
 const args = process.argv.slice(2), flag = (f) => { const i = args.indexOf(f); if (i < 0) return null; args.splice(i, 1); return args[i] && !args[i].startsWith('--') ? args.splice(i, 1)[0] : true }
-const fresh = !!flag('--fresh'), only = flag('--only')
+const fresh = !!flag('--fresh'), only = flag('--only'), area = !!flag('--area')
 const id = args[0] || 'berlayar-rise'
-const PARTS = ['estate', 'buildings', 'walk', 'amenities', 'rail']
-const parts = typeof only === 'string' ? only.split(',') : PARTS
+const PARTS = ['estate', 'buildings', 'walk', 'amenities', 'rail', 'roads']
+// A site known only from a town map has no blocks to shade or fit, so it needs no buildings.
+const parts = typeof only === 'string' ? only.split(',') : area ? ['walk', 'amenities', 'rail', 'roads'] : PARTS
 for (const p of parts) if (!PARTS.includes(p)) throw new Error(`Unknown part "${p}" (parts: ${PARTS.join(', ')})`)
-const outFile = `src/surroundings/sites/${id}.osm.json`
+const dir = area ? 'src/surroundings/areas' : 'src/surroundings/sites'
+const outFile = `${dir}/${id}.osm.json`
 if (only && !existsSync(outFile)) throw new Error(`--only needs an existing ${outFile}; run without it first`)
 const cacheDir = `.osm-cache/${id}`
 if (fresh) rmSync(cacheDir, { recursive: true, force: true })
 mkdirSync(cacheDir, { recursive: true })
-const site = JSON.parse(readFileSync(`src/surroundings/sites/${id}.json`, 'utf8'))
+const site = JSON.parse(readFileSync(`${dir}/${id}.json`, 'utf8'))
 const g = site.geo
 if (!g) throw new Error(`${id}.json has no "geo" (lat0, lon0, cx, cy) to place it on the map`)
 const KX = 111320 * Math.cos(g.lat0 * Math.PI / 180), KY = 110574
@@ -60,7 +63,7 @@ const [estateWay] = !want('estate') && !want('buildings') ? [] : await overpass(
 const estate = estateWay ? estateWay.geometry.map((p) => toSite(p.lat, p.lon)) : old.estate ? [...old.estate, old.estate[0]] : []
 
 // The brochure's own blocks and buildings.
-const own = [...site.blocks.flatMap((b) => (b.masses ?? [{ poly: b.footprint }]).map((m) => m.poly)), ...site.buildings.filter((b) => b.poly).map((b) => b.poly)]
+const own = area ? [] : [...site.blocks.flatMap((b) => (b.masses ?? [{ poly: b.footprint }]).map((m) => m.poly)), ...site.buildings.filter((b) => b.poly).map((b) => b.poly)]
 // Buildings: height from "height", else storeys from "building:levels" (3 m each), else assumed 2 storeys.
 const B = want('buildings') ? await overpass('buildings', `[out:json][timeout:120];way["building"](${box(1300)});out tags geom;`) : []
 let known = 0
@@ -95,19 +98,28 @@ for (const w of W) {
 }
 
 // Amenities.
-const A = !want('amenities') ? [] : await overpass('amenities', `[out:json][timeout:120];(
-  node["railway"="subway_entrance"](${box(2600)});
-  nwr["railway"="station"]["station"="subway"]["name"](${box(3000)});
-  nwr["amenity"="school"]["name"](${box(2600)});
-  nwr["leisure"="park"]["name"](${box(2600)});
-  nwr["shop"~"^(supermarket|mall)$"]["name"](${box(2600)});
-  nwr["amenity"~"^(marketplace|food_court)$"]["name"](${box(2600)});
-  nwr["name"~"Food Centre|Hawker"](${box(2600)});
-  nwr["amenity"~"^(clinic|hospital)$"]["name"](${box(2600)});
-  nwr["amenity"="community_centre"]["name"](${box(2600)});
-  nwr["amenity"="bus_station"]["name"](${box(2600)});
-  nwr["amenity"="library"]["name"](${box(2600)});
-);out tags center;`)
+// In three smaller queries, each saved as it arrives: a busy server answers these when it times out on one big one.
+const AQ = [
+  [
+    `node["railway"="subway_entrance"](${box(2600)});`,
+    `nwr["railway"="station"]["station"="subway"]["name"](${box(3000)});`,
+    `nwr["amenity"="school"]["name"](${box(area ? 3200 : 2600)});`,
+  ],
+  [
+    `nwr["leisure"="park"]["name"](${box(2600)});`,
+    `nwr["shop"~"^(supermarket|mall)$"]["name"](${box(2600)});`,
+    `nwr["amenity"~"^(marketplace|food_court)$"]["name"](${box(2600)});`,
+    `nwr["name"~"Food Centre|Hawker"](${box(2600)});`,
+  ],
+  [
+    `nwr["amenity"~"^(clinic|hospital)$"]["name"](${box(2600)});`,
+    `nwr["amenity"="community_centre"]["name"](${box(2600)});`,
+    `nwr["amenity"="bus_station"]["name"](${box(2600)});`,
+    `nwr["amenity"="library"]["name"](${box(2600)});`,
+  ],
+]
+const A = []
+if (want('amenities')) for (const [i, q] of AQ.entries()) A.push(...await overpass(`amenities-${i + 1}`, `[out:json][timeout:120];(${q.join('')});out tags center;`))
 const kindOf = (t) => {
   if (t.railway === 'subway_entrance') return 'mrt'
   if (t.amenity === 'school') return 'school'
@@ -119,7 +131,8 @@ const kindOf = (t) => {
 }
 // Exits are often unnamed or named "<Station> (<line>) Exit A": name them "<Station> MRT (<line>), exit A",
 // taking the station from the nearest station node when the exit has no name.
-const stations = A.filter((e) => e.tags?.railway === 'station').map((e) => ({ at: toSite(e.lat ?? e.center.lat, e.lon ?? e.center.lon), name: e.tags.name.replace(/\s+station$/i, ''), line: e.tags.name.match(/\(([^)]+)\)/)?.[1] }))
+// Open stations name the exits near them; stations still being built have no exits yet.
+const stations = A.filter((e) => e.tags?.railway === 'station' && e.tags.construction !== 'station').map((e) => ({ at: toSite(e.lat ?? e.center.lat, e.lon ?? e.center.lon), name: e.tags.name.replace(/\s+station$/i, ''), line: e.tags.name.match(/\(([^)]+)\)/)?.[1] }))
 const mrtName = (t, at) => {
   const m = (t.name || '').match(/^(.*?)\s*\(([^)]+)\)\s*(?:Exit\s*)?([A-Z0-9]{0,3})$/i)
   if (m) return `${m[1].replace(/\s*MRT$/i, '')} MRT (${m[2]})${m[3] ? `, exit ${m[3]}` : ''}`
@@ -130,7 +143,12 @@ const mrtName = (t, at) => {
 }
 const amenities = [], seen = new Set()
 for (const e of A) {
-  if (e.tags?.railway === 'station') continue
+  if (e.tags?.railway === 'station') {
+    // A station being built: listed itself (marked "future"), since it has no exits mapped yet.
+    const t = e.tags, lat = e.lat ?? e.center?.lat, lon = e.lon ?? e.center?.lon
+    if (t.construction === 'station' && lat != null) amenities.push({ name: `${t.name.replace(/\s+station$/i, '')} MRT${t.ref ? ` (${t.ref})` : ''}, being built`, kind: 'mrt', sub: 'future', at: toSite(lat, lon) })
+    continue
+  }
   const t = e.tags || {}, lat = e.lat ?? e.center?.lat, lon = e.lon ?? e.center?.lon
   if (lat == null) continue
   let name = t.name || ''
@@ -147,9 +165,16 @@ for (const e of A) {
   amenities.push({ name: name.slice(0, 70), kind, at, ...(sub ? { sub } : {}) })
 }
 
+// Open stations with no exit mapped (often elevated ones): the station itself is the place to walk to.
+for (const st of stations) {
+  if (amenities.some((a) => a.kind === 'mrt' && Math.hypot(a.at[0] - st.at[0], a.at[1] - st.at[1]) < 300)) continue
+  amenities.push({ name: `${st.name.replace(/\s*\(.*\)$/, '').replace(/\s*MRT( Station)?$/i, '')} MRT${st.line ? ` (${st.line})` : ''}`, kind: 'mrt', at: st.at })
+}
+
 // Railway tracks, for train noise: above ground they matter; underground ones are only mentioned. Points
 // closer than 5 m are dropped (tracks are long and smooth).
-const R = !want('rail') ? [] : await overpass('rail', `[out:json][timeout:120];way["railway"~"^(rail|subway|light_rail|monorail)$"](${box(1500)});out tags geom;`)
+// Lines being built count too (marked f): an elevated one will be heard once it opens.
+const R = !want('rail') ? [] : await overpass('rail', `[out:json][timeout:120];(way["railway"~"^(rail|subway|light_rail|monorail)$"](${box(1500)});way["railway"="construction"]["construction"~"^(rail|subway|light_rail|monorail)$"](${box(1500)}););out tags geom;`)
 const rail = []
 for (const w of R) {
   const t = w.tags || {}, pts = []
@@ -159,7 +184,23 @@ for (const w of R) {
   }
   if (pts.length < 2) continue
   const under = t.tunnel === 'yes' || t.location === 'underground' || parseInt(t.layer) < 0
-  rail.push({ ...(t.name ? { n: t.name.slice(0, 60) } : {}), ...(under ? { u: 1 } : {}), p: pts.map((p) => p.map(Math.round)).flat() })
+  rail.push({ ...(t.name ? { n: t.name.slice(0, 60) } : {}), ...(under ? { u: 1 } : {}), ...(t.railway === 'construction' ? { f: 1 } : {}), p: pts.map((p) => p.map(Math.round)).flat() })
+}
+
+// Roads, for traffic noise: expressways and the bigger streets near the site.
+const RD = !want('roads') ? [] : await overpass('roads', `[out:json][timeout:120];way["highway"~"^(motorway|trunk|primary|secondary|tertiary)$"](${box(900)});out tags geom;`)
+const roads = []
+for (const w of RD) {
+  const t = w.tags || {}, pts = []
+  for (const g of w.geometry || []) {
+    const p = toSite(g.lat, g.lon), q = pts.at(-1)
+    if (!q || Math.hypot(p[0] - q[0], p[1] - q[1]) >= 5) pts.push(p)
+  }
+  if (pts.length < 2) continue
+  const k = t.highway === 'motorway' ? 'expressway' : t.highway === 'tertiary' ? 'minor' : 'major'
+  const under = t.tunnel === 'yes' || parseInt(t.layer) < 0
+  if (under) continue
+  roads.push({ ...(t.name ? { n: t.name.slice(0, 60) } : {}), k, p: pts.map((p) => p.map(Math.round)).flat() })
 }
 
 // The estate's outline too: walks start anywhere on its edge (its own paths aren't mapped while it's being built).
@@ -171,8 +212,9 @@ const out = {
   ...(want('walk') ? { walk: simplifyWalk({ nodes, ways }) } : {}),
   ...(want('amenities') ? { amenities } : {}),
   ...(want('rail') ? { rail } : {}),
+  ...(want('roads') ? { roads } : {}),
 }
 writeFileSync(outFile, JSON.stringify(out))
 // The run is complete: the saved answers are no longer needed.
 rmSync(cacheDir, { recursive: true, force: true })
-console.log(`${out.buildings.length} buildings, ${out.walk.nodes.length / 2} path nodes in ${out.walk.ways.length} ways, ${out.amenities.length} amenities, ${(out.rail ?? []).length} railway tracks (${(out.rail ?? []).filter((r) => !r.u).length} above ground)${want('buildings') ? `; ${known} buildings have heights` : ''}`)
+console.log(`${(out.buildings ?? []).length} buildings, ${(out.roads ?? []).length} roads, ${out.walk.nodes.length / 2} path nodes in ${out.walk.ways.length} ways, ${out.amenities.length} amenities, ${(out.rail ?? []).length} railway tracks (${(out.rail ?? []).filter((r) => !r.u).length} above ground)${want('buildings') ? `; ${known} buildings have heights` : ''}`)
