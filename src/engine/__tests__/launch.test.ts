@@ -129,4 +129,9 @@ describe('sites shown before a launch', () => {
     // 180 2-room Flexi, 80 3-room, 170 4-room, 250 5-room, 30 3Gen (710 flats).
     expect(Object.values(t.flats).reduce((a, b) => a + b!, 0)).toBe(710)
   })
+  it('adds up the Sembawang flat mix', () => {
+    const t = LAUNCHES.find((l) => l.id === '2026-11')!.previews!.find((v) => v.town === 'Sembawang')!
+    // 330 2-room Flexi, 100 3-room, 460 4-room, 420 5-room (1,310 flats).
+    expect(Object.values(t.flats).reduce((a, b) => a + b!, 0)).toBe(1310)
+  })
 })

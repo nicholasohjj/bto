@@ -133,6 +133,12 @@ const NOVEMBER_2026: Launch = {
       note: '710 flats in five blocks mixing sold and rental flats; eating house, minimart, 4 shops, preschool, kidney dialysis centre',
       source: 'HDB Tengah town map, issued June 2026 (checked 2026-10-14)',
     },
+    {
+      town: 'Sembawang', where: 'Admiralty Lane and Sembawang Drive, by Jelutung Harbour Park, about 1 km from Sembawang MRT',
+      flats: { '2R': 330, '3R': 100, '4R': 460, '5R': 420 },
+      note: '1,310 flats, one block mixing sold and rental flats; eating house, supermarket, 5 shops, preschool',
+      source: 'HDB Sembawang town map, issued June 2026 (checked 2026-10-14)',
+    },
   ],
   projects: [],
 }
