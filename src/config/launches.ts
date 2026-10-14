@@ -151,6 +151,12 @@ const NOVEMBER_2026: Launch = {
       note: '1,640 flats, one block mixing sold and rental flats; eating house, 2 shops, 2 preschools, Residents’ Network Centre, Active Ageing Centre (Care), kidney dialysis centre',
       source: 'HDB Bedok town map, issued June 2026 (checked 2026-10-14)',
     },
+    {
+      town: 'Bedok', where: 'Bayshore Drive and Bayshore Walk, beside Bayshore MRT (Thomson–East Coast line), across Bayshore Drive from the other Bedok site and by East Coast Park',
+      flats: { '2R': 350, '4R': 510 },
+      note: '860 flats, one block mixing sold and rental flats; minimart, 2 shops, preschool',
+      source: 'HDB Bedok town map for this site, issued June 2026 (checked 2026-10-14)',
+    },
   ],
   projects: [],
 }
