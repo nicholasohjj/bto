@@ -26,3 +26,6 @@ dist-ssr
 
 # HDB brochures and launch material (source data for config/launches.ts; not ours to publish)
 brochures/
+
+# Overpass answers saved by an unfinished snapshot run (scripts/osm-snapshot.mjs)
+.osm-cache/

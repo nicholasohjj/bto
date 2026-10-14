@@ -1,11 +1,25 @@
 // Snapshot OpenStreetMap data around a Surroundings site: buildings (with heights), the walking
-// network, and amenities, converted to the site's metres. Run occasionally to refresh:
+// network, amenities and railway tracks, converted to the site's metres. Run occasionally to refresh:
 //   node scripts/osm-snapshot.mjs berlayar-rise
+//   node scripts/osm-snapshot.mjs berlayar-rise --only rail   (redo some parts, keep the rest of the snapshot)
+//   node scripts/osm-snapshot.mjs berlayar-rise --fresh       (ignore answers saved by an earlier, interrupted run)
+// Each Overpass answer is saved in .osm-cache/<site>/ as it arrives, so a run that dies on a busy server
+// picks up where it stopped. Parts: estate, buildings, walk, amenities, rail.
 // Data © OpenStreetMap contributors, ODbL; the page credits this.
-import { readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { simplifyWalk } from './simplify-walk.mjs'
 
-const id = process.argv[2] || 'berlayar-rise'
+const args = process.argv.slice(2), flag = (f) => { const i = args.indexOf(f); if (i < 0) return null; args.splice(i, 1); return args[i] && !args[i].startsWith('--') ? args.splice(i, 1)[0] : true }
+const fresh = !!flag('--fresh'), only = flag('--only')
+const id = args[0] || 'berlayar-rise'
+const PARTS = ['estate', 'buildings', 'walk', 'amenities', 'rail']
+const parts = typeof only === 'string' ? only.split(',') : PARTS
+for (const p of parts) if (!PARTS.includes(p)) throw new Error(`Unknown part "${p}" (parts: ${PARTS.join(', ')})`)
+const outFile = `src/surroundings/sites/${id}.osm.json`
+if (only && !existsSync(outFile)) throw new Error(`--only needs an existing ${outFile}; run without it first`)
+const cacheDir = `.osm-cache/${id}`
+if (fresh) rmSync(cacheDir, { recursive: true, force: true })
+mkdirSync(cacheDir, { recursive: true })
 const site = JSON.parse(readFileSync(`src/surroundings/sites/${id}.json`, 'utf8'))
 const g = site.geo
 if (!g) throw new Error(`${id}.json has no "geo" (lat0, lon0, cx, cy) to place it on the map`)
@@ -15,7 +29,16 @@ const C = `${g.lat0},${g.lon0}`
 /** A south,west,north,east box reaching `m` metres from the site centre (box queries are lighter than "around"). */
 const box = (m) => { const dl = m / KY, dn = m / KX; return `${(g.lat0 - dl).toFixed(5)},${(g.lon0 - dn).toFixed(5)},${(g.lat0 + dl).toFixed(5)},${(g.lon0 + dn).toFixed(5)}` }
 
-async function overpass(q) {
+/** An Overpass query, answered from .osm-cache when an earlier run already got it. */
+async function overpass(name, q) {
+  const f = `${cacheDir}/${name}.json`
+  if (existsSync(f)) { console.log(`${name}: saved answer from an earlier run`); return JSON.parse(readFileSync(f, 'utf8')) }
+  const els = await fetchOverpass(q)
+  writeFileSync(f, JSON.stringify(els))
+  console.log(`${name}: ${els.length} elements`)
+  return els
+}
+async function fetchOverpass(q) {
   // Public servers are often busy: try each a few times, waiting between attempts.
   for (let attempt = 0; attempt < 4; attempt++) {
     for (const url of ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter']) {
@@ -31,11 +54,15 @@ async function overpass(q) {
 const inside = (p, poly) => { let c = false; for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) if ((poly[i][1] > p[1]) !== (poly[j][1] > p[1]) && p[0] < (poly[j][0] - poly[i][0]) * (p[1] - poly[i][1]) / (poly[j][1] - poly[i][1]) + poly[i][0]) c = !c; return c }
 
 // The estate itself, which the brochure model covers (OSM has it only as a construction site).
-const [estateWay] = await overpass(`[out:json][timeout:60];way["landuse"="construction"]["name"="${site.name}"](around:600,${C});out geom;`)
-const estate = estateWay ? estateWay.geometry.map((p) => toSite(p.lat, p.lon)) : []
+const want = (p) => parts.includes(p)
+const old = only ? JSON.parse(readFileSync(outFile, 'utf8')) : {}
+const [estateWay] = !want('estate') && !want('buildings') ? [] : await overpass('estate', `[out:json][timeout:60];way["landuse"="construction"]["name"="${site.name}"](around:600,${C});out geom;`)
+const estate = estateWay ? estateWay.geometry.map((p) => toSite(p.lat, p.lon)) : old.estate ? [...old.estate, old.estate[0]] : []
 
+// The brochure's own blocks and buildings.
+const own = [...site.blocks.flatMap((b) => (b.masses ?? [{ poly: b.footprint }]).map((m) => m.poly)), ...site.buildings.filter((b) => b.poly).map((b) => b.poly)]
 // Buildings: height from "height", else storeys from "building:levels" (3 m each), else assumed 2 storeys.
-const B = await overpass(`[out:json][timeout:120];way["building"](${box(1300)});out tags geom;`)
+const B = want('buildings') ? await overpass('buildings', `[out:json][timeout:120];way["building"](${box(1300)});out tags geom;`) : []
 let known = 0
 const buildings = []
 for (const w of B) {
@@ -43,6 +70,8 @@ for (const w of B) {
   if (poly.length < 4) continue
   const c = poly.reduce((s, p) => [s[0] + p[0] / poly.length, s[1] + p[1] / poly.length], [0, 0])
   if (estate.length && inside(c, estate)) continue
+  // OpenStreetMap may already have the estate's own blocks or carpark: the brochure model has them.
+  if (own.some((o) => inside(c, o) || poly.some((p) => inside(p, o)))) continue
   const t = w.tags || {}, h = parseFloat(t.height), lv = parseFloat(t['building:levels'])
   const height = isFinite(h) && h > 0 ? h : isFinite(lv) && lv > 0 ? lv * 3 : 6
   const has = (isFinite(h) && h > 0) || (isFinite(lv) && lv > 0)
@@ -52,7 +81,7 @@ for (const w of B) {
 }
 
 // Walking network: footpaths and streets (not expressways), with shared nodes joined.
-const W = await overpass(`[out:json][timeout:180];way["highway"~"^(footway|path|pedestrian|steps|living_street|residential|service|unclassified|tertiary|tertiary_link|secondary|secondary_link|primary|primary_link|trunk|trunk_link|cycleway|corridor|track)$"]["access"!~"^(private|no)$"]["foot"!="no"](${box(2600)});out geom;`)
+const W = !want('walk') ? [] : await overpass('walk', `[out:json][timeout:180];way["highway"~"^(footway|path|pedestrian|steps|living_street|residential|service|unclassified|tertiary|tertiary_link|secondary|secondary_link|primary|primary_link|trunk|trunk_link|cycleway|corridor|track)$"]["access"!~"^(private|no)$"]["foot"!="no"](${box(2600)});out geom;`)
 const idx = new Map(), nodes = [], ways = []
 for (const w of W) {
   const ids = w.nodes || [], geom = w.geometry || []
@@ -66,7 +95,7 @@ for (const w of W) {
 }
 
 // Amenities.
-const A = await overpass(`[out:json][timeout:120];(
+const A = !want('amenities') ? [] : await overpass('amenities', `[out:json][timeout:120];(
   node["railway"="subway_entrance"](${box(2600)});
   nwr["railway"="station"]["station"="subway"]["name"](${box(3000)});
   nwr["amenity"="school"]["name"](${box(2600)});
@@ -118,7 +147,32 @@ for (const e of A) {
   amenities.push({ name: name.slice(0, 70), kind, at, ...(sub ? { sub } : {}) })
 }
 
+// Railway tracks, for train noise: above ground they matter; underground ones are only mentioned. Points
+// closer than 5 m are dropped (tracks are long and smooth).
+const R = !want('rail') ? [] : await overpass('rail', `[out:json][timeout:120];way["railway"~"^(rail|subway|light_rail|monorail)$"](${box(1500)});out tags geom;`)
+const rail = []
+for (const w of R) {
+  const t = w.tags || {}, pts = []
+  for (const g of w.geometry || []) {
+    const p = toSite(g.lat, g.lon), q = pts.at(-1)
+    if (!q || Math.hypot(p[0] - q[0], p[1] - q[1]) >= 5) pts.push(p)
+  }
+  if (pts.length < 2) continue
+  const under = t.tunnel === 'yes' || t.location === 'underground' || parseInt(t.layer) < 0
+  rail.push({ ...(t.name ? { n: t.name.slice(0, 60) } : {}), ...(under ? { u: 1 } : {}), p: pts.map((p) => p.map(Math.round)).flat() })
+}
+
 // The estate's outline too: walks start anywhere on its edge (its own paths aren't mapped while it's being built).
-const out = { fetched: new Date().toISOString().slice(0, 10), attribution: '© OpenStreetMap contributors (ODbL)', ...(estate.length ? { estate: estate.slice(0, -1) } : {}), buildings, walk: simplifyWalk({ nodes, ways }), amenities }
-writeFileSync(`src/surroundings/sites/${id}.osm.json`, JSON.stringify(out))
-console.log(`${buildings.length} buildings (${known} with heights), ${nodes.length / 2} path nodes in ${ways.length} ways, ${amenities.length} amenities`)
+const out = {
+  // A partial run keeps the date of the full snapshot it updates.
+  ...old, fetched: old.fetched ?? new Date().toISOString().slice(0, 10), attribution: '© OpenStreetMap contributors (ODbL)',
+  ...(want('estate') && estate.length ? { estate: estate.slice(0, -1) } : {}),
+  ...(want('buildings') ? { buildings } : {}),
+  ...(want('walk') ? { walk: simplifyWalk({ nodes, ways }) } : {}),
+  ...(want('amenities') ? { amenities } : {}),
+  ...(want('rail') ? { rail } : {}),
+}
+writeFileSync(outFile, JSON.stringify(out))
+// The run is complete: the saved answers are no longer needed.
+rmSync(cacheDir, { recursive: true, force: true })
+console.log(`${out.buildings.length} buildings, ${out.walk.nodes.length / 2} path nodes in ${out.walk.ways.length} ways, ${out.amenities.length} amenities, ${(out.rail ?? []).length} railway tracks (${(out.rail ?? []).filter((r) => !r.u).length} above ground)${want('buildings') ? `; ${known} buildings have heights` : ''}`)

@@ -17,6 +17,12 @@ export interface Block { id: string; storeys: number; footprint: Pt[]; masses?: 
 export const blockMasses = (b: Block): Mass[] => b.masses ?? [{ storeys: b.storeys, poly: b.footprint }]
 /** Lowest and highest storey of a unit stack. */
 export const unitStoreys = (b: Block, u: Unit): [number, number] => [u.from ?? 2, u.to ?? b.storeys]
+/** The unit stack whose window is nearest a point on a block, preferring stacks that reach this storey (blocks step down). */
+export function unitAt(b: Block, at: Pt, storey: number): Unit {
+  const reach = b.units.filter((u) => { const [lo, hi] = unitStoreys(b, u); return storey >= lo && storey <= hi })
+  const d = (u: Unit) => Math.hypot(u.win[0] - at[0], u.win[1] - at[1])
+  return (reach.length ? reach : b.units).reduce((best, u) => d(u) < d(best) ? u : best)
+}
 /** "18 storeys", or "24–35 storeys" for a block that steps down. */
 export function storeysLabel(b: Block) {
   const lo = Math.min(...blockMasses(b).map((m) => m.storeys))
@@ -45,6 +51,8 @@ export interface Osm {
   buildings: { h: number; a?: number; n?: string; p: number[] }[]
   walk: { nodes: number[]; ways: number[][] }
   amenities: Amenity[]
+  /** Railway tracks: n name, u underground, p x,y pairs. */
+  rail?: { n?: string; u?: 1; p: number[] }[]
 }
 
 /* map placement */
@@ -212,6 +220,28 @@ export function roadDistances(site: Site, u: UnitPos): RoadDist[] {
     const toward: Pt = [ld.at[0] - u.eye[0], ld.at[1] - u.eye[1]], L = Math.hypot(...toward) || 1
     return { name: r.name, kind: r.kind, dist: Math.round(Math.hypot(flat, u.eye[2])), faces: (toward[0] * u.n[0] + toward[1] * u.n[1]) / L > 0.3 }
   }).sort((a, b) => a.dist - b.dist)
+}
+
+export interface RailDist { name: string; underground: boolean; dist: number; faces: boolean }
+/**
+ * Each railway line near the unit, nearest point first. Above ground: from the window, counting height, and whether
+ * the window faces it (trains are heard from a few hundred metres). Underground: flat distance, for a mention only.
+ */
+export function railDistances(u: UnitPos, osm?: Osm | null, within = 400): RailDist[] {
+  const best = new Map<string, RailDist>()
+  const eye: Pt = [u.eye[0], u.eye[1]]
+  for (const r of osm?.rail ?? []) {
+    const line: Pt[] = []
+    for (let i = 0; i < r.p.length; i += 2) line.push([r.p[i], r.p[i + 1]])
+    const ld = lineDist(eye, line), under = !!r.u
+    if (ld.d > within) continue
+    const toward: Pt = [ld.at[0] - eye[0], ld.at[1] - eye[1]], L = Math.hypot(...toward) || 1
+    const d: RailDist = { name: r.n ?? 'A railway line', underground: under, dist: Math.round(under ? ld.d : Math.hypot(ld.d, u.eye[2])), faces: !under && (toward[0] * u.n[0] + toward[1] * u.n[1]) / L > 0.3 }
+    const key = d.name + (under ? '|u' : '')
+    const old = best.get(key)
+    if (!old || d.dist < old.dist) best.set(key, d)
+  }
+  return [...best.values()].sort((a, b) => a.dist - b.dist)
 }
 
 export interface AmenityDist { a: Amenity; dist: number; walkMin: number }

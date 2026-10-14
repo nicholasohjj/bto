@@ -139,14 +139,25 @@ Around the estate, the page uses an OpenStreetMap snapshot (© OpenStreetMap con
 existing buildings go into the 3D model and the sun and view checks (a building with no height is taken
 as 2 storeys), walking times follow real footpaths and streets (the estate's own paths aren't mapped while it's being built, so the walk across it is a straight line plus 30%), and amenities such as MRT exits, schools
 and clinics are added to the brochure's list. Primary schools are listed within 1 km and 1–2 km; for
-P1 registration, people still need to check distances on OneMap. To refresh a snapshot:
+P1 registration, people still need to check distances on OneMap. Railway tracks are in the snapshot
+too: above-ground track within 400 m shows under "Roads and noise" (distance from the window, counting
+height); underground lines are only mentioned. OpenStreetMap buildings that overlap the brochure's own
+blocks or buildings are dropped, so a block isn't counted twice. To refresh a snapshot:
 
 ```
 node scripts/osm-snapshot.mjs berlayar-rise
 node scripts/osm-snapshot.mjs kebun-baru-breeze
 node scripts/osm-snapshot.mjs kebun-baru-ridge
 node scripts/osm-snapshot.mjs lakeview-cascadia
+node scripts/osm-snapshot.mjs lakeview-cascadia --only rail   # redo some parts (estate, buildings, walk, amenities, rail)
 ```
+
+Overpass is often busy: each answer is saved in `.osm-cache/<site>/` (git-ignored) as it arrives, so
+re-running after a failure carries on from there (`--fresh` starts over).
+
+Units can be picked from the dropdowns or by clicking a block, in the 3D view (at the clicked height) or
+on the map (at the current storey); the stack whose window is nearest the click is chosen. The comparison
+takes up to three units from any of the projects, each worked out with its own surroundings.
 
 `sites.test.ts` checks every site: each window on the outline of a block part that reaches its top storey, facing out, a Flat Studio layout
 for each unit type, and storeys within each stack.

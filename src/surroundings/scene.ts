@@ -16,6 +16,8 @@ export interface SceneApi {
   onHeading(fn: (deg: number) => void): void
   /** The distance line under each place's label (e.g. walking time); straight-line distance otherwise. */
   labelText(fn: (a: Amenity) => string): void
+  /** Called when someone clicks a block (not a drag): which block, where on the ground plan, and at what height. */
+  onPick(fn: (block: string, at: Pt, heightM: number) => void): void
   reset(): void
   resize(): void
 }
@@ -252,6 +254,30 @@ export function createScene(canvas: HTMLCanvasElement): SceneApi | null {
   })
   canvas.addEventListener('pointerup', () => { drag = null })
 
+  // Clicking a block picks a unit there; a press that moves (orbiting) or lingers doesn't count.
+  let pickFn: ((block: string, at: Pt, heightM: number) => void) | null = null, press: { x: number; y: number; t: number } | null = null
+  const ray = new THREE.Raycaster(), ptr = new THREE.Vector2()
+  const blockAt = (e: PointerEvent) => {
+    const r = canvas.getBoundingClientRect()
+    ptr.set((e.clientX - r.left) / r.width * 2 - 1, -(e.clientY - r.top) / r.height * 2 + 1)
+    ray.setFromCamera(ptr, camera)
+    return ray.intersectObjects(world.children.filter((o) => o.userData.block), false)[0] ?? null
+  }
+  canvas.addEventListener('pointerdown', (e) => { press = { x: e.clientX, y: e.clientY, t: performance.now() } })
+  canvas.addEventListener('pointerup', (e) => {
+    const p = press; press = null
+    if (winMode || !pickFn || !p || Math.hypot(e.clientX - p.x, e.clientY - p.y) > 6 || performance.now() - p.t > 500) return
+    const hit = blockAt(e)
+    if (hit) pickFn(hit.object.userData.block, [hit.point.x + centre[0], hit.point.z + centre[1]], hit.point.y)
+  })
+  // A pointer over a block shows it can be clicked (checked at most once a frame).
+  let hoverQueued = false
+  canvas.addEventListener('pointermove', (e) => {
+    if (winMode || press || hoverQueued || e.pointerType !== 'mouse') return
+    hoverQueued = true
+    requestAnimationFrame(() => { hoverQueued = false; canvas.style.cursor = pickFn && blockAt(e) ? 'pointer' : '' })
+  })
+
   let heading: ((deg: number) => void) | null = null
   const fwd = new THREE.Vector3()
   function frame() {
@@ -299,6 +325,7 @@ export function createScene(canvas: HTMLCanvasElement): SceneApi | null {
     reset,
     onHeading(fn) { heading = fn },
     labelText(fn) { labelFn = fn; buildLabels() },
+    onPick(fn) { pickFn = fn },
     resize() {
       const w = canvas.clientWidth, h = canvas.clientHeight
       if (!w || !h) return

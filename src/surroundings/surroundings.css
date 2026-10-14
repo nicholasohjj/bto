@@ -65,6 +65,8 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 .cmp th,.cmp td{padding:5px 4px;border-bottom:1px dotted var(--line);text-align:right;vertical-align:top}
 .cmp th:first-child,.cmp td:first-child{text-align:left;color:var(--ink2);font-weight:400}
 .cmp td.best{color:var(--good);font-weight:600}
+.cmp .proj{font-weight:400;color:var(--ink2)}
+.note.tip{margin-top:6px}
 .am{display:grid;grid-template-columns:18px minmax(0,1fr) auto;gap:6px;align-items:baseline;padding:4px 0;border-bottom:1px dotted var(--line)}
 button.am{width:100%;background:none;border:0;border-bottom:1px dotted var(--line);border-radius:0;text-align:left;padding:5px 2px;min-height:32px}
 .am i{font-style:normal;font-weight:700;font-size:10px;width:18px;height:18px;border-radius:50%;display:grid;place-items:center;color:#fff}

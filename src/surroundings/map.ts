@@ -1,7 +1,7 @@
 /** The real map (OneMap or OpenStreetMap) with the estate, your unit, walking rings, amenities and routes. */
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import { blockMasses, ellipsePoly, storeysLabel, toLatLng, type Amenity, type Pt, type Site, type UnitPos } from './analysis'
+import { blockMasses, ellipsePoly, fromLatLng, toLatLng, type Amenity, type Pt, type Site, type UnitPos } from './analysis'
 
 export const KIND: Record<string, { c: string; l: string; n: string }> = {
   mrt: { c: '#d22f45', l: 'M', n: 'MRT' }, bus: { c: '#7a5aa6', l: 'B', n: 'Bus interchange' }, school: { c: '#2f6db5', l: 'S', n: 'School' },
@@ -11,7 +11,8 @@ export const KIND: Record<string, { c: string; l: string; n: string }> = {
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!)
 
 export interface MapAmenity { a: Amenity; label: string }
-export function createMap(el: HTMLElement, onPick: (a: Amenity) => void) {
+/** `onPick`: a place was clicked; `onBlock`: a block was clicked, at this point (site metres). */
+export function createMap(el: HTMLElement, onPick: (a: Amenity) => void, onBlock: (block: string, at: Pt) => void) {
   const map = L.map(el, { zoomControl: true, attributionControl: true, minZoom: 12, maxZoom: 19 })
   const onemap = L.tileLayer('https://www.onemap.gov.sg/maps/tiles/Default/{z}/{x}/{y}.png', {
     minZoom: 11, maxZoom: 19,
@@ -41,7 +42,8 @@ export function createMap(el: HTMLElement, onPick: (a: Amenity) => void) {
     if (!site) return
     for (const b of site.blocks) {
       const mine = u?.block.id === b.id
-      L.polygon(blockMasses(b).map((m) => poly(m.poly)), { color: mine ? '#d98c00' : '#6b6760', weight: mine ? 2.5 : 1, fillColor: mine ? '#f6e7b8' : '#efece6', fillOpacity: 0.95 }).bindPopup(`Block ${b.id}, ${storeysLabel(b)}`)
+      L.polygon(blockMasses(b).map((m) => poly(m.poly)), { color: mine ? '#d98c00' : '#6b6760', weight: mine ? 2.5 : 1, fillColor: mine ? '#f6e7b8' : '#efece6', fillOpacity: 0.95 })
+        .on('click', (e: L.LeafletMouseEvent) => onBlock(b.id, fromLatLng(site!, e.latlng.lat, e.latlng.lng)))
         .bindTooltip(b.id, { permanent: true, direction: 'center', className: 'blk' }).addTo(unitL)
     }
     if (!u) return

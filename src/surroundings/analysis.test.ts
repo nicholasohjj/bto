@@ -95,3 +95,34 @@ describe('with OpenStreetMap', async () => {
     expect(inEstate.length).toBe(0)
   })
 })
+
+describe('trains', () => {
+  const u = unitPos(S, { block: '200B', unit: '129', storey: 10 })!
+  const [x, y] = u.eye, n = u.n
+  // A straight track 60 m in front of the window, running across its view, and one underground behind the block.
+  const across = (d: number) => [x + n[0] * d - n[1] * 300, y + n[1] * d + n[0] * 300, x + n[0] * d + n[1] * 300, y + n[1] * d - n[0] * 300]
+  const osm = { rail: [{ n: 'Test Line', p: across(60) }, { n: 'Deep Line', u: 1 as const, p: across(-80) }, { n: 'Far Line', p: across(900) }] } as unknown as import('./analysis').Osm
+  it('measures above-ground track from the window, counting height, and says whether the window faces it', async () => {
+    const { railDistances } = await import('./analysis')
+    const r = railDistances(u, osm)
+    const t = r.find((x) => x.name === 'Test Line')!
+    expect(t.underground).toBe(false); expect(t.faces).toBe(true)
+    expect(t.dist).toBe(Math.round(Math.hypot(60, u.eye[2])))
+    expect(r.find((x) => x.name === 'Deep Line')).toMatchObject({ underground: true, faces: false, dist: 80 })
+    expect(r.some((x) => x.name === 'Far Line')).toBe(false)
+  })
+})
+
+describe('picking a unit by clicking a block', async () => {
+  const { unitAt } = await import('./analysis')
+  it('takes the stack whose window is nearest the click', () => {
+    const b = S.blocks[0], u = b.units[3]
+    expect(unitAt(b, [u.win[0] + u.n[0], u.win[1] + u.n[1]], 10).no).toBe(u.no)
+  })
+  it('skips stacks that stop below the clicked storey', async () => {
+    const lv = (await import('./sites/lakeview-cascadia.json')).default as unknown as Site
+    const b = lv.blocks.find((x) => x.id === '325A')!, low = b.units.find((x) => x.no === '305')!
+    expect(unitAt(b, low.win, 10).no).toBe('305')
+    expect(unitAt(b, low.win, 30).no).not.toBe('305')
+  })
+})

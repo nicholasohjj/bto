@@ -1,5 +1,5 @@
 /** Surroundings page: pick a unit, see its view, sun, roads and amenities, and compare units. */
-import { KEY_DAYS, obstacles, roadDistances, storeysLabel, sunDay, unitPos, unitStoreys, view, yearSun, type Amenity, type Osm, type Pick, type Pt, type Site, type UnitPos } from './analysis'
+import { KEY_DAYS, obstacles, railDistances, roadDistances, storeysLabel, sunDay, unitAt, unitPos, unitStoreys, view, yearSun, type Amenity, type Osm, type Pick, type Pt, type Site, type UnitPos } from './analysis'
 import { createMap, KIND } from './map'
 import { createScene } from './scene'
 import berlayar from './sites/berlayar-rise.json'
@@ -34,20 +34,36 @@ function toast(m: string) { const t = $('#toast'); t.textContent = m; t.classLis
 
 /* state, from the address, then this browser, then defaults */
 const q = new URLSearchParams(location.search)
-let saved: { site?: string; pick?: Pick; compare?: Pick[] } = {}
+/** A unit in the comparison, from any project. */
+interface CmpPick extends Pick { site: string }
+let saved: { site?: string; pick?: Pick; compare?: (Pick & { site?: string })[] } = {}
 try { saved = JSON.parse(localStorage.getItem('surroundings') || '{}') } catch { /* fresh start */ }
 let siteId = q.get('site') && SITES[q.get('site')!] ? q.get('site')! : saved.site && SITES[saved.site] ? saved.site : 'berlayar-rise'
 let site = SITES[siteId]
 const first = site.blocks[0]
 let pick: Pick = q.get('block') ? { block: q.get('block')!, unit: q.get('unit') || '', storey: +(q.get('storey') || 10) } : saved.pick ?? { block: first.id, unit: first.units[0].no, storey: Math.round(first.storeys / 2) }
-let compare: Pick[] = saved.compare ?? []
+// Entries saved before comparisons spanned projects are from the project that was open.
+let compare: CmpPick[] = (saved.compare ?? []).map((p) => ({ ...p, site: p.site ?? saved.site ?? siteId })).filter((p) => SITES[p.site])
 let future = 40, winView = false
 const today = new Date()
 const dayText = (d: { label: string }) => d.label === 'Today' ? 'today' : 'on the ' + d.label
 const DAYS = [{ label: 'Today', m: today.getMonth() + 1, d: today.getDate() }, ...KEY_DAYS]
 let dayIdx = 0, time = 15
-let osm: Osm | null = null, graph: Graph | null = null
-const runs = new Map<string, ReturnType<typeof fromStarts>>()
+/** A project's surroundings: its OpenStreetMap snapshot and walking network (loaded on demand), and walks worked out so far. */
+interface Ctx { id: string; site: Site; osm: Osm | null; graph: Graph | null; runs: Map<string, ReturnType<typeof fromStarts>>; loading?: Promise<Ctx> }
+const ctxs = new Map<string, Ctx>()
+function ctxOf(id: string): Ctx {
+  let c = ctxs.get(id)
+  if (!c) { c = { id, site: SITES[id], osm: null, graph: null, runs: new Map() }; ctxs.set(id, c) }
+  return c
+}
+function loadCtx(id: string): Promise<Ctx> {
+  const c = ctxOf(id)
+  c.loading ??= OSM[id]().then((o) => { c.osm = o; c.graph = buildGraph(o.walk); return c }).catch((e) => { c.loading = undefined; throw e })
+  return c.loading
+}
+/** The open project. */
+let cx = ctxOf(siteId)
 
 function persist() {
   try { localStorage.setItem('surroundings', JSON.stringify({ site: siteId, pick, compare })) } catch { /* private mode */ }
@@ -58,7 +74,7 @@ function persist() {
 
 /* views */
 const scene = createScene($('#gl') as HTMLCanvasElement)
-const map = createMap($('#map'), (a) => showRoute(a))
+const map = createMap($('#map'), (a) => showRoute(a), (b, at) => pickAt(b, at))
 if (!scene) $('#hint3').textContent = 'The 3D view needs WebGL. The Map tab and results still work.'
 
 function current(): UnitPos | null {
@@ -68,30 +84,41 @@ function current(): UnitPos | null {
   return unitPos(site, pick)
 }
 
+/** Pick the unit whose window is nearest a clicked point on a block, at the clicked height (3D) or the current storey (map). */
+function pickAt(blockId: string, at: Pt, heightM?: number) {
+  const b = site.blocks.find((x) => x.id === blockId)
+  if (!b) return
+  const storey = heightM == null ? pick.storey : Math.max(2, Math.floor(heightM / site.storeyM) + 1)
+  const u = unitAt(b, at, storey)
+  pick = { block: b.id, unit: u.no, storey }
+  update()
+  toast(`Picked Block ${b.id} #${String(pick.storey).padStart(2, '0')}-${u.no}`)
+}
+
 /* places and walking */
 const centre = (u: UnitPos): Pt => { const fp = u.block.footprint; return [fp.reduce((s, p) => s + p[0], 0) / fp.length, fp.reduce((s, p) => s + p[1], 0) / fp.length] }
 /** In-estate places from the brochure, plus OpenStreetMap's once loaded (the brochure's town-map list until then). */
-const places = (): Amenity[] => osm ? [...site.amenities.filter((a) => a.local), ...osm.amenities] : site.amenities
+const places = (c: Ctx = cx): Amenity[] => c.osm ? [...c.site.amenities.filter((a) => a.local), ...c.osm.amenities] : c.site.amenities
 interface Place { a: Amenity; straight: number; route: Route | null; dist: number; walkMin: number }
-function walkTo(u: UnitPos, a: Amenity): Place {
-  const c = centre(u), straight = Math.hypot(a.at[0] - c[0], a.at[1] - c[1])
+function walkTo(u: UnitPos, a: Amenity, c: Ctx = cx): Place {
+  const o = centre(u), straight = Math.hypot(a.at[0] - o[0], a.at[1] - o[1])
   let route: Route | null = null
-  if (graph && !a.local) {
-    let run = runs.get(u.block.id)
+  if (c.graph && !a.local) {
+    let run = c.runs.get(u.block.id)
     if (!run) {
-      const estate = osm?.estate ?? hull([...site.blocks.flatMap((b) => b.footprint), ...site.buildings.flatMap((b) => b.poly ?? [])])
-      run = fromStarts(graph, estateStarts(graph, c, estate)); runs.set(u.block.id, run)
+      const estate = c.osm?.estate ?? hull([...c.site.blocks.flatMap((b) => b.footprint), ...c.site.buildings.flatMap((b) => b.poly ?? [])])
+      run = fromStarts(c.graph, estateStarts(c.graph, o, estate)); c.runs.set(u.block.id, run)
     }
-    route = routeTo(graph, run, c, a.at)
+    route = routeTo(c.graph, run, o, a.at)
   }
   const dist = route ? route.dist : Math.round(straight * 1.3)
   return { a, straight: Math.round(straight), route, dist, walkMin: Math.max(1, Math.round(dist / 80)) }
 }
 /** Nearest of a kind by walking distance (checks the 8 closest in a straight line). */
-function nearest(u: UnitPos, kind: string, filter: (a: Amenity) => boolean = () => true): Place | null {
+function nearest(u: UnitPos, kind: string, filter: (a: Amenity) => boolean = () => true, cc: Ctx = cx): Place | null {
   const c = centre(u)
-  const cands = places().filter((a) => a.kind === kind && filter(a)).sort((p, q2) => Math.hypot(p.at[0] - c[0], p.at[1] - c[1]) - Math.hypot(q2.at[0] - c[0], q2.at[1] - c[1])).slice(0, 8)
-  return cands.map((a) => walkTo(u, a)).sort((p, q2) => p.dist - q2.dist)[0] ?? null
+  const cands = places(cc).filter((a) => a.kind === kind && filter(a)).sort((p, q2) => Math.hypot(p.at[0] - c[0], p.at[1] - c[1]) - Math.hypot(q2.at[0] - c[0], q2.at[1] - c[1])).slice(0, 8)
+  return cands.map((a) => walkTo(u, a, cc)).sort((p, q2) => p.dist - q2.dist)[0] ?? null
 }
 function showRoute(a: Amenity) {
   const u = current()
@@ -112,12 +139,14 @@ function fillPickers() {
   $<HTMLSelectElement>('#day').innerHTML = DAYS.map((d, i) => `<option value="${i}"${i === dayIdx ? ' selected' : ''}>${d.label}</option>`).join('')
 }
 
-/* Work that only changes with the block, reserved-land height or loaded data is redone only then. */
-let obsCache: { key: string; obs: ReturnType<typeof obstacles> } | null = null
-const getObstacles = () => {
-  const key = `${siteId}|${future}|${osm ? 1 : 0}`
-  if (obsCache?.key !== key) obsCache = { key, obs: obstacles(site, future, osm) }
-  return obsCache.obs
+/* Work that only changes with the project, reserved-land height or loaded data is redone only then. */
+const obsCache = new Map<string, { key: string; obs: ReturnType<typeof obstacles> }>()
+const obsKey = (c: Ctx) => `${c.id}|${future}|${c.osm ? 1 : 0}`
+const getObstacles = (c: Ctx = cx) => {
+  const key = obsKey(c)
+  let o = obsCache.get(c.id)
+  if (o?.key !== key) { o = { key, obs: obstacles(c.site, future, c.osm) }; obsCache.set(c.id, o) }
+  return o.obs
 }
 let shown = { future: -1, places: '' }
 const walkLabel = (u: UnitPos, a: Amenity) => { const p = walkTo(u, a); return `${km(p.dist)} · ${p.walkMin} min walk${p.route ? '' : ' (estimate)'}` }
@@ -141,7 +170,7 @@ function update() {
   scene?.setUnit(u); scene?.setSun(y, d.m, d.d, time)
   map.setUnit(u)
   if (shown.future !== future) { shown.future = future; scene?.setFuture(future); map.setFuture(future) }
-  const pk = `${siteId}|${u.block.id}|${graph ? 1 : 0}`
+  const pk = `${siteId}|${u.block.id}|${cx.graph ? 1 : 0}`
   if (shown.places !== pk) {
     shown.places = pk
     map.setAmenities(places().map((a) => ({ a, label: walkLabel(u, a) })))
@@ -173,7 +202,7 @@ function sunBar(day: ReturnType<typeof sunDay>) {
 function renderResults(u: UnitPos, obs: ReturnType<typeof obstacles>) {
   const d = DAYS[dayIdx], y = today.getFullYear(), day = sunDay(site, u, y, d.m, d.d, obs), yr = yearSun(site, u, obs, y), v = view(u, obs), roads = roadDistances(site, u)
   const westy = yr.avgAfternoon >= 1.5, bright = yr.avgSun >= 2
-  const guessed = osm ? osm.buildings.filter((b) => b.a).length : 0
+  const osm = cx.osm, graph = cx.graph, guessed = osm ? osm.buildings.filter((b) => b.a).length : 0
   let h = `<div class="sec"><h3>Block ${u.block.id}, #${String(u.storey).padStart(2, '0')}-${u.unit.no}</h3>
     <div class="kv"><span>Flat type</span><b>${TYPE[u.unit.type] ?? u.unit.type}</b></div>
     <div class="kv"><span>Height above ground</span><b>about ${Math.round(u.floorZ)} m</b></div>
@@ -187,8 +216,10 @@ function renderResults(u: UnitPos, obs: ReturnType<typeof obstacles>) {
     <div class="kv"><span>Clear for 100 m or more</span><b>${v.openPct}%</b></div>
     <div class="kv"><span>Nearest building in front</span><b>${v.nearest ? `${esc(v.nearest.name.replace(/:.*/, ''))}, ${Math.round(v.nearest.dist)} m` : 'none within 1 km'}</b></div>
     <p class="note">Looking out across 140° at eye level. Only buildings taller than your floor block the view.${future > 0 && site.zones.some((z) => z.kind === 'future') ? ` Reserved land is assumed to get ${future}-storey blocks.` : ''} ${osm ? `Buildings around the estate are from OpenStreetMap (${guessed} of ${osm.buildings.length} have no height there and are taken as 2 storeys).` : '<b>Loading the buildings around the estate…</b>'}</p></div>`
+  const rail = railDistances(u, osm), trains = rail.filter((r) => !r.underground), under = [...new Set([...rail.filter((r) => r.underground && r.dist < 250).map((r) => r.name), ...site.rail.filter((r) => r.underground).map((r) => r.name)].map((n) => n.replace(/ \(.*\)$/, '')))]
   h += `<div class="sec"><h3>Roads and noise</h3>${roads.slice(0, 4).map((r) => `<div class="kv"><span>${esc(r.name)}${r.faces ? ' <span class="pill warn">faces it</span>' : ''}</span><b>${r.dist} m</b></div>`).join('')}
-    <p class="note">Distance from the window to the road's edge, counting height. ${roads[0].dist < 80 && roads[0].faces ? 'Close to a road and facing it, so expect traffic noise; check at different times.' : 'Visit at peak hour to judge noise.'}${site.rail.filter((r) => r.underground).map((r) => ` The ${esc(r.name.replace(/ \(.*\)$/, ''))} runs underground nearby.`).join('')}</p></div>`
+    ${trains.slice(0, 2).map((r) => `<div class="kv"><span>${esc(r.name)} (train tracks above ground)${r.faces ? ' <span class="pill warn">faces it</span>' : ''}</span><b>${r.dist} m</b></div>`).join('')}
+    <p class="note">Distance from the window to the road's edge${trains.length ? ' or the track' : ''}, counting height. ${roads[0].dist < 80 && roads[0].faces ? 'Close to a road and facing it, so expect traffic noise; check at different times.' : 'Visit at peak hour to judge noise.'}${trains.some((r) => r.dist < 150 || (r.faces && r.dist < 300)) ? ' Trains on the track nearby can be heard, more so with windows facing it; visit when trains are running, including early morning and late at night.' : ''}${under.map((n) => ` The ${esc(n)} runs underground nearby, so it adds no train noise.`).join('')}${osm ? '' : ' Train tracks show once the surroundings load.'}</p></div>`
   const kinds: [string, string][] = [['mrt', 'MRT'], ['bus', 'Bus interchange'], ['shops', 'Shops and food'], ['park', 'Park'], ['community', 'Community'], ['health', 'Clinic or hospital']]
   const near = kinds.map(([k]) => nearest(u, k)).filter((x): x is Place => !!x)
   h += `<div class="sec"><h3>Nearby</h3>${near.map((x) => `<button type="button" class="am link" data-am="${esc(x.a.name)}" title="Show the walking route on the map"><i aria-hidden="true" style="background:${KIND[x.a.kind].c}">${esc(KIND[x.a.kind].l)}</i><span>${esc(x.a.name)}</span><b>${km(x.dist)} · ${x.walkMin} min</b></button>`).join('')}
@@ -197,29 +228,34 @@ function renderResults(u: UnitPos, obs: ReturnType<typeof obstacles>) {
   const c = centre(u), prim = places().filter((a) => a.kind === 'school' && (a.sub === 'primary' || /primary/i.test(a.name))).map((a) => ({ a, d: Math.round(Math.hypot(a.at[0] - c[0], a.at[1] - c[1])) })).filter((x) => x.d <= 2000).sort((p, q2) => p.d - q2.d)
   h += `<div class="sec"><h3>Primary schools within 2 km</h3>${prim.length ? prim.map((x) => `<button type="button" class="am link" data-am="${esc(x.a.name)}" title="Show the walking route on the map"><i aria-hidden="true" style="background:${KIND.school.c}">S</i><span>${esc(x.a.name)}</span><b>${x.d <= 1000 ? 'within 1 km' : '1–2 km'} · ${km(x.d)}</b></button>`).join('') : '<p class="note" style="margin:0">None found.</p>'}
     <p class="note">Primary 1 registration gives priority to homes within 1 km and 2 km of a school. These are rough straight-line distances to the school's map point; the official distance is measured by SLA from your address (OneMap's school query).</p></div>`
-  h += compareHtml(obs)
+  h += compareHtml()
   h += `<div class="sec"><p class="note" style="margin:0">Estate: ${esc(site.source)}. ${osm ? `Surroundings: ${esc(osm.attribution)}, snapshot of ${osm.fetched}.` : ''} Blocks are placed to within a few metres; storeys are taken as ${site.storeyM} m. Heights of future buildings on reserved land are not known. A planning aid, not a survey.</p></div>`
   $('#results').innerHTML = h
 }
 
 const cmpCache = new Map<string, { sun: number; pm: number; far: number; road: number; mrt: number }>()
-function compareHtml(obs: ReturnType<typeof obstacles>) {
-  const rows = compare.map((p) => unitPos(site, p)).filter((u): u is UnitPos => !!u)
-  if (!rows.length) return `<div class="sec"><h3>Compare units</h3><p class="note" style="margin:0">Add up to 3 units to compare their sun, view and distances side by side.</p></div>`
-  const y = today.getFullYear(), data = rows.map((u) => {
-    const key = `${obsCache?.key}|${graph ? 1 : 0}|${u.block.id}|${u.unit.no}|${u.storey}`
+function compareHtml() {
+  const rows = compare.map((p) => ({ c: ctxOf(p.site), u: unitPos(SITES[p.site], p) })).filter((r): r is { c: Ctx; u: UnitPos } => !!r.u)
+  if (!rows.length) return `<div class="sec"><h3>Compare units</h3><p class="note" style="margin:0">Add up to 3 units, from any of the projects, to compare their sun, view and distances side by side.</p></div>`
+  // Units from other projects need those projects' surroundings: load them, then come back.
+  const waiting = rows.filter((r) => !r.c.osm)
+  for (const r of waiting) if (r.c !== cx) loadCtx(r.c.id).then(updateSoon, () => toast(`Could not load the surroundings of ${r.c.site.name}`))
+  if (waiting.length) return `<div class="sec"><h3>Compare units</h3><p class="note" style="margin:0">Loading the surroundings of ${[...new Set(waiting.map((r) => esc(r.c.site.name)))].join(' and ')}…</p></div>`
+  const multi = new Set(rows.map((r) => r.c.id)).size > 1
+  const y = today.getFullYear(), data = rows.map(({ c: ctx, u }) => {
+    const key = `${obsKey(ctx)}|${u.block.id}|${u.unit.no}|${u.storey}`
     let c = cmpCache.get(key)
     if (!c) {
-      const yr = yearSun(site, u, obs, y), v = view(u, obs), r = roadDistances(site, u)[0], mrt = nearest(u, 'mrt')
+      const obs = getObstacles(ctx), yr = yearSun(ctx.site, u, obs, y), v = view(u, obs), r = roadDistances(ctx.site, u)[0], mrt = nearest(u, 'mrt', undefined, ctx)
       c = { sun: yr.avgSun, pm: yr.avgAfternoon, far: v.farPct, road: r.dist, mrt: mrt ? mrt.walkMin : 99 }
       cmpCache.set(key, c)
     }
-    return { u, ...c }
+    return { u, ctx, ...c }
   })
   const best = (k: keyof (typeof data)[number], hi: boolean) => { const vals = data.map((x) => x[k] as number); return hi ? Math.max(...vals) : Math.min(...vals) }
   const cell = (v: number, b: number, s: string) => `<td class="${data.length > 1 && v === b ? 'best' : ''}">${s}</td>`
   const bs = best('sun', true), bp = best('pm', false), bf = best('far', true), br = best('road', true), bm = best('mrt', false)
-  return `<div class="sec"><h3>Compare units</h3><div style="overflow:auto"><table class="cmp"><tr><th></th>${data.map((x, i) => `<th>${x.u.block.id} #${String(x.u.storey).padStart(2, '0')}-${x.u.unit.no}<br><button class="btn rm" data-rm="${i}" aria-label="Remove ${x.u.block.id} #${String(x.u.storey).padStart(2, '0')}-${x.u.unit.no} from the comparison">×</button></th>`).join('')}</tr>
+  return `<div class="sec"><h3>Compare units</h3><div style="overflow:auto"><table class="cmp"><tr><th></th>${data.map((x, i) => `<th>${multi ? `<span class="proj">${esc(x.ctx.site.name)}</span><br>` : ''}${x.u.block.id} #${String(x.u.storey).padStart(2, '0')}-${x.u.unit.no}<br><button class="btn rm" data-rm="${i}" aria-label="Remove ${multi ? esc(x.ctx.site.name) + ' ' : ''}${x.u.block.id} #${String(x.u.storey).padStart(2, '0')}-${x.u.unit.no} from the comparison">×</button></th>`).join('')}</tr>
     <tr><td>Type</td>${data.map((x) => `<td>${TYPE[x.u.unit.type]?.replace(' Flexi', '') ?? x.u.unit.type}</td>`).join('')}</tr>
     <tr><td>Faces</td>${data.map((x) => `<td>${x.u.facing}</td>`).join('')}</tr>
     <tr><td>Height</td>${data.map((x) => `<td>${Math.round(x.u.floorZ)} m</td>`).join('')}</tr>
@@ -228,23 +264,18 @@ function compareHtml(obs: ReturnType<typeof obstacles>) {
     <tr><td>View clear 300 m+</td>${data.map((x) => cell(x.far, bf, x.far + '%')).join('')}</tr>
     <tr><td>Nearest road</td>${data.map((x) => cell(x.road, br, x.road + ' m')).join('')}</tr>
     <tr><td>Walk to MRT</td>${data.map((x) => cell(x.mrt, bm, x.mrt < 99 ? x.mrt + ' min' : '—')).join('')}</tr></table></div>
-    <p class="note">Highlighted: best in each row (more sun, less afternoon sun, more view, further from roads, closer to the MRT).</p></div>`
+    <p class="note">Highlighted: best in each row (more sun, less afternoon sun, more view, further from roads, closer to the MRT).${multi ? ' Units from different projects are worked out the same way, each with its own surroundings.' : ''}${site.zones.some((z) => z.kind === 'future') || rows.some((r) => r.c.site.zones.some((z) => z.kind === 'future')) ? ` Reserved land is taken as ${future} storeys everywhere.` : ''}</p></div>`
 }
 
 /* controls */
 async function loadOsm() {
-  osm = null; graph = null; runs.clear()
-  const load = OSM[siteId]
-  if (!load) return
-  try {
-    const o = await load()
-    if (site !== SITES[siteId]) return
-    osm = o; graph = buildGraph(o.walk)
-    scene?.setOsm(o)
-    update()
-  } catch { toast('Could not load the buildings around the estate') }
+  const c = cx
+  try { await loadCtx(c.id) } catch { toast('Could not load the buildings around the estate'); return }
+  if (c !== cx) return
+  scene?.setOsm(c.osm!)
+  update()
 }
-$('#site').addEventListener('change', (e) => { siteId = (e.target as HTMLSelectElement).value; site = SITES[siteId]; compare = []; shown = { future: -1, places: '' }; pick = { block: site.blocks[0].id, unit: site.blocks[0].units[0].no, storey: Math.round(site.blocks[0].storeys / 2) }; scene?.setSite(site); map.setSite(site); update(); loadOsm() })
+$('#site').addEventListener('change', (e) => { siteId = (e.target as HTMLSelectElement).value; site = SITES[siteId]; cx = ctxOf(siteId); shown = { future: -1, places: '' }; pick = { block: site.blocks[0].id, unit: site.blocks[0].units[0].no, storey: Math.round(site.blocks[0].storeys / 2) }; scene?.setSite(site); map.setSite(site); update(); loadOsm() })
 $('#block').addEventListener('change', (e) => { pick.block = (e.target as HTMLSelectElement).value; update(); scene?.reset() })
 $('#unit').addEventListener('change', (e) => { pick.unit = (e.target as HTMLSelectElement).value; update() })
 for (const id of ['#storey', '#storeyR']) $(id).addEventListener('input', (e) => { const v = parseInt((e.target as HTMLInputElement).value); if (isFinite(v)) { pick.storey = v; updateSoon() } })
@@ -261,8 +292,8 @@ $('#time').addEventListener('input', (e) => {
 })
 $('#future').addEventListener('change', (e) => { future = +(e.target as HTMLSelectElement).value; update() })
 $('#addCmp').addEventListener('click', () => {
-  if (compare.some((p) => p.block === pick.block && p.unit === pick.unit && p.storey === pick.storey)) { toast('Already in the comparison'); return }
-  compare = [...compare, { ...pick }].slice(-3); update(); toast('Added to the comparison')
+  if (compare.some((p) => p.site === siteId && p.block === pick.block && p.unit === pick.unit && p.storey === pick.storey)) { toast('Already in the comparison'); return }
+  compare = [...compare, { ...pick, site: siteId }].slice(-3); update(); toast(compare.length === 1 ? 'Added to the comparison. Units from other projects can join it too.' : 'Added to the comparison')
 })
 $('#results').addEventListener('click', (e) => {
   const t = e.target as HTMLElement, b = t.closest<HTMLElement>('[data-rm]')
@@ -282,6 +313,7 @@ document.querySelectorAll<HTMLElement>('.seg [data-v]').forEach((b) => b.addEven
   if (v === 'map') map.redraw(); else scene?.resize()
 }))
 
+scene?.onPick((b, at, h) => pickAt(b, at, h))
 scene?.onHeading((deg) => { $('#compass').style.transform = `rotate(${-deg}deg)` })
 scene?.setSite(site)
 map.setSite(site)

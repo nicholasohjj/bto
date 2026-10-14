@@ -3,7 +3,7 @@ import berlayar from './sites/berlayar-rise.json'
 import breeze from './sites/kebun-baru-breeze.json'
 import ridge from './sites/kebun-baru-ridge.json'
 import lakeview from './sites/lakeview-cascadia.json'
-import { blockMasses, rayPoly, unitPos, type Pt, type Site } from './analysis'
+import { blockMasses, rayPoly, unitPos, type Osm, type Pt, type Site } from './analysis'
 import { unitLayout } from '../state/unit'
 import { SURROUNDINGS } from '../state/studio'
 
@@ -43,6 +43,16 @@ describe.each(SITES.map((s) => [s.name, s] as const))('%s', (_name, S) => {
       expect(unitPos(S, { block: b.id, unit: u.no, storey: 1 })!.storey).toBe(u.from ?? 2)
       expect(unitPos(S, { block: b.id, unit: u.no, storey: 99 })!.storey).toBe(u.to ?? b.storeys)
     }
+  })
+  it("leaves the estate's own blocks and buildings out of the OpenStreetMap snapshot (the brochure model has them)", async () => {
+    const osm = (await import(`./sites/${S.id}.osm.json`)).default as unknown as Osm
+    const own = [...S.blocks.flatMap((b) => blockMasses(b).map((m) => m.poly)), ...S.buildings.flatMap((b) => b.poly ? [b.poly] : [])]
+    const clash = osm.buildings.filter((b) => {
+      const pts: Pt[] = []
+      for (let i = 0; i < b.p.length; i += 2) pts.push([b.p[i], b.p[i + 1]])
+      return own.some((o) => pts.some((p) => inside(o, p)))
+    })
+    expect(clash.map((b) => `${b.n ?? 'unnamed'} ${b.h} m`)).toEqual([])
   })
   it('has the geo anchor and an amenity list', () => {
     expect(S.geo).toBeTruthy()
