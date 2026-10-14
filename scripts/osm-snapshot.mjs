@@ -165,12 +165,6 @@ for (const e of A) {
   amenities.push({ name: name.slice(0, 70), kind, at, ...(sub ? { sub } : {}) })
 }
 
-// Open stations with no exit mapped (often elevated ones): the station itself is the place to walk to.
-for (const st of stations) {
-  if (amenities.some((a) => a.kind === 'mrt' && Math.hypot(a.at[0] - st.at[0], a.at[1] - st.at[1]) < 300)) continue
-  amenities.push({ name: `${st.name.replace(/\s*\(.*\)$/, '').replace(/\s*MRT( Station)?$/i, '')} MRT${st.line ? ` (${st.line})` : ''}`, kind: 'mrt', at: st.at })
-}
-
 // Railway tracks, for train noise: above ground they matter; underground ones are only mentioned. Points
 // closer than 5 m are dropped (tracks are long and smooth).
 // Lines being built count too (marked f): an elevated one will be heard once it opens.
@@ -185,6 +179,19 @@ for (const w of R) {
   if (pts.length < 2) continue
   const under = t.tunnel === 'yes' || t.location === 'underground' || parseInt(t.layer) < 0
   rail.push({ ...(t.name ? { n: t.name.slice(0, 60) } : {}), ...(under ? { u: 1 } : {}), ...(t.railway === 'construction' ? { f: 1 } : {}), p: pts.map((p) => p.map(Math.round)).flat() })
+}
+
+// Open stations with no exit mapped (often elevated ones): the station itself is the place to walk to. A station
+// counts as open only where an open track passes it, since a line being built can have stations tagged as open.
+if (want('amenities')) {
+  const tracks = (want('rail') ? rail : old.rail ?? []).map((r) => { const l = []; for (let i = 0; i < r.p.length; i += 2) l.push([r.p[i], r.p[i + 1]]); return { open: !r.f, l } })
+  const segD = (p, a, b) => { const dx = b[0] - a[0], dy = b[1] - a[1], t = Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / (dx * dx + dy * dy || 1))); return Math.hypot(a[0] + t * dx - p[0], a[1] + t * dy - p[1]) }
+  const near = (p, open) => tracks.some((t) => t.open === open && t.l.some((q, i) => i > 0 && segD(p, t.l[i - 1], q) < 150))
+  for (const st of stations) {
+    if (amenities.some((a) => a.kind === 'mrt' && Math.hypot(a.at[0] - st.at[0], a.at[1] - st.at[1]) < 300)) continue
+    const future = !near(st.at, true) && near(st.at, false)
+    amenities.push({ name: `${st.name.replace(/\s*\(.*\)$/, '').replace(/\s*MRT( Station)?$/i, '')} MRT${st.line ? ` (${st.line})` : ''}${future ? ', being built' : ''}`, kind: 'mrt', ...(future ? { sub: 'future' } : {}), at: st.at })
+  }
 }
 
 // Roads, for traffic noise: expressways and the bigger streets near the site.

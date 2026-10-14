@@ -47,6 +47,12 @@ describe('upcoming sites', () => {
     }
     for (const p of b.outline) expect(edgeDist(toA(p), a.outline)).toBeGreaterThan(5)
   })
+  it('lists the Jurong Region Line stations near Tengah stations as being built, and the open stations nearby without mapped exits', async () => {
+    const mrt = (await AREA_OSM['tengah-garden-avenue']()).amenities.filter((x) => x.kind === 'mrt')
+    const named = (n: string) => mrt.find((x) => x.name.startsWith(n))
+    for (const n of ['Tengah Plantation', 'Tengah Park', 'Hong Kah', 'Tengah MRT']) expect(named(n)?.sub, n).toBe('future')
+    for (const n of ['Bukit Batok MRT', 'Chinese Garden MRT']) expect(named(n)?.sub, n).toBeUndefined()
+  })
   it('finds the expressways the town maps draw beside the Tengah and Bedok sites', async () => {
     const tg = AREAS.find((x) => x.id === 'tengah-garden-avenue')!, bd = AREAS.find((x) => x.id === 'bedok-bayshore-walk')!
     const nt = noiseSources(tg, await AREA_OSM[tg.id]()), nb = noiseSources(bd, await AREA_OSM[bd.id]())
