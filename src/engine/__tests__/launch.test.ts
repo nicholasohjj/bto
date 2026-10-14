@@ -139,4 +139,13 @@ describe('sites shown before a launch', () => {
     // 170 2-room Flexi, 270 4-room (440 flats).
     expect(Object.values(t.flats).reduce((a, b) => a + b!, 0)).toBe(440)
   })
+  it('adds up the Bedok flat mix', () => {
+    const t = LAUNCHES.find((l) => l.id === '2026-11')!.previews!.find((v) => v.town === 'Bedok')!
+    // 890 2-room Flexi, 90 3-room, 660 4-room (1,640 flats).
+    expect(Object.values(t.flats).reduce((a, b) => a + b!, 0)).toBe(1640)
+  })
+  it('has a site for every town the launch names', () => {
+    const l = LAUNCHES.find((x) => x.id === '2026-11')!
+    expect(l.previews!.map((v) => v.town).sort()).toEqual([...l.towns!].sort())
+  })
 })

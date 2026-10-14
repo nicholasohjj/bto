@@ -145,6 +145,12 @@ const NOVEMBER_2026: Launch = {
       note: '440 flats; preschool',
       source: 'HDB Geylang town map, issued June 2026 (checked 2026-10-14)',
     },
+    {
+      town: 'Bedok', where: 'Upper East Coast Road and Bayshore Road, beside Bayshore MRT (Thomson–East Coast line)',
+      flats: { '2R': 890, '3R': 90, '4R': 660 },
+      note: '1,640 flats, one block mixing sold and rental flats; eating house, 2 shops, 2 preschools, Residents’ Network Centre, Active Ageing Centre (Care), kidney dialysis centre',
+      source: 'HDB Bedok town map, issued June 2026 (checked 2026-10-14)',
+    },
   ],
   projects: [],
 }
