@@ -4,11 +4,12 @@ import breeze from './sites/kebun-baru-breeze.json'
 import ridge from './sites/kebun-baru-ridge.json'
 import lakeview from './sites/lakeview-cascadia.json'
 import sembawang from './sites/sembawang-brook.json'
+import portico from './sites/sembawang-portico.json'
 import { blockMasses, rayPoly, unitPos, type Osm, type Pt, type Site } from './analysis'
 import { unitLayout } from '../state/unit'
 import { SURROUNDINGS } from '../state/studio'
 
-const SITES = [berlayar, breeze, ridge, lakeview, sembawang] as unknown as Site[]
+const SITES = [berlayar, breeze, ridge, lakeview, sembawang, portico] as unknown as Site[]
 
 const onEdge = (poly: Pt[], p: Pt) => Math.min(...poly.map((a, i) => {
   const b = poly[(i + 1) % poly.length], dx = b[0] - a[0], dy = b[1] - a[1]

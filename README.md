@@ -119,7 +119,7 @@ src/surroundings/
 scripts/osm-snapshot.mjs    refreshes a snapshot from the Overpass API
 ```
 
-Sites: Berlayar Rise, Kebun Baru Breeze, Kebun Baru Ridge, Lakeview Cascadia and Sembawang Brook (June 2026). Each site file is redrawn from the project's HDB
+Sites: Berlayar Rise, Kebun Baru Breeze, Kebun Baru Ridge, Lakeview Cascadia, Sembawang Brook and Sembawang Portico (June 2026). Each site file is redrawn from the project's HDB
 brochure: block outlines and unit positions from the vector block floor plans, placed on the site plan
 (blocks turned from north, as at both Kebun Baru projects, are fitted unit by unit); roads,
 reserved land and buildings traced from the site plan or taken from OpenStreetMap; amenities from the
@@ -150,6 +150,7 @@ node scripts/osm-snapshot.mjs kebun-baru-breeze
 node scripts/osm-snapshot.mjs kebun-baru-ridge
 node scripts/osm-snapshot.mjs lakeview-cascadia
 node scripts/osm-snapshot.mjs sembawang-brook
+node scripts/osm-snapshot.mjs sembawang-portico
 node scripts/osm-snapshot.mjs lakeview-cascadia --only rail   # redo some parts (estate, buildings, walk, amenities, rail)
 ```
 

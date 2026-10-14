@@ -78,6 +78,13 @@ export const BROCHURE_LAYOUTS: Record<string, { key: string; label: string; type
     { key: 'berlayar-rise/3R', label: '3-room', type: '3R' },
     { key: 'berlayar-rise/4R', label: '4-room', type: '4R' },
   ],
+  'sembawang-portico': [
+    { key: 'sembawang-portico/2R-1', label: '2-room Flexi (Type 1)', type: '2R' },
+    { key: 'sembawang-portico/2R-2', label: '2-room Flexi (Type 2)', type: '2R' },
+    { key: 'sembawang-portico/3R', label: '3-room', type: '3R' },
+    { key: 'sembawang-portico/4R', label: '4-room', type: '4R' },
+    { key: 'sembawang-portico/5R', label: '5-room', type: '5R' },
+  ],
   'sembawang-brook': [
     { key: 'sembawang-brook/2R-1', label: '2-room Flexi (Type 1)', type: '2R' },
     { key: 'sembawang-brook/2R-2', label: '2-room Flexi (Type 2)', type: '2R' },
@@ -103,7 +110,7 @@ export const BROCHURE_LAYOUTS: Record<string, { key: string; label: string; type
 }
 
 /** Projects with a Surroundings page (view, sun, roads and amenities per unit). */
-export const SURROUNDINGS = new Set(['berlayar-rise', 'kebun-baru-breeze', 'kebun-baru-ridge', 'lakeview-cascadia', 'sembawang-brook'])
+export const SURROUNDINGS = new Set(['berlayar-rise', 'kebun-baru-breeze', 'kebun-baru-ridge', 'lakeview-cascadia', 'sembawang-brook', 'sembawang-portico'])
 export const surroundingsUrl = (projectId: string) => `/surroundings/?site=${encodeURIComponent(projectId)}`
 
 /** Brochure layouts for this plan's project, if it was picked from a launch that has them. */
