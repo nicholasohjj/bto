@@ -134,4 +134,9 @@ describe('sites shown before a launch', () => {
     // 330 2-room Flexi, 100 3-room, 460 4-room, 420 5-room (1,310 flats).
     expect(Object.values(t.flats).reduce((a, b) => a + b!, 0)).toBe(1310)
   })
+  it('adds up the Geylang flat mix', () => {
+    const t = LAUNCHES.find((l) => l.id === '2026-11')!.previews!.find((v) => v.town === 'Geylang')!
+    // 170 2-room Flexi, 270 4-room (440 flats).
+    expect(Object.values(t.flats).reduce((a, b) => a + b!, 0)).toBe(440)
+  })
 })

@@ -139,6 +139,12 @@ const NOVEMBER_2026: Launch = {
       note: '1,310 flats, one block mixing sold and rental flats; eating house, supermarket, 5 shops, preschool',
       source: 'HDB Sembawang town map, issued June 2026 (checked 2026-10-14)',
     },
+    {
+      town: 'Geylang', where: 'Aljunied Road and Jalan Raya, about 400 m from Mattar MRT (Downtown line)',
+      flats: { '2R': 170, '4R': 270 },
+      note: '440 flats; preschool',
+      source: 'HDB Geylang town map, issued June 2026 (checked 2026-10-14)',
+    },
   ],
   projects: [],
 }
