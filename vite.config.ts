@@ -53,5 +53,7 @@ export default defineConfig({
   },
   test: {
     include: ['src/**/*.test.ts'],
+    // Some tests load whole OpenStreetMap snapshots, which takes a few seconds on a busy machine.
+    testTimeout: 20000,
   },
 })

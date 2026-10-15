@@ -43,7 +43,7 @@ export function InfoTip({ term, text }: { term?: Term; text?: string }) {
           setPos({ left, top: below, width })
           setOpen((o) => !o)
         }}
-        className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full border border-line text-[10px] font-semibold text-muted hover:text-ink focus-visible:outline-2 focus-visible:outline-accent"
+        className="relative ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full border before:absolute before:-inset-3 border-line text-[10px] font-semibold text-muted hover:text-ink focus-visible:outline-2 focus-visible:outline-accent"
       >
         i
       </button>
