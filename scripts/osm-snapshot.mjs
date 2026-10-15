@@ -134,6 +134,9 @@ const kindOf = (t) => {
 // Open stations name the exits near them; stations still being built have no exits yet.
 const stations = A.filter((e) => e.tags?.railway === 'station' && e.tags.construction !== 'station').map((e) => ({ at: toSite(e.lat ?? e.center.lat, e.lon ?? e.center.lon), name: e.tags.name.replace(/\s+station$/i, ''), line: e.tags.name.match(/\(([^)]+)\)/)?.[1] }))
 const mrtName = (t, at) => {
+  // An exit named only by its letter ("Exit B (Elevator)") takes its station's name below.
+  const bare = (t.name || '').match(/^Exit\s*([A-Z0-9]{1,3})\b/i)
+  if (bare) t = { ...t, name: undefined, ref: t.ref ?? bare[1] }
   const m = (t.name || '').match(/^(.*?)\s*\(([^)]+)\)\s*(?:Exit\s*)?([A-Z0-9]{0,3})$/i)
   if (m) return `${m[1].replace(/\s*MRT$/i, '')} MRT (${m[2]})${m[3] ? `, exit ${m[3]}` : ''}`
   // Station areas can be long, so their centre may be a few hundred metres from an exit.
@@ -181,15 +184,17 @@ for (const w of R) {
   rail.push({ ...(t.name ? { n: t.name.slice(0, 60) } : {}), ...(under ? { u: 1 } : {}), ...(t.railway === 'construction' ? { f: 1 } : {}), p: pts.map((p) => p.map(Math.round)).flat() })
 }
 
-// Open stations with no exit mapped (often elevated ones): the station itself is the place to walk to. A station
-// counts as open only where an open track passes it, since a line being built can have stations tagged as open.
+// Elevated stations often have no exits mapped: the station itself is then the place to walk to. Only where an open
+// track runs above ground beside it: a line being built can have stations tagged as open, and trains pass underground
+// through stations that never opened (Bukit Brown) or haven't yet (Mount Pleasant). Open underground stations have exits.
 if (want('amenities')) {
-  const tracks = (want('rail') ? rail : old.rail ?? []).map((r) => { const l = []; for (let i = 0; i < r.p.length; i += 2) l.push([r.p[i], r.p[i + 1]]); return { open: !r.f, l } })
+  const tracks = (want('rail') ? rail : old.rail ?? []).map((r) => { const l = []; for (let i = 0; i < r.p.length; i += 2) l.push([r.p[i], r.p[i + 1]]); return { open: !r.f, above: !r.u, l } })
   const segD = (p, a, b) => { const dx = b[0] - a[0], dy = b[1] - a[1], t = Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / (dx * dx + dy * dy || 1))); return Math.hypot(a[0] + t * dx - p[0], a[1] + t * dy - p[1]) }
-  const near = (p, open) => tracks.some((t) => t.open === open && t.l.some((q, i) => i > 0 && segD(p, t.l[i - 1], q) < 150))
+  const near = (p, open) => tracks.some((t) => t.open === open && (!open || t.above) && t.l.some((q, i) => i > 0 && segD(p, t.l[i - 1], q) < 150))
   for (const st of stations) {
     if (amenities.some((a) => a.kind === 'mrt' && Math.hypot(a.at[0] - st.at[0], a.at[1] - st.at[1]) < 300)) continue
-    const future = !near(st.at, true) && near(st.at, false)
+    const open = near(st.at, true), future = !open && near(st.at, false)
+    if (!open && !future) continue
     amenities.push({ name: `${st.name.replace(/\s*\(.*\)$/, '').replace(/\s*MRT( Station)?$/i, '')} MRT${st.line ? ` (${st.line})` : ''}${future ? ', being built' : ''}`, kind: 'mrt', ...(future ? { sub: 'future' } : {}), at: st.at })
   }
 }
