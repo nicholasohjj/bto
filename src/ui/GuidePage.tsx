@@ -26,6 +26,9 @@ export function GuidePage({ policy: p, scenario, result, onOpenPlan }: {
           <Li>Processing takes <b>up to a month</b> (longer just before an exercise), and the e-service closes while an exercise is open. It’s valid for <b>{p.hfe.validityMonths} months</b>.</Li>
           <Li>Income is the <b>12 months ending 2 months before</b> you apply for it: each person’s pay (no bonuses or employer CPF) averaged over the months they worked. Families’ ceiling: <b>{money(p.eligibility.incomeCeilingFamilies)}</b> a month.</Li>
           <Li>Taking a bank loan? Ask DBS, Hong Leong Finance, Maybank, OCBC or UOB for a free <b>In-Principle Approval</b> at the same time.</Li>
+          <Li><b>Engaged?</b> You can apply as fiancé and fiancée if both of you are unmarried; anyone aged 18 to 20 needs a parent’s or guardian’s written consent.</Li>
+          <Li>Keep your household the same until you apply. A change such as <b>getting married</b>, adding or removing someone, a new citizenship or buying private property can make the letter invalid. Before you apply for a flat, cancel it and apply for a new one; after you’ve applied, tell HDB through MyRequest@HDB.</Li>
+          <Li>Not working for the last 12 months (students, NSmen)? The letter says you can’t get the Enhanced CPF Housing Grant or an HDB loan yet. With the <b>Deferred Income Assessment</b>, HDB looks at your income again shortly before keys, and tells you at booking whether you can use it.</Li>
           <Pay>Nothing yet.</Pay>
         </>
       ),
@@ -90,6 +93,7 @@ export function GuidePage({ policy: p, scenario, result, onOpenPlan }: {
           <Li>Fees: survey {cents(fees.surveyFee['2R'])}–{cents(fees.surveyFee.Exec)} by flat type, registration {cents(fees.escrowRegistrationFee)} each (HDB loan), and stamp duty on the loan ({pct(fees.mortgageStampDutyPct)}, up to {money(fees.mortgageStampDutyMax)}).</Li>
           <Li>Second-timers pay the <b>resale levy</b> in cash ({money(Math.min(...Object.values(p.resaleLevy)))}–{money(Math.max(...Object.values(p.resaleLevy)))}).</Li>
           <Li>HDB fire insurance is compulsory with an HDB loan; the Home Protection Scheme is compulsory if CPF pays your instalments.</Li>
+          <Li>Bought as fiancé and fiancée? Submit your <b>marriage certificate within 3 months</b> of collecting the keys.</Li>
           <Pay>The balance of the price (grant, CPF, loan and cash), fees, and any resale levy.</Pay>
         </>
       ),
