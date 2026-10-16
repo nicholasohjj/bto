@@ -236,3 +236,19 @@ describe('seed scenario', () => {
     expect(compareRows([r, r])[0].values).toEqual([480000, 480000])
   })
 })
+
+describe('OA interest timing (cpf.gov.sg FAQ)', () => {
+  const oaIn = (r: ReturnType<typeof runScenario>, ym: string) => r.months.find((m) => m.ym === ym)!.combined.oa
+  // base() turns interest off; this needs it. The same credit in different months isolates its own interest.
+  const withGrant = (date: string) => runScenario(base((s) => {
+    s.policyOverrides = {}
+    s.flat.grants = [...s.flat.grants, { id: 'test', name: 'Test credit', amount: 100000, splitA: 100, when: { date } }]
+  }))
+  it('pays interest on money from the month after it arrives, compounded at the year end', () => {
+    const nov = withGrant('2027-11'), dec = withGrant('2027-12'), jan = withGrant('2028-01')
+    // In by November: earns December's interest, credited in January.
+    expect(oaIn(nov, '2028-01') - oaIn(dec, '2028-01')).toBeCloseTo(100000 * 0.025 / 12, 2)
+    // In in December: no interest for that year, the same as arriving in January.
+    expect(oaIn(dec, '2028-01')).toBeCloseTo(oaIn(jan, '2028-01'), 2)
+  })
+})

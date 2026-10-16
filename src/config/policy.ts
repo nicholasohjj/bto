@@ -272,7 +272,9 @@ export const DEFAULT_POLICY: Policy = {
     // (seen in search results; page body not read). SECONDARY 2026-09-23.
     oaInterestRate: 0.025,
     // Accrued interest on CPF used for housing = prevailing OA rate (2.5%).
-    // Computed monthly, compounded annually (same as OA interest).
+    // Computed monthly, compounded annually (same as OA interest). Timing VERIFIED 2026-10-16 against the cpf.gov.sg FAQ
+    // "How is my CPF interest computed and credited into my accounts?": money paid in earns from the next month,
+    // money taken out stops earning that month, credited by the following year and compounded annually.
     // Source: cpf.gov.sg "CPF refund when selling or transferring property" (principal +
     // accrued interest). Exact rate/method page returned 404. SECONDARY 2026-09-23.
     accruedInterestRate: 0.025,

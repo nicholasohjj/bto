@@ -158,6 +158,10 @@ export function simulateCore(
   const hdbRuleBumps: CoreResult['hdbRuleBumps'] = []
   let lastMortgageCpf: Record<PartnerId, number> = { A: 0, B: 0 }
   const pending: Record<PartnerId, { cash: number; oa: number }> = { A: { cash: 0, oa: 0 }, B: { cash: 0, oa: 0 } }
+  // OA interest credited at the year end, added in January; it compounds, so it earns from then.
+  const yearInterest: Record<PartnerId, number> = { A: 0, B: 0 }
+  // Money put into the OA this month (contributions, grants, top-ups): CPF pays interest on it from next month.
+  const creditedThisMonth: Record<PartnerId, number> = { A: 0, B: 0 }
 
   const combined = (): PotBalances => ({ cash: pots.A.cash + pots.B.cash, oa: pots.A.oa + pots.B.oa })
   const sharesFor = (payer: Obligation['payer']): Record<PartnerId, number> =>
@@ -222,6 +226,7 @@ export function simulateCore(
       const toOa = paid * ratesFor(age, policy, prYear(p, ym)).oaRatio
       pots[id].cash -= paid
       pots[id].oa += toOa
+      creditedThisMonth[id] += toOa
       topUpsInYear.set(key, (topUpsInYear.get(key) ?? 0) + paid)
       return {
         ym, itemId: ob.id, label: ob.label, kind: 'voluntaryCpf', amount: round2(paid), fromCash: round2(paid), fromCpf: -round2(toOa),
@@ -342,8 +347,10 @@ export function simulateCore(
     // a. Last month's income becomes available (savings, bonus, CPF contributions).
     for (const id of IDS) {
       pots[id].cash += pending[id].cash
-      pots[id].oa += pending[id].oa
+      pots[id].oa += pending[id].oa + yearInterest[id]
+      creditedThisMonth[id] = pending[id].oa
       pending[id] = { cash: 0, oa: 0 }
+      yearInterest[id] = 0
     }
 
     // b. Grants credited to OA.
@@ -351,6 +358,7 @@ export function simulateCore(
       if (ymToIndex(g.ym) !== idx && !(idx === startIdx && ymToIndex(g.ym) < startIdx)) continue
       for (const id of IDS) {
         pots[id].oa += g.amounts[id]
+        creditedThisMonth[id] += g.amounts[id]
         pots[id].grant += g.amounts[id]
       }
       const amount = g.amounts.A + g.amounts.B
@@ -469,12 +477,15 @@ export function simulateCore(
       outstanding = Math.max(0, outstanding + interest - amount)
     }
 
-    // e. OA interest: accrue monthly on the balance, credit at year end. Cash interest monthly.
+    // e. OA interest: computed monthly, credited at the year end and compounded yearly (cpf.gov.sg FAQ
+    // "How is my CPF interest computed and credited"). Money paid in this month earns from next month;
+    // money taken out this month doesn't earn this month. Cash interest monthly.
     for (const id of IDS) {
       if (cashRate > 0) pending[id].cash += Math.max(0, pots[id].cash) * (cashRate / 12)
-      pots[id].pendingInterest += Math.max(0, pots[id].oa) * (policy.cpf.oaInterestRate / 12)
+      pots[id].pendingInterest += Math.max(0, pots[id].oa - creditedThisMonth[id]) * (policy.cpf.oaInterestRate / 12)
+      creditedThisMonth[id] = 0
       if (monthOf(ym) === 12) {
-        pending[id].oa += pots[id].pendingInterest
+        yearInterest[id] += pots[id].pendingInterest
         pots[id].pendingInterest = 0
       }
     }
