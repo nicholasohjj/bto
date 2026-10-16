@@ -105,3 +105,20 @@ button.am{width:100%;background:none;border:0;border-bottom:1px dotted var(--lin
   #main.area #stage{order:-1}
   #main.area #results{border-right:0;overflow:visible}
 }
+/* your places */
+.mp{padding:6px 0;border-bottom:1px dotted var(--line)}
+.mp-top{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+.mp-top small{color:var(--ink2)}
+.mp-top>b{white-space:nowrap;font-variant-numeric:tabular-nums}
+.mp-act{display:flex;gap:14px;margin-top:2px;font-size:12px}
+.mp-act a{color:var(--accent)}
+.linkbtn{background:none;border:0;padding:0;color:var(--ink2);text-decoration:underline;min-height:24px}
+.mpd{border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--ink);padding:0;width:min(420px,calc(100vw - 32px))}
+.mpd::backdrop{background:rgb(0 0 0/.4)}
+.mpd-form{padding:16px;display:grid;gap:10px}
+.mpd-form h3{margin:0;font:600 15px/1.2 var(--f-display)}
+.mpd-form label{display:grid;gap:4px;font-size:12px;color:var(--ink2)}
+.mpd-form input,.mpd-form select{background:var(--field);border:1px solid var(--line);border-radius:6px;padding:7px 8px;color:var(--ink);font-size:14px}
+.mpd-form .note{margin:0}
+.mpd-res{max-height:40vh;overflow:auto}
+.mpd-btns{display:flex;justify-content:flex-end;gap:8px}

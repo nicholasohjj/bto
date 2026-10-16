@@ -1,10 +1,11 @@
 /** Upcoming sites page: what's around a site known only from HDB's town map (no blocks yet). */
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import { lineDist, toLatLng, type Amenity, type Pt, type Site } from './analysis'
-import { across, areaM2, centroid, edgeDist, noiseSources, primarySchools, undergroundNear, type Area, type AreaOsm } from './area'
+import { fromLatLng, lineDist, toLatLng, type Amenity, type Pt, type Site } from './analysis'
+import { across, areaM2, centroid, edgeDist, farDist, noiseSources, primarySchools, undergroundNear, type Area, type AreaOsm } from './area'
 import { AREA_OSM, AREAS } from './areaList'
 import { KIND } from './map'
+import { bindPlaces, placesHtml, type MyPlace, type Reach } from './places'
 import { buildGraph, fromStarts, nearestNodes, routeTo, type Graph } from './walk'
 import { LAUNCHES } from '../config/launches'
 import { FLAT_TYPES } from '../ui/labels'
@@ -134,6 +135,11 @@ function openNote(c: Ctx, listed: { a: Amenity }[]) {
 }
 
 /* results */
+/** A place's distance from the nearest and farthest edge of the site (0 if it's on the site). */
+function reachOf(p: MyPlace): Reach {
+  const at = fromLatLng({ geo: area.geo } as Site, p.lat, p.lon)
+  return { near: Math.round(edgeDist(at, area.outline)), far: Math.round(farDist(at, area.outline)) }
+}
 const row = (a: Amenity, right: string, title = 'Show the walking route on the map') =>
   `<button type="button" class="am link" data-am="${esc(a.name)}" title="${title}"><i aria-hidden="true" style="background:${(KIND[a.kind] ?? KIND.community).c}">${esc((KIND[a.kind] ?? KIND.community).l)}</i><span>${esc(a.name)}</span><b>${right}</b></button>`
 function siteHtml() {
@@ -165,15 +171,17 @@ function render(c: Ctx | null) {
   h += `<div class="sec"><h3>Roads and trains to listen for</h3>${noise.length ? noise.slice(0, 6).map((n) => `<div class="kv"><span>${esc(n.name)} <small style="color:var(--ink2)">(${what[n.kind]}, ${n.side} side)</small>${n.kind !== 'major' && n.dist < 100 ? ' <span class="pill warn">close</span>' : ''}</span><b>${n.dist ? `${n.dist} m` : 'next to it'}</b></div>`).join('') : '<p class="note" style="margin:0">No expressway, main road or above-ground train track within 300 m.</p>'}
     ${noise.length ? `<p class="note key">On the map: ${[noise.some((n) => n.kind === 'expressway') && '<i style="background:#c0392b"></i>expressway', noise.some((n) => n.kind === 'major') && '<i style="background:#e8833a"></i>main road', noise.some((n) => n.kind === 'rail') && '<i class="dash"></i>train tracks'].filter(Boolean).join(' ')}</p>` : ''}
     <p class="note">The closest a block could be, from the edge of the site. ${noise.some((n) => n.kind !== 'major' && n.dist < 100) ? 'Blocks on that side will hear it, more so on upper floors facing it; once the site plan is out, see which stacks face it. ' : ''}Visit at peak hour${noise.some((n) => n.kind === 'rail') ? ', and when trains run early in the morning and late at night' : ''}.${under.map((n) => ` The ${esc(n)} runs underground nearby, so it adds no train noise.`).join('')}</p></div>`
+  h += placesHtml(ll(centroid(area.outline)), reachOf, true)
   h += `<div class="sec"><p class="note" style="margin:0">Site: ${esc(area.source)}, to within about 20 m. Surroundings: ${esc(c.osm.attribution)}, snapshot of ${c.osm.fetched}. A planning aid, not a survey.</p></div>`
   $('#results').innerHTML = h
 }
 
+let shownCtx: Ctx | null = null
 async function open(a: Area) {
   area = a
   const u = new URL(location.href); u.search = new URLSearchParams({ site: a.id }).toString(); history.replaceState(null, '', u)
   $<HTMLSelectElement>('#site').value = a.id
-  drawSite(); render(null)
+  drawSite(); shownCtx = null; render(null)
   let c: Ctx
   try { c = await loadCtx(a) } catch { toast('Could not load what\'s around the site'); return }
   if (area !== a) return
@@ -181,6 +189,7 @@ async function open(a: Area) {
   const list = [...stations(c).map((s) => ({ a: s.a, w: s.w })), ...primarySchools(a, c.osm).map((s) => ({ a: s.a, w: walk(c, s.a) })),
     ...['bus', 'shops', 'park', 'community', 'health'].map((k) => nearestOf(c, k)).filter((x): x is { a: Amenity; w: Walk } => !!x)]
   drawPlaces(c, list.map((x) => ({ a: x.a, label: `${km(x.w.dist)} · ${x.w.walkMin} min walk` })))
+  shownCtx = c
   render(c)
 }
 
@@ -197,4 +206,5 @@ $('#results').addEventListener('click', async (e) => {
   const c = await loadCtx(area), a = c.osm.amenities.find((x) => x.name === b.dataset.am)
   if (a) { showRoute(c, a); document.querySelectorAll('#results .am.on').forEach((x) => x.classList.remove('on')); b.classList.add('on') }
 })
+bindPlaces($('#results'), () => render(shownCtx))
 open(area)

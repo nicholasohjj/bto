@@ -1,5 +1,5 @@
 /** Surroundings page: pick a unit, see its view, sun, roads and amenities, and compare units. */
-import { KEY_DAYS, obstacles, railDistances, roadDistances, storeysLabel, sunDay, unitAt, unitPos, unitStoreys, view, yearSun, type Amenity, type Osm, type Pick, type Pt, type Site, type UnitPos } from './analysis'
+import { KEY_DAYS, obstacles, toLatLng, railDistances, roadDistances, storeysLabel, sunDay, unitAt, unitPos, unitStoreys, view, yearSun, type Amenity, type Osm, type Pick, type Pt, type Site, type UnitPos } from './analysis'
 import { createMap, KIND } from './map'
 import { createScene } from './scene'
 import berlayar from './sites/berlayar-rise.json'
@@ -10,6 +10,7 @@ import sembawangBrook from './sites/sembawang-brook.json'
 import sembawangPortico from './sites/sembawang-portico.json'
 import woodgroveAcres from './sites/woodgrove-acres.json'
 import { saveChosenUnit, studioUnitUrl, unitLabel } from '../state/unit'
+import { bindPlaces, distanceM, kmText, loadPlaces, placesHtml } from './places'
 import { buildGraph, estateStarts, fromStarts, hull, routeTo, type Graph, type Route } from './walk'
 
 const SITES: Record<string, Site> = {
@@ -241,6 +242,8 @@ function renderResults(u: UnitPos, obs: ReturnType<typeof obstacles>) {
   const c = centre(u), prim = places().filter((a) => a.kind === 'school' && (a.sub === 'primary' || /primary/i.test(a.name))).map((a) => ({ a, d: Math.round(Math.hypot(a.at[0] - c[0], a.at[1] - c[1])) })).filter((x) => x.d <= 2000).sort((p, q2) => p.d - q2.d)
   h += `<div class="sec"><h3>Primary schools within 2 km</h3>${prim.length ? prim.map((x) => `<button type="button" class="am link" data-am="${esc(x.a.name)}" title="Show the walking route on the map"><i aria-hidden="true" style="background:${KIND.school.c}">S</i><span>${esc(x.a.name)}</span><b>${x.d <= 1000 ? '<span class="pill good">within 1 km</span>' : '1–2 km'} · ${km(x.d)}</b></button>`).join('') : '<p class="note" style="margin:0">None found.</p>'}
     <p class="note">Primary 1 registration gives priority to homes within 1 km and 2 km of a school. These are rough straight-line distances to the school's map point; the official distance is measured by SLA from your address (OneMap's school query).</p></div>`
+  const at = toLatLng(site, c)
+  h += placesHtml(at, (p) => { const d = Math.round(distanceM(at[0], at[1], p.lat, p.lon)); return { near: d, far: d } })
   h += compareHtml()
   h += `<div class="sec"><p class="note" style="margin:0">Estate: ${esc(site.source)}. ${osm ? `Surroundings: ${esc(osm.attribution)}, snapshot of ${osm.fetched}.` : ''} Blocks are placed to within a few metres; storeys are taken as ${site.storeyM} m. Heights of future buildings on reserved land are not known. A planning aid, not a survey.</p></div>`
   $('#results').innerHTML = h
@@ -276,8 +279,9 @@ function compareHtml() {
     <tr><td>After 3 pm</td>${data.map((x) => cell(x.pm, bp, hrs(x.pm))).join('')}</tr>
     <tr><td>View clear 300 m+</td>${data.map((x) => cell(x.far, bf, x.far + '%')).join('')}</tr>
     <tr><td>Nearest road</td>${data.map((x) => cell(x.road, br, x.road + ' m')).join('')}</tr>
-    <tr><td>Walk to MRT</td>${data.map((x) => cell(x.mrt, bm, x.mrt < 99 ? x.mrt + ' min' : '—')).join('')}</tr></table></div>
-    <p class="note">Highlighted: best in each row (more sun, less afternoon sun, more view, further from roads, closer to the MRT).${multi ? ' Units from different projects are worked out the same way, each with its own surroundings.' : ''}${site.zones.some((z) => z.kind === 'future') || rows.some((r) => r.c.site.zones.some((z) => z.kind === 'future')) ? ` Reserved land is taken as ${future} storeys everywhere.` : ''}</p></div>`
+    <tr><td>Walk to MRT</td>${data.map((x) => cell(x.mrt, bm, x.mrt < 99 ? x.mrt + ' min' : '—')).join('')}</tr>
+    ${loadPlaces().map((p) => { const ds = data.map((x) => { const ll = toLatLng(x.ctx.site, centre(x.u)); return distanceM(ll[0], ll[1], p.lat, p.lon) }), b = Math.min(...ds); return `<tr><td>To ${esc(p.name)}</td>${ds.map((d) => cell(d, b, kmText(d))).join('')}</tr>` }).join('')}</table></div>
+    <p class="note">Highlighted: best in each row (more sun, less afternoon sun, more view, further from roads, closer to the MRT${loadPlaces().length ? ' and to your places, in a straight line' : ''}).${multi ? ' Units from different projects are worked out the same way, each with its own surroundings.' : ''}${site.zones.some((z) => z.kind === 'future') || rows.some((r) => r.c.site.zones.some((z) => z.kind === 'future')) ? ` Reserved land is taken as ${future} storeys everywhere.` : ''}</p></div>`
 }
 
 /* controls */
@@ -308,6 +312,7 @@ $('#addCmp').addEventListener('click', () => {
   if (compare.some((p) => p.site === siteId && p.block === pick.block && p.unit === pick.unit && p.storey === pick.storey)) { toast('Already in the comparison'); return }
   compare = [...compare, { ...pick, site: siteId }].slice(-3); update(); toast(compare.length === 1 ? 'Added to the comparison. Units from other projects can join it too.' : 'Added to the comparison')
 })
+bindPlaces($('#results'), () => update())
 $('#results').addEventListener('click', (e) => {
   const t = e.target as HTMLElement, b = t.closest<HTMLElement>('[data-rm]')
   if (b) { compare.splice(+b.dataset.rm!, 1); update(); return }

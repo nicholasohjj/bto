@@ -29,6 +29,8 @@ Shared links show a preview card (title, description and `public/og.png`) from t
 
 **⋯ → Print summary** prints one page for an HDB or bank appointment (`ui/PrintSummary.tsx`): key dates, the loan, each payment with its cash/CPF split, and the problems to check. Choose "Save as PDF" in the print dialog to get a PDF.
 
+**Payments → Add to calendar** (also **⋯ → Add payments to calendar**) saves the plan's payment months from this month on as an `.ics` file (`state/calendar.ts`). The plan works in months, so each month with payments is one all-day event on the 1st, listing each payment with its cash/CPF split, with a reminder a week before. Milestones (booking, AFL, keys) name the event; only the first mortgage payment and the first of each recurring item are included, and rent is left out. UIDs are fixed per plan and month, so importing again updates the events.
+
 ## Project layout
 
 ```
@@ -164,6 +166,8 @@ takes up to three units from any of the projects, each worked out with its own s
 
 `sites.test.ts` checks every site: each window on the outline of a block part that reaches its top storey, facing out, a Flat Studio layout
 for each unit type, and storeys within each stack.
+
+**Your places** (`places.ts`, on both Surroundings pages): up to three addresses (work, parents' or child's home, other), found with OneMap's public address search or a pasted latitude and longitude, and saved in this browser (`bto.myPlaces`). Each shows the straight-line distance from the block (or from the nearest and farthest edge of an upcoming site), a link to the trip by public transport in Google Maps, and for a parents' home whether it's within 4 km (HDB's distance for living near parents, for priority and the Proximity Housing Grant). The unit comparison gets a row for each place. Travel times aren't estimated.
 
 ### Upcoming sites (`/surroundings/area/`)
 
