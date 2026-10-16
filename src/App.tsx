@@ -7,6 +7,8 @@ import { money } from './engine/format'
 import { newId } from './state/defaults'
 import { exportJson, importJson, loadState, saveState, type AppState } from './state/storage'
 import { decodeScenario, sharedCode, shareUrl } from './state/share'
+import { calendarEventCount, calendarIcs } from './state/calendar'
+import { currentYm } from './engine/dates'
 import { readStudioDesign, restoreStudioDesign } from './state/studio'
 import { AdvancedSettings } from './ui/AdvancedSettings'
 import { TimelineChart } from './ui/lazyCharts'
@@ -149,14 +151,23 @@ export default function App() {
     setState((st) => ({ ...st, scenarios: rest, activeId: rest[0].id, compareIds: st.compareIds.filter((id) => id !== active.id) }))
     setMessage(`Deleted “${active.name}”.`)
   }
-  const download = (all: boolean) => {
-    const list = all ? state.scenarios : [active]
-    const blob = new Blob([exportJson(list, readStudioDesign())], { type: 'application/json' })
+  const save = (data: string, type: string, name: string) => {
     const a = document.createElement('a')
-    a.href = URL.createObjectURL(blob)
-    a.download = all ? 'bto-scenarios.json' : `bto-${slug(active.name)}.json`
+    a.href = URL.createObjectURL(new Blob([data], { type }))
+    a.download = name
     a.click()
     setTimeout(() => URL.revokeObjectURL(a.href), 1000)
+  }
+  const download = (all: boolean) =>
+    save(exportJson(all ? state.scenarios : [active], readStudioDesign()), 'application/json',
+      all ? 'bto-scenarios.json' : `bto-${slug(active.name)}.json`)
+  const addToCalendar = () => {
+    if (!result) return
+    const ics = calendarIcs(active, result, { from: currentYm() })
+    const n = calendarEventCount(ics)
+    if (n === 0) { setMessage('No payments left from this month on, so there’s nothing to add.'); return }
+    save(ics, 'text/calendar', `bto-${slug(active.name)}.ics`)
+    setMessage(`Saved ${n} payment month${n > 1 ? 's' : ''} as a calendar file: open it to add them to your calendar. Each is on the 1st of the month, with a reminder a week before; check HDB’s or your bank’s notice for the exact date.`)
   }
   const onImport = async (file: File) => {
     try {
@@ -249,6 +260,7 @@ export default function App() {
             onImport={() => fileRef.current?.click()}
             onShare={share}
             onPrint={result ? () => window.print() : undefined}
+            onCalendar={result ? addToCalendar : undefined}
             theme={theme.value}
             onTheme={theme.set}
           />
@@ -319,7 +331,7 @@ export default function App() {
           </>
         )}
 
-        {result && tab === 'schedule' && <ScheduleTable result={result} />}
+        {result && tab === 'schedule' && <ScheduleTable result={result} onCalendar={addToCalendar} />}
         {result && tab === 'cpf' && <AccruedView result={result} names={names} single={active.buyers === 'single'} />}
 
         {tab === 'edit' && (
@@ -397,7 +409,7 @@ function MiniStatus({ result, onOpen }: { result: SimResult; onOpen: () => void 
 
 function ScenarioMenu(props: {
   onRename: () => void; onDuplicate: () => void; onNew: () => void; onDelete?: () => void
-  onExport: (all: boolean) => void; onImport: () => void; onShare: () => void; onPrint?: () => void; theme: ThemePref; onTheme: (t: ThemePref) => void
+  onExport: (all: boolean) => void; onImport: () => void; onShare: () => void; onPrint?: () => void; onCalendar?: () => void; theme: ThemePref; onTheme: (t: ThemePref) => void
 }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -424,6 +436,7 @@ function ScenarioMenu(props: {
             <div className="my-1 border-t border-line" />
             {item('Share link to this scenario', props.onShare)}
             {item('Print summary (or PDF)', props.onPrint)}
+            {item('Add payments to calendar (.ics)', props.onCalendar)}
             <div className="my-1 border-t border-line" />
             {item('Export this scenario (JSON)', () => props.onExport(false))}
             {item('Export all scenarios (JSON)', () => props.onExport(true))}

@@ -152,7 +152,7 @@ function WarningCard({ w }: { w: Warning }) {
 
 // ---------------- Schedule table ----------------
 
-export function ScheduleTable({ result }: { result: SimResult }) {
+export function ScheduleTable({ result, onCalendar }: { result: SimResult; onCalendar?: () => void }) {
   const [showMonthly, setShowMonthly] = useState(false)
   // Rent, mortgage and 2nd+ occurrences of repeating items ("x#2") are hidden unless asked for.
   const isRoutine = (e: SimResult['events'][number]) =>
@@ -163,6 +163,7 @@ export function ScheduleTable({ result }: { result: SimResult }) {
     <Card className="!p-0">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line p-3">
         <div className="text-sm font-semibold">Payment schedule</div>
+        {onCalendar && <Button onClick={onCalendar} className="sm:ml-auto">Add to calendar</Button>}
         {monthlyCount > 0 && <div className="w-full sm:w-72"><Toggle label={`Show repeating payments (${monthlyCount})`} checked={showMonthly} onChange={setShowMonthly} /></div>}
       </div>
       {/* Phones: one card per payment */}
