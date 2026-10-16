@@ -1,19 +1,21 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { compareRows } from '../engine/compare'
 import { addMonths, formatYm } from '../engine/dates'
 import { jobLossImpact, withJobLoss } from '../engine/whatIf'
 import { affordablePrice, type AffordLimit } from '../engine/afford'
-import { launchFit, pickedLaunch, type ProjectFit } from '../engine/launch'
+import { launchFit, pickedLaunch, pickedProject, type ProjectFit } from '../engine/launch'
 import { GROUP_LABEL, oddsFor, rateGroups } from '../engine/ballot'
+import { mopYears, projectSale, resaleLevy } from '../engine/afterMop'
+import { loadResale, summarise, type ResaleFile } from '../surroundings/resale'
 import { LAUNCHES, type Launch, type LaunchProject } from '../config/launches'
-import type { FlatType } from '../config/policy'
+import type { FlatType, Policy } from '../config/policy'
 import { FLAT_TYPES } from './labels'
 import { areaUrl } from '../state/studio'
 import { money } from '../engine/format'
 import { monthlyInstalment } from '../engine/loan'
 import type { Scenario, SimResult, Warning } from '../engine/types'
 import { CompareChart } from './lazyCharts'
-import { Button, Card, InfoTip, Select, T, Toggle } from './controls'
+import { Button, Card, Field, InfoTip, MoneyInput, PercentInput, Segmented, Select, T, Toggle } from './controls'
 import type { Term } from './glossary'
 
 // ---------------- Summary cards ----------------
@@ -306,9 +308,10 @@ function LoanPathList({ steps }: { steps: SimResult['loanPath'] }) {
 
 // ---------------- Accrued interest ----------------
 
-export function AccruedView({ result, names, single = false }: { result: SimResult; names: [string, string]; single?: boolean }) {
+export function AccruedView({ scenario, policy, result, names, single = false }: { scenario: Scenario; policy: Policy; result: SimResult; names: [string, string]; single?: boolean }) {
   return (
     <div className="space-y-3">
+      <SaleCard scenario={scenario} policy={policy} result={result} names={names} single={single} />
       <Card>
         <p className="text-sm text-ink-2">
           If you sell, you must put back into your own CPF OA all the CPF you used for the flat <b className="text-ink">plus</b> the 2.5% a year it would have earned
@@ -339,6 +342,83 @@ export function AccruedView({ result, names, single = false }: { result: SimResu
         ))}
       </div>
     </div>
+  )
+}
+
+/** Selling after the MOP at a price the user picks: the loan, the CPF refund and what comes back. */
+function SaleCard({ scenario, policy, result, names, single }: { scenario: Scenario; policy: Policy; result: SimResult; names: [string, string]; single: boolean }) {
+  const mop = mopYears(scenario)
+  const horizons = result.accrued.map((a) => a.yearsAfterKeys)
+  const [years, setYears] = useState(() => horizons.find((y) => y >= mop) ?? horizons[0])
+  const [price, setPrice] = useState(() => Math.round(result.loan.effectivePrice / 1000) * 1000)
+  const [agentPct, setAgentPct] = useState(0)
+  const sale = projectSale(scenario, result, policy, { years, price, agentPct })
+  const projectId = scenario.flat.project?.id
+  const [resale, setResale] = useState<{ id: string; file: ResaleFile } | null>(null)
+  useEffect(() => {
+    let live = true
+    if (projectId) loadResale(projectId)?.then((file) => { if (live) setResale({ id: projectId, file }) }, () => {})
+    return () => { live = false }
+  }, [projectId])
+  const nearby = resale && resale.id === projectId ? summarise(resale.file.rows, (x) => x.d).find((x) => x.type === scenario.flat.type) : undefined
+  if (!sale || !horizons.length) return null
+  const levy = resaleLevy(scenario, policy)
+  const refund = sale.refundDue.A + sale.refundDue.B
+  const short = refund - sale.cpfBack
+  const line = (label: ReactNode, value: string, cls = '') => (
+    <div className={`flex justify-between gap-3 ${cls}`}><dt className="text-ink-2">{label}</dt><dd className="tnum">{value}</dd></div>
+  )
+  return (
+    <Card>
+      <h2 className="text-sm font-semibold">If you sell after the minimum occupation period</h2>
+      <p className="mt-1 text-xs text-ink-2">
+        {scenario.flat.classification} flats can be sold {mop} years after key collection{scenario.flat.classification !== 'Standard' ? ' (5 for Standard flats)' : ''}. Pick when and for how much.
+      </p>
+      <div className="mt-3 grid gap-3 sm:grid-cols-3">
+        <Field label="Sell">
+          <Segmented value={String(years)} onChange={(v) => setYears(+v)} ariaLabel="Years after keys"
+            options={horizons.map((y) => ({ value: String(y), label: `${y} years` }))} />
+        </Field>
+        <Field label="For" hint={nearby
+          ? <>You bought for {money(result.loan.effectivePrice)}. Resale {FLAT_TYPES.find((t) => t.value === nearby.type)?.label ?? nearby.type} flats within 1 km of {pickedProject(scenario)?.project.name ?? 'the project'}: median <b className="text-ink">{money(nearby.median)}</b> ({nearby.n} sales; leases from {nearby.leaseFrom === nearby.leaseTo ? nearby.leaseFrom : `${nearby.leaseFrom}–${nearby.leaseTo}`}).{' '}
+            <button type="button" className="text-accent underline" onClick={() => setPrice(Math.round(nearby.median / 1000) * 1000)}>Use it</button></>
+          : <>You bought for {money(result.loan.effectivePrice)}. Check recent prices nearby.</>}>
+          <MoneyInput value={price} onChange={setPrice} ariaLabel="Sale price" />
+        </Field>
+        <Field label="Agent’s fee" hint="Leave at 0 if you sell it yourself. GST is added.">
+          <PercentInput value={agentPct} onChange={setAgentPct} max={5} ariaLabel="Agent’s commission" />
+        </Field>
+      </div>
+      {sale.beforeMop ? (
+        <p className="mt-3 text-sm text-serious">
+          {formatYm(sale.ym)} is before the {mop}-year minimum occupation period ends, so the flat can’t be sold then. Pick {mop} years or later.
+        </p>
+      ) : (
+        <div className="mt-3 grid gap-4 md:grid-cols-2">
+          <dl className="space-y-1 text-sm">
+            {line(`Sale in ${formatYm(sale.ym)}`, money(price), 'font-medium')}
+            {sale.recovery !== 0 && line(<>Subsidy recovery to HDB{sale.recoveryPct !== undefined ? ` (${sale.recoveryPct}%)` : ''}</>, sale.recovery === null ? 'not known' : `−${money(sale.recovery)}`)}
+            {line('Loan still owed', `−${money(sale.loan)}`)}
+            {sale.agentFee > 0 && line('Agent’s fee', `−${money(sale.agentFee)}`)}
+            {line(<>Back into your CPF OA <span className="text-muted">(CPF used + <T term="accrued">accrued interest</T>)</span></>, `−${money(sale.cpfBack)}`)}
+            {line('Cash in hand', sale.cash < 0 ? `−${money(-sale.cash)}` : money(sale.cash), `border-t border-line pt-1 font-semibold ${sale.cash < 0 ? 'text-critical' : ''}`)}
+          </dl>
+          <div className="space-y-2 text-xs text-ink-2">
+            <p className="text-sm text-ink">
+              For your next home: <b className="tnum">{money(Math.max(0, sale.cash))}</b> cash and <b className="tnum">{money(sale.cpfBack)}</b> back in CPF{!single && <> ({names[0]} {money(sale.refundDue.A * (sale.cpfBack / (refund || 1)))}, {names[1]} {money(sale.refundDue.B * (sale.cpfBack / (refund || 1)))})</>}.
+            </p>
+            {sale.cash < 0
+              ? <p className="text-critical">The sale doesn’t cover the loan: you’d need {money(-sale.cash)} in cash to clear it.</p>
+              : short > 1
+                ? <p>The sale doesn’t cover the full {money(refund)} CPF refund. Sold at market value, only what’s left after the loan goes back ({money(short)} less); you don’t top up the rest in cash.</p>
+                : <p>Below about <b className="tnum text-ink">{money(sale.breakEven)}</b>, nothing comes back as cash: it all goes to the loan and your CPF.</p>}
+            {sale.recovery === null && <p>Pick the project in Edit plan → Flat to include its subsidy recovery rate.</p>}
+            {levy > 0 && <p>Buying another new flat from HDB (BTO or EC) after this one means a <b className="text-ink">{money(levy)}</b> resale levy, paid in cash; a resale flat has none.</p>}
+            <p className="text-muted">The loan follows your plan’s mortgage (with any rate or loan changes). Legal fees for the sale and HDB’s resale fees aren’t counted. Estimates only.</p>
+          </div>
+        </div>
+      )}
+    </Card>
   )
 }
 

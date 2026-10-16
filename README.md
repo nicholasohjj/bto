@@ -31,6 +31,8 @@ Shared links show a preview card (title, description and `public/og.png`) from t
 
 **Ballot odds**: once a launch closes, `launches.ts` holds HDB's application rates (`applicationRates`: applicants per flat set aside for seniors, first-timer families, first-timer singles and second-timer families, by project and flat type, with the medians). The plan's group comes from its buyers, first-timer status and ages (seniors: everyone 55 or over, 2-room Flexi only). The Flat editor shows the picked project's rate and what it means (HDB shortlists up to twice as many applicants as flats, so a rate of 3.3 means at most about 6 in 10 got a queue number), "Which projects fit" shows it on each project, and an upcoming launch shows the last rates in its towns. Extra ballot chances and priority schemes aren't modelled; a first-timer + second-timer couple sees both family rates, since HDB's page doesn't say which group they're in.
 
+**If you sell** tab (`engine/afterMop.ts`, the card at the top of the CPF refund projection): pick when to sell (5, 10 or 15 years after keys; before the minimum occupation period of 5 years, or 10 for Plus and Prime, it says it can't be sold), the price and an agent's fee. It shows the loan still owed (following the plan's mortgage, with any loan changes), Plus/Prime subsidy recovery at the picked project's rate, the CPF to put back (CPF used + accrued interest), the cash left, and the price below which nothing comes back as cash. A sale that doesn't cover the full CPF refund puts back only what's left after the loan (no cash top-up, for a sale at market value). It names the resale levy for a next subsidised flat. With a picked project, it shows the median recent resale price of that flat type within 1 km, with a button to use it. Legal and HDB resale fees on the sale aren't counted.
+
 **Payments → Add to calendar** (also **⋯ → Add payments to calendar**) saves the plan's payment months from this month on as an `.ics` file (`state/calendar.ts`). The plan works in months, so each month with payments is one all-day event on the 1st, listing each payment with its cash/CPF split, with a reminder a week before. Milestones (booking, AFL, keys) name the event; only the first mortgage payment and the first of each recurring item are included, and rent is left out. UIDs are fixed per plan and month, so importing again updates the events.
 
 ## Project layout
@@ -188,6 +190,13 @@ node scripts/osm-snapshot.mjs yishun-khatib --area
 ```
 
 `area.ts` holds the geometry (tested in `area.test.ts`); `areaPage.ts` is the page.
+
+**Resale prices within 1 km** (`resale.ts`, both Surroundings pages): HDB resale transactions from data.gov.sg (Singapore Open Data Licence) for the last 12 months, by flat type: number of sales, median, range, median per m², lease start years, and the latest five sales. Distances are from the block on the unit page and from the edge of the site on the upcoming-sites page. The transactions have no position, so `scripts/resale-snapshot.mjs` places each block with OneMap's address search (streets first, so only blocks on streets within 4 km of a site are looked up) and writes `src/surroundings/resale/<site>.json` with the sales within 1.5 km of each site, in the site's metres. It caches answers in `.resale-cache/` (git-ignored); re-run it to refresh:
+
+```
+node scripts/resale-snapshot.mjs              # every site and area, last 12 months
+node scripts/resale-snapshot.mjs --months 18
+```
 
 `*.local.test.ts` files run only where the git-ignored brochures are present (`brochures/`): they
 check the PDF importer on a real block plan.

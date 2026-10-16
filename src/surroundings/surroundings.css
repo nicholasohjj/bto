@@ -122,3 +122,16 @@ button.am{width:100%;background:none;border:0;border-bottom:1px dotted var(--lin
 .mpd-form .note{margin:0}
 .mpd-res{max-height:40vh;overflow:auto}
 .mpd-btns{display:flex;justify-content:flex-end;gap:8px}
+/* resale prices */
+.rs{border-bottom:1px dotted var(--line);padding:2px 0}
+.rs summary{display:flex;justify-content:space-between;gap:8px;align-items:baseline;cursor:pointer;padding:5px 2px;min-height:32px;list-style:none}
+.rs summary::-webkit-details-marker{display:none}
+.rs summary::before{content:"▸";color:var(--ink2);margin-right:4px}
+.rs[open] summary::before{content:"▾"}
+.rs summary>span{flex:1}
+.rs summary small{color:var(--ink2)}
+.rs summary>b{font-variant-numeric:tabular-nums}
+.rs .kv{padding-left:14px}
+.rs-list{list-style:none;margin:4px 0 6px;padding:0 0 0 14px;font-size:12px;color:var(--ink2)}
+.rs-list li{display:flex;justify-content:space-between;gap:8px;padding:2px 0}
+.rs-list b{color:var(--ink);font-variant-numeric:tabular-nums}

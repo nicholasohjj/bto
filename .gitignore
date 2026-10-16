@@ -29,3 +29,6 @@ brochures/
 
 # Overpass answers saved by an unfinished snapshot run (scripts/osm-snapshot.mjs)
 .osm-cache/
+
+# Answers saved by a resale snapshot run (scripts/resale-snapshot.mjs)
+.resale-cache/

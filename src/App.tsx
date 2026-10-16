@@ -28,7 +28,7 @@ type Tab = 'overview' | 'schedule' | 'cpf' | 'edit' | 'reno' | 'compare' | 'adva
 const TABS: { id: Tab; label: string }[] = [
   { id: 'overview', label: 'Overview' },
   { id: 'schedule', label: 'Payments' },
-  { id: 'cpf', label: 'CPF interest' },
+  { id: 'cpf', label: 'If you sell' },
   { id: 'edit', label: 'Edit plan' },
   { id: 'reno', label: 'Renovation' },
   { id: 'compare', label: 'Compare' },
@@ -332,7 +332,7 @@ export default function App() {
         )}
 
         {result && tab === 'schedule' && <ScheduleTable result={result} onCalendar={addToCalendar} />}
-        {result && tab === 'cpf' && <AccruedView result={result} names={names} single={active.buyers === 'single'} />}
+        {result && tab === 'cpf' && <AccruedView scenario={active} policy={policy} result={result} names={names} single={active.buyers === 'single'} />}
 
         {tab === 'edit' && (
           <div className="space-y-4">

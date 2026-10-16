@@ -11,6 +11,7 @@ import sembawangPortico from './sites/sembawang-portico.json'
 import woodgroveAcres from './sites/woodgrove-acres.json'
 import { saveChosenUnit, studioUnitUrl, unitLabel } from '../state/unit'
 import { bindPlaces, distanceM, kmText, loadPlaces, placesHtml } from './places'
+import { loadResale, resaleHtml, summarise, type ResaleFile } from './resale'
 import { buildGraph, estateStarts, fromStarts, hull, routeTo, type Graph, type Route } from './walk'
 
 const SITES: Record<string, Site> = {
@@ -242,6 +243,8 @@ function renderResults(u: UnitPos, obs: ReturnType<typeof obstacles>) {
   const c = centre(u), prim = places().filter((a) => a.kind === 'school' && (a.sub === 'primary' || /primary/i.test(a.name))).map((a) => ({ a, d: Math.round(Math.hypot(a.at[0] - c[0], a.at[1] - c[1])) })).filter((x) => x.d <= 2000).sort((p, q2) => p.d - q2.d)
   h += `<div class="sec"><h3>Primary schools within 2 km</h3>${prim.length ? prim.map((x) => `<button type="button" class="am link" data-am="${esc(x.a.name)}" title="Show the walking route on the map"><i aria-hidden="true" style="background:${KIND.school.c}">S</i><span>${esc(x.a.name)}</span><b>${x.d <= 1000 ? '<span class="pill good">within 1 km</span>' : '1–2 km'} · ${km(x.d)}</b></button>`).join('') : '<p class="note" style="margin:0">None found.</p>'}
     <p class="note">Primary 1 registration gives priority to homes within 1 km and 2 km of a school. These are rough straight-line distances to the school's map point; the official distance is measured by SLA from your address (OneMap's school query).</p></div>`
+  const rf = resale.get(siteId) ?? null
+  h += resaleHtml(rf, rf ? summarise(rf.rows, (x) => Math.hypot(x.at[0] - c[0], x.at[1] - c[1])) : [], `Block ${esc(u.block.id)}`, u.unit.type.replace(/-\d$/, ''))
   const at = toLatLng(site, c)
   h += placesHtml(at, (p) => { const d = Math.round(distanceM(at[0], at[1], p.lat, p.lon)); return { near: d, far: d } })
   h += compareHtml()
@@ -285,8 +288,11 @@ function compareHtml() {
 }
 
 /* controls */
+/** Resale snapshots, loaded with the surroundings (null: none taken for this site). */
+const resale = new Map<string, ResaleFile | null>()
 async function loadOsm() {
   const c = cx
+  if (!resale.has(c.id)) { resale.set(c.id, null); loadResale(c.id)?.then((f) => { resale.set(c.id, f); if (c === cx) updateSoon() }, () => resale.delete(c.id)) }
   try { await loadCtx(c.id) } catch { toast('Could not load the buildings around the estate'); return }
   if (c !== cx) return
   scene?.setOsm(c.osm!)

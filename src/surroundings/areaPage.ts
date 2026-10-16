@@ -6,6 +6,7 @@ import { across, areaM2, centroid, edgeDist, farDist, noiseSources, primarySchoo
 import { AREA_OSM, AREAS } from './areaList'
 import { KIND } from './map'
 import { bindPlaces, placesHtml, type MyPlace, type Reach } from './places'
+import { loadResale, resaleHtml, summarise, type ResaleFile } from './resale'
 import { buildGraph, fromStarts, nearestNodes, routeTo, type Graph } from './walk'
 import { LAUNCHES } from '../config/launches'
 import { FLAT_TYPES } from '../ui/labels'
@@ -171,13 +172,17 @@ function render(c: Ctx | null) {
   h += `<div class="sec"><h3>Roads and trains to listen for</h3>${noise.length ? noise.slice(0, 6).map((n) => `<div class="kv"><span>${esc(n.name)} <small style="color:var(--ink2)">(${what[n.kind]}, ${n.side} side)</small>${n.kind !== 'major' && n.dist < 100 ? ' <span class="pill warn">close</span>' : ''}</span><b>${n.dist ? `${n.dist} m` : 'next to it'}</b></div>`).join('') : '<p class="note" style="margin:0">No expressway, main road or above-ground train track within 300 m.</p>'}
     ${noise.length ? `<p class="note key">On the map: ${[noise.some((n) => n.kind === 'expressway') && '<i style="background:#c0392b"></i>expressway', noise.some((n) => n.kind === 'major') && '<i style="background:#e8833a"></i>main road', noise.some((n) => n.kind === 'rail') && '<i class="dash"></i>train tracks'].filter(Boolean).join(' ')}</p>` : ''}
     <p class="note">The closest a block could be, from the edge of the site. ${noise.some((n) => n.kind !== 'major' && n.dist < 100) ? 'Blocks on that side will hear it, more so on upper floors facing it; once the site plan is out, see which stacks face it. ' : ''}Visit at peak hour${noise.some((n) => n.kind === 'rail') ? ', and when trains run early in the morning and late at night' : ''}.${under.map((n) => ` The ${esc(n)} runs underground nearby, so it adds no train noise.`).join('')}</p></div>`
+  const rf = resaleOf.get(area.id) ?? null
+  h += resaleHtml(rf, rf ? summarise(rf.rows, (x) => edgeDist(x.at, area.outline)) : [], 'the edge of the site')
   h += placesHtml(ll(centroid(area.outline)), reachOf, true)
   h += `<div class="sec"><p class="note" style="margin:0">Site: ${esc(area.source)}, to within about 20 m. Surroundings: ${esc(c.osm.attribution)}, snapshot of ${c.osm.fetched}. A planning aid, not a survey.</p></div>`
   $('#results').innerHTML = h
 }
 
 let shownCtx: Ctx | null = null
+const resaleOf = new Map<string, ResaleFile | null>()
 async function open(a: Area) {
+  if (!resaleOf.has(a.id)) { resaleOf.set(a.id, null); loadResale(a.id)?.then((f) => { resaleOf.set(a.id, f); if (area === a && shownCtx) render(shownCtx) }, () => resaleOf.delete(a.id)) }
   area = a
   const u = new URL(location.href); u.search = new URLSearchParams({ site: a.id }).toString(); history.replaceState(null, '', u)
   $<HTMLSelectElement>('#site').value = a.id
