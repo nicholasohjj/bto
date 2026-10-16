@@ -1,5 +1,5 @@
 import type { Policy } from '../config/policy'
-import { addMonths, ymToIndex } from './dates'
+import { addMonths, monthsBetween, ymToIndex } from './dates'
 import { pickedProject } from './launch'
 import { isResale } from './saleType'
 import type { LoanStep } from './simulate'
@@ -51,6 +51,8 @@ export interface SaleResult {
   cash: number
   /** The price at which the sale just covers the loan, costs and the full CPF refund. */
   breakEven: number
+  /** Someone is 55 or over at the sale: their refund tops up the Retirement Account first. */
+  over55: boolean
 }
 
 export function projectSale(s: Scenario, r: SimResult, policy: Policy, input: SaleInput): SaleResult | null {
@@ -68,13 +70,19 @@ export function projectSale(s: Scenario, r: SimResult, policy: Policy, input: Sa
   const agentFee = input.price * (input.agentPct ?? 0) * (1 + gst)
   const refundDue = { A: point.perPartner.A.principal + point.perPartner.A.accrued, B: point.perPartner.B.principal + point.perPartner.B.accrued }
   const refund = refundDue.A + refundDue.B
-  // A sale at market value only has to refund CPF from what's left after the loan; no cash top-up.
-  const left = input.price - (recovery ?? 0) - loan - agentFee
-  const cpfBack = Math.max(0, Math.min(refund, left))
-  const cash = left - cpfBack
+  // cpf.gov.sg "CPF refund when selling or transferring property" (VERIFIED 2026-10-16): the sale proceeds pay off
+  // the loan and refund the CPF used plus accrued interest. Sold at market value, if that's not enough, only the
+  // selling price less the loan goes back to CPF; no cash top-up. Costs such as the agent's fee don't reduce it.
+  // Subsidy recovery on Plus/Prime flats is taken off first here (that page doesn't cover it).
+  const proceeds = input.price - (recovery ?? 0) - loan
+  const cpfBack = Math.max(0, Math.min(refund, proceeds))
+  const cash = proceeds - cpfBack - agentFee
   const keep = 1 - (recoveryPct ?? 0) / 100 - (input.agentPct ?? 0) * (1 + gst)
-  return { ym, beforeMop: input.years < mop, mop, loan, recovery, recoveryPct, agentFee, refundDue, cpfBack, cash, breakEven: (loan + refund) / keep }
+  return { ym, beforeMop: input.years < mop, mop, loan, recovery, recoveryPct, agentFee, refundDue, cpfBack, cash, breakEven: (loan + refund) / keep,
+    over55: people(s).some((p) => monthsBetween(p.birthYearMonth, ym) >= 55 * 12) }
 }
+
+const people = (s: Scenario) => (s.buyers === 'single' ? [s.partners[0]] : s.partners)
 
 /** Resale levy for buying another subsidised flat (BTO or EC) after selling this one; half for singles. */
 export function resaleLevy(s: Scenario, policy: Policy): number {

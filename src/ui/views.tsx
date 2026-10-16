@@ -407,11 +407,12 @@ function SaleCard({ scenario, policy, result, names, single }: { scenario: Scena
             <p className="text-sm text-ink">
               For your next home: <b className="tnum">{money(Math.max(0, sale.cash))}</b> cash and <b className="tnum">{money(sale.cpfBack)}</b> back in CPF{!single && <> ({names[0]} {money(sale.refundDue.A * (sale.cpfBack / (refund || 1)))}, {names[1]} {money(sale.refundDue.B * (sale.cpfBack / (refund || 1)))})</>}.
             </p>
-            {sale.cash < 0
-              ? <p className="text-critical">The sale doesn’t cover the loan: you’d need {money(-sale.cash)} in cash to clear it.</p>
+            {sale.cash < 0 && sale.cpfBack < 0.5 && price - (sale.recovery ?? 0) < sale.loan
+              ? <p className="text-critical">The sale doesn’t cover the loan: you’d need {money(-sale.cash)} in cash to clear it{sale.agentFee > 0 ? ' and pay the agent' : ''}.</p>
               : short > 1
-                ? <p>The sale doesn’t cover the full {money(refund)} CPF refund. Sold at market value, only what’s left after the loan goes back ({money(short)} less); you don’t top up the rest in cash.</p>
+                ? <p>The sale doesn’t cover the full {money(refund)} CPF refund. Sold at market value, only the price less the loan goes back ({money(short)} less, shared in proportion to what each of you owes); you don’t top up the rest in cash.{sale.agentFee > 0 && sale.cash < 0.5 ? ' The agent’s fee is still yours to pay.' : ''}</p>
                 : <p>Below about <b className="tnum text-ink">{money(sale.breakEven)}</b>, nothing comes back as cash: it all goes to the loan and your CPF.</p>}
+            {sale.over55 && <p>For anyone 55 or over by then, CPF first uses their refund to top up their Retirement Account to the required retirement sum; the rest stays in the OA.</p>}
             {sale.recovery === null && <p>Pick the project in Edit plan → Flat to include its subsidy recovery rate.</p>}
             {levy > 0 && <p>Buying another new flat from HDB (BTO or EC) after this one means a <b className="text-ink">{money(levy)}</b> resale levy, paid in cash; a resale flat has none.</p>}
             <p className="text-muted">The loan follows your plan’s mortgage (with any rate or loan changes). Legal fees for the sale and HDB’s resale fees aren’t counted. Estimates only.</p>
