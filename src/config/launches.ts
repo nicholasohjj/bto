@@ -61,9 +61,62 @@ export interface Launch {
   previews?: LaunchPreview[]
   /** Empty until HDB announces the projects. */
   projects: LaunchProject[]
+  /** Applications received, from HDB's application-rate page once the launch closes. */
+  applicationRates?: ApplicationRates
+}
+
+/** Who a share of the flats is set aside for, as HDB's application-rate page groups applicants. */
+export type RateGroup = 'seniors' | 'ftFamilies' | 'ftSingles' | 'stFamilies'
+
+/** One row of HDB's table: some projects' flats of one type (HDB pools some projects, and 5-room with 3Gen). */
+export interface ApplicationRateRow {
+  projects: string[]
+  types: FlatType[]
+  units: number
+  applicants: number
+  /** Applicants per flat set aside for each group, as HDB rounds them (one decimal place). */
+  rates: Partial<Record<RateGroup, number>>
+}
+
+export interface ApplicationRates {
+  /** When the count was taken ("YYYY-MM-DD"): the close of applications. */
+  asAt: string
+  rows: ApplicationRateRow[]
+  /** Median rate of each group, for 2-room Flexi flats and for 3-room and bigger. */
+  median: { flexi: Partial<Record<RateGroup, number>>; bigger: Partial<Record<RateGroup, number>> }
+  source: string
+  verified: string
+}
+
+// HDB "Flat Supply & Applications Received", June 2026 BTO, as at 11:59pm on 24 June 2026
+// (services-homes.hdb.gov.sg/sales/application-rate/bto/202606, printed by the user 2026-10-16). VERIFIED 2026-10-16.
+const JUNE_2026_RATES: ApplicationRates = {
+  asAt: '2026-06-24',
+  rows: [
+    { projects: ['kebun-baru-breeze'], types: ['2R'], units: 377, applicants: 1011, rates: { seniors: 2.6, ftFamilies: 0.1, ftSingles: 4.1, stFamilies: 0.3 } },
+    { projects: ['lakeview-cascadia'], types: ['2R'], units: 476, applicants: 2172, rates: { seniors: 3.7, ftFamilies: 0.2, ftSingles: 7.9, stFamilies: 0.2 } },
+    { projects: ['berlayar-rise'], types: ['2R'], units: 816, applicants: 3364, rates: { seniors: 2.6, ftFamilies: 0.1, ftSingles: 7.8, stFamilies: 0.4 } },
+    { projects: ['sembawang-portico', 'sembawang-brook'], types: ['2R'], units: 461, applicants: 1307, rates: { seniors: 2.3, ftFamilies: 0.4, ftSingles: 4.7, stFamilies: 0.9 } },
+    { projects: ['woodgrove-acres'], types: ['2R'], units: 157, applicants: 1131, rates: { seniors: 3.9, ftFamilies: 0.8, ftSingles: 19.3, stFamilies: 2.8 } },
+    { projects: ['kebun-baru-ridge'], types: ['3R'], units: 95, applicants: 338, rates: { ftFamilies: 1.4, stFamilies: 24.3 } },
+    { projects: ['kebun-baru-breeze', 'kebun-baru-ridge'], types: ['4R'], units: 592, applicants: 1249, rates: { ftFamilies: 1.4, stFamilies: 8.3 } },
+    { projects: ['lakeview-cascadia'], types: ['4R'], units: 745, applicants: 3971, rates: { ftFamilies: 3.9, stFamilies: 18.5 } },
+    { projects: ['berlayar-rise'], types: ['3R'], units: 172, applicants: 616, rates: { ftFamilies: 1.3, stFamilies: 23.9 } },
+    { projects: ['berlayar-rise'], types: ['4R'], units: 988, applicants: 5285, rates: { ftFamilies: 3.3, stFamilies: 23.9 } },
+    { projects: ['sembawang-portico', 'sembawang-brook'], types: ['3R'], units: 187, applicants: 286, rates: { ftFamilies: 0.7, stFamilies: 5.0 } },
+    { projects: ['sembawang-portico', 'sembawang-brook'], types: ['4R'], units: 764, applicants: 685, rates: { ftFamilies: 0.6, stFamilies: 3.6 } },
+    { projects: ['sembawang-portico', 'sembawang-brook'], types: ['5R', '3Gen'], units: 623, applicants: 438, rates: { ftFamilies: 0.4, stFamilies: 3.4 } },
+    { projects: ['woodgrove-acres'], types: ['3R'], units: 80, applicants: 377, rates: { ftFamilies: 2.3, stFamilies: 14.3 } },
+    { projects: ['woodgrove-acres'], types: ['4R'], units: 162, applicants: 832, rates: { ftFamilies: 4.1, stFamilies: 15.0 } },
+    { projects: ['woodgrove-acres'], types: ['5R'], units: 257, applicants: 832, rates: { ftFamilies: 2.5, stFamilies: 9.9 } },
+  ],
+  median: { flexi: { seniors: 2.6, ftFamilies: 0.2, ftSingles: 7.8, stFamilies: 0.4 }, bigger: { ftFamilies: 1.4, stFamilies: 14.3 } },
+  source: 'HDB Flat Supply & Applications Received, June 2026 BTO, as at 24 Jun 2026',
+  verified: '2026-10-16',
 }
 
 const JUNE_2026: Launch = {
+  applicationRates: JUNE_2026_RATES,
   id: '2026-06',
   name: 'June 2026 BTO',
   applicationMonth: '2026-06',

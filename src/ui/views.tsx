@@ -4,6 +4,7 @@ import { addMonths, formatYm } from '../engine/dates'
 import { jobLossImpact, withJobLoss } from '../engine/whatIf'
 import { affordablePrice, type AffordLimit } from '../engine/afford'
 import { launchFit, pickedLaunch, type ProjectFit } from '../engine/launch'
+import { GROUP_LABEL, oddsFor, rateGroups } from '../engine/ballot'
 import { LAUNCHES, type Launch, type LaunchProject } from '../config/launches'
 import type { FlatType } from '../config/policy'
 import { FLAT_TYPES } from './labels'
@@ -620,6 +621,10 @@ export function LaunchFitCard({ scenario, onCompare }: { scenario: Scenario; onC
               <span className="tnum whitespace-nowrap text-sm text-ink-2">from {money(f.fromPrice)}</span>
             </span>
             {sub && <span className="block text-xs text-ink-2">{sub}</span>}
+            {(() => {
+              const g = rateGroups(scenario, f.type).groups[0], o = g && oddsFor(launch!, f.project.id, f.type, g)
+              return o ? <span className="block text-xs text-ink-2">Ballot: <span className={o.band === 'good' ? 'text-good-ink' : o.band === 'hard' ? 'text-serious' : 'text-ink'}>{o.rate.toFixed(1)}</span> applicants per flat for {GROUP_LABEL[g]} (median {o.median.toFixed(1)})</span> : null
+            })()}
             <span className={`mt-0.5 block text-xs ${f.ok ? 'text-good-ink' : 'text-critical'}`}>
               {f.ok
                 ? <>✔ {f.aboveMax ? 'Price isn’t the limit' : <>Works up to <span className="tnum">{money(f.maxPrice!)}</span></>}</>
@@ -695,7 +700,7 @@ export function LaunchFitCard({ scenario, onCompare }: { scenario: Scenario; onC
       </p>
       {!planShort && <p className="mt-3 text-[11px] text-muted">
         Starting prices are the cheapest unit of each type, before grants. Keeps your loan, CPF slider, costs and grants; each project’s dates come from
-        its stated waiting time (“about”: a typical one). {(scenario.buyers ?? 'couple') !== 'couple' && 'Singles can only buy 2-room Flexi flats. '}Source: {launch.source}.
+        its stated waiting time (“about”: a typical one). {(scenario.buyers ?? 'couple') !== 'couple' && 'Singles can only buy 2-room Flexi flats. '}Source: {launch.source}.{launch.applicationRates && <> Ballot: {launch.applicationRates.source}; fewer than 1 applicant per flat means everyone in that group could get a queue number.</>}
       </p>}
     </Card>
   )

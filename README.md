@@ -29,6 +29,8 @@ Shared links show a preview card (title, description and `public/og.png`) from t
 
 **⋯ → Print summary** prints one page for an HDB or bank appointment (`ui/PrintSummary.tsx`): key dates, the loan, each payment with its cash/CPF split, and the problems to check. Choose "Save as PDF" in the print dialog to get a PDF.
 
+**Ballot odds**: once a launch closes, `launches.ts` holds HDB's application rates (`applicationRates`: applicants per flat set aside for seniors, first-timer families, first-timer singles and second-timer families, by project and flat type, with the medians). The plan's group comes from its buyers, first-timer status and ages (seniors: everyone 55 or over, 2-room Flexi only). The Flat editor shows the picked project's rate and what it means (HDB shortlists up to twice as many applicants as flats, so a rate of 3.3 means at most about 6 in 10 got a queue number), "Which projects fit" shows it on each project, and an upcoming launch shows the last rates in its towns. Extra ballot chances and priority schemes aren't modelled; a first-timer + second-timer couple sees both family rates, since HDB's page doesn't say which group they're in.
+
 **Payments → Add to calendar** (also **⋯ → Add payments to calendar**) saves the plan's payment months from this month on as an `.ics` file (`state/calendar.ts`). The plan works in months, so each month with payments is one all-day event on the 1st, listing each payment with its cash/CPF split, with a reminder a week before. Milestones (booking, AFL, keys) name the event; only the first mortgage payment and the first of each recurring item are included, and rent is left out. UIDs are fixed per plan and month, so importing again updates the events.
 
 ## Project layout
@@ -55,6 +57,7 @@ src/
     accruedInterest.ts  CPF accrued interest at 5/10/15 years after keys
     compare.ts          Key-number rows for scenario comparison
     launch.ts           Fills the flat from a picked launch project; "which projects fit?" check across a launch
+    ballot.ts           Ballot odds from HDB's application rates: the plan's group, the rate and median, past rates in a town
     policyOverrides.ts  Applies per-scenario "Advanced settings" overrides to the policy
     __tests__/          Vitest tests
   state/                Seed scenarios, localStorage, JSON export/import, share links, renovation stages,
