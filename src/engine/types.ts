@@ -123,6 +123,8 @@ export interface Flat {
   secondTimer?: PartnerId
   /** Month you apply for the HFE letter (default: a month before the flat application). */
   hfeMonth?: YearMonth
+  /** Last month the HFE letter is valid, from the letter (default: the HFE month plus its validity). */
+  hfeValidUntil?: YearMonth
   /** Remaining lease in years when you buy (default 99). Affects CPF use and HDB loan limit. */
   remainingLeaseYears?: number
   /**

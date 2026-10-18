@@ -2,6 +2,9 @@ import { formatYm } from '../engine/dates'
 import { money } from '../engine/format'
 import { isCompleted } from '../engine/saleType'
 import type { PaidEvent, Scenario, SimResult } from '../engine/types'
+import { LAUNCHES } from '../config/launches'
+import { readShortlist } from '../state/shortlist'
+import { unitLabel } from '../state/unit'
 import { Disclaimer } from './Disclaimer'
 import { FLAT_TYPES, MILESTONES } from './labels'
 
@@ -99,8 +102,29 @@ export function PrintSummary({ scenario, result }: { scenario: Scenario; result:
           )}
       </section>
 
+      <Shortlist />
+
       <footer className="mt-3"><Disclaimer compact /></footer>
     </div>
+  )
+}
+
+const UNIT_TYPE: Record<string, string> = { '2R-1': '2-room Flexi (Type 1)', '2R-2': '2-room Flexi (Type 2)', '3R': '3-room', '4R': '4-room', '5R': '5-room', '3Gen': '3Gen' }
+
+/** The units ranked in Surroundings, for the flat selection appointment. */
+function Shortlist() {
+  const list = readShortlist()
+  if (!list.length) return null
+  const name = (id: string) => LAUNCHES.flatMap((l) => l.projects).find((p) => p.id === id)?.name ?? id
+  return (
+    <section className="mt-2 break-inside-avoid">
+      <h2 className="font-bold">Unit shortlist, in order of choice</h2>
+      <ol className="list-decimal columns-2 gap-x-6 pl-5">
+        {list.map((u) => (
+          <li key={`${u.site}|${u.block}|${u.unit}|${u.storey}`}>{name(u.site)}, {unitLabel(u)} · {UNIT_TYPE[u.type] ?? u.type}{u.facing ? `, faces ${u.facing}` : ''}</li>
+        ))}
+      </ol>
+    </section>
   )
 }
 

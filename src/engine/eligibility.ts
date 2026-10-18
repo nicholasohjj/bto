@@ -52,6 +52,11 @@ export function tierAmount(income: number, tiers: GrantTier[]): number {
   return tiers.find((t) => income <= t.upTo)?.amount ?? 0
 }
 
+/** Last month the HFE letter is valid: from the letter, or the HFE month plus its validity. */
+export function hfeValidUntil(s: Scenario, policy: Policy): YearMonth {
+  return s.flat.hfeValidUntil ?? addMonths(hfeMonth(s, policy), policy.hfe.validityMonths)
+}
+
 /** When you apply for the HFE letter: as set, or a month before the flat application. */
 export function hfeMonth(s: Scenario, policy: Policy): YearMonth {
   return s.flat.hfeMonth ?? addMonths(s.flat.dates.application, -policy.hfe.monthsBeforeApplication)

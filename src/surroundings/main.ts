@@ -10,6 +10,8 @@ import sembawangBrook from './sites/sembawang-brook.json'
 import sembawangPortico from './sites/sembawang-portico.json'
 import woodgroveAcres from './sites/woodgrove-acres.json'
 import { saveChosenUnit, studioUnitUrl, unitLabel } from '../state/unit'
+import { addToShortlist, moveInShortlist, readShortlist, saveShortlist, SHORTLIST_MAX, type ShortlistUnit } from '../state/shortlist'
+import { BOOK_SHARES, flatTypeOf, queueBands, siteUnits, unitKey, type QueueBand, type QueueResult, type QueueUnit } from './queue'
 import { bindPlaces, distanceM, kmText, loadPlaces, placesHtml } from './places'
 import { loadResale, resaleHtml, summarise, type ResaleFile } from './resale'
 import { buildGraph, estateStarts, fromStarts, hull, routeTo, type Graph, type Route } from './walk'
@@ -33,6 +35,8 @@ const OSM: Record<string, () => Promise<Osm>> = {
   'sembawang-portico': () => import('./sites/sembawang-portico.osm.json').then((m) => m.default as unknown as Osm),
   'woodgrove-acres': () => import('./sites/woodgrove-acres.osm.json').then((m) => m.default as unknown as Osm),
 }
+/** Flat types, as a queue number is for one of them. */
+const QTYPE: Record<string, string> = { '2R': '2-room Flexi', '3R': '3-room', '4R': '4-room', '5R': '5-room', '3Gen': '3Gen' }
 const TYPE: Record<string, string> = { '2R-1': '2-room Flexi (Type 1)', '2R-2': '2-room Flexi (Type 2)', '3R': '3-room', '4R': '4-room', '5R': '5-room', '3Gen': '3Gen' }
 
 const $ = <T extends HTMLElement = HTMLElement>(s: string) => document.querySelector(s) as T
@@ -47,7 +51,9 @@ function toast(m: string) { const t = $('#toast'); t.textContent = m; t.classLis
 const q = new URLSearchParams(location.search)
 /** A unit in the comparison, from any project. */
 interface CmpPick extends Pick { site: string }
-let saved: { site?: string; pick?: Pick; compare?: (Pick & { site?: string })[] } = {}
+/** A queue number for one project: its flat type and the share of those ahead assumed to book. */
+interface QueueSet { no: number; type: string; share: number }
+let saved: { site?: string; pick?: Pick; compare?: (Pick & { site?: string })[]; queue?: Record<string, QueueSet> } = {}
 try { saved = JSON.parse(localStorage.getItem('surroundings') || '{}') } catch { /* fresh start */ }
 let siteId = q.get('site') && SITES[q.get('site')!] ? q.get('site')! : saved.site && SITES[saved.site] ? saved.site : 'berlayar-rise'
 let site = SITES[siteId]
@@ -55,6 +61,8 @@ const first = site.blocks[0]
 let pick: Pick = q.get('block') ? { block: q.get('block')!, unit: q.get('unit') || '', storey: +(q.get('storey') || 10) } : saved.pick ?? { block: first.id, unit: first.units[0].no, storey: Math.round(first.storeys / 2) }
 // Entries saved before comparisons spanned projects are from the project that was open.
 let compare: CmpPick[] = (saved.compare ?? []).map((p) => ({ ...p, site: p.site ?? saved.site ?? siteId })).filter((p) => SITES[p.site])
+const queue: Record<string, QueueSet> = saved.queue ?? {}
+let shortlist = readShortlist()
 let future = 40, winView = false
 const today = new Date()
 const dayText = (d: { label: string }) => d.label === 'Today' ? 'today' : 'on the ' + d.label
@@ -77,7 +85,7 @@ function loadCtx(id: string): Promise<Ctx> {
 let cx = ctxOf(siteId)
 
 function persist() {
-  try { localStorage.setItem('surroundings', JSON.stringify({ site: siteId, pick, compare })) } catch { /* private mode */ }
+  try { localStorage.setItem('surroundings', JSON.stringify({ site: siteId, pick, compare, queue })) } catch { /* private mode */ }
   const u = new URL(location.href)
   u.search = new URLSearchParams({ site: siteId, block: pick.block, unit: pick.unit, storey: String(pick.storey) }).toString()
   history.replaceState(null, '', u)
@@ -151,6 +159,12 @@ function fillPickers() {
   $<HTMLSelectElement>('#unit').innerHTML = b.units.map((u) => `<option value="${u.no}"${u.no === pick.unit ? ' selected' : ''}>Unit ${u.no} · ${TYPE[u.type] ?? u.type}</option>`).join('')
   const unit = b.units.find((u) => u.no === pick.unit), [lowest, highest] = unit ? unitStoreys(b, unit) : [2, b.storeys]
   for (const id of ['#storey', '#storeyR']) { const el = $<HTMLInputElement>(id); el.min = String(lowest); el.max = String(highest); if (el !== document.activeElement || id === '#storeyR') el.value = String(pick.storey) }
+  const order = Object.keys(QTYPE), types = [...new Set(site.blocks.flatMap((x) => x.units.map((u) => flatTypeOf(u.type))))].sort((a, c) => order.indexOf(a) - order.indexOf(c))
+  const qs = queue[siteId], qt = qs && types.includes(qs.type) ? qs.type : flatTypeOf(unit?.type ?? types[0])
+  $<HTMLSelectElement>('#qType').innerHTML = types.map((t) => `<option value="${t}"${t === qt ? ' selected' : ''}>${QTYPE[t] ?? t}</option>`).join('')
+  $<HTMLSelectElement>('#qShare').innerHTML = BOOK_SHARES.map((o) => `<option value="${o.value}"${o.value === (qs?.share ?? 1) ? ' selected' : ''}>${o.label}</option>`).join('')
+  const qNo = $<HTMLInputElement>('#qNo')
+  if (qNo !== document.activeElement) qNo.value = qs?.no ? String(qs.no) : ''
   $<HTMLSelectElement>('#day').innerHTML = DAYS.map((d, i) => `<option value="${i}"${i === dayIdx ? ' selected' : ''}>${d.label}</option>`).join('')
 }
 
@@ -222,6 +236,7 @@ function renderResults(u: UnitPos, obs: ReturnType<typeof obstacles>) {
     <div class="kv"><span>Flat type</span><b>${TYPE[u.unit.type] ?? u.unit.type}</b></div>
     <div class="kv"><span>Height above ground</span><b>about ${Math.round(u.floorZ)} m</b></div>
     <div class="kv"><span>Main windows face</span><b>${u.facing}</b></div></div>`
+  h += queueHtml(u)
   h += `<div class="sec"><h3>Sun on the main windows</h3><div class="big">${hrs(day.sunHours)} <small>direct sun ${dayText(d)}</small></div>${sunBar(day)}
     <div class="kv"><span>After 3 pm (west sun)</span><b>${hrs(day.afternoonHours)}</b></div>
     <div class="kv"><span>Year average</span><b>${hrs(yr.avgSun)} a day, ${hrs(yr.avgAfternoon)} after 3 pm</b></div>
@@ -247,12 +262,111 @@ function renderResults(u: UnitPos, obs: ReturnType<typeof obstacles>) {
   h += resaleHtml(rf, rf ? summarise(rf.rows, (x) => Math.hypot(x.at[0] - c[0], x.at[1] - c[1])) : [], `Block ${esc(u.block.id)}`, u.unit.type.replace(/-\d$/, ''))
   const at = toLatLng(site, c)
   h += placesHtml(at, (p) => { const d = Math.round(distanceM(at[0], at[1], p.lat, p.lon)); return { near: d, far: d } })
+  h += shortlistHtml()
   h += compareHtml()
   h += `<div class="sec"><p class="note" style="margin:0">Estate: ${esc(site.source)}. ${osm ? `Surroundings: ${esc(osm.attribution)}, snapshot of ${osm.fetched}.` : ''} Blocks are placed to within a few metres; storeys are taken as ${site.storeyM} m. Heights of future buildings on reserved land are not known. A planning aid, not a survey.</p></div>`
   $('#results').innerHTML = h
 }
 
-const cmpCache = new Map<string, { sun: number; pm: number; far: number; road: number; mrt: number }>()
+interface Metrics { sun: number; pm: number; far: number; road: number; mrt: number }
+const cmpCache = new Map<string, Metrics>()
+/** Year-average sun, view, nearest road and walk to the MRT, for comparing units (needs the project's surroundings loaded). */
+function metricsOf(ctx: Ctx, u: UnitPos, y = today.getFullYear()): Metrics {
+  const key = `${obsKey(ctx)}|${u.block.id}|${u.unit.no}|${u.storey}`
+  let c = cmpCache.get(key)
+  if (!c) {
+    const obs = getObstacles(ctx), yr = yearSun(ctx.site, u, obs, y), v = view(u, obs), r = roadDistances(ctx.site, u)[0], mrt = nearest(u, 'mrt', undefined, ctx)
+    c = { sun: yr.avgSun, pm: yr.avgAfternoon, far: v.farPct, road: r.dist, mrt: mrt ? mrt.walkMin : 99 }
+    cmpCache.set(key, c)
+  }
+  return c
+}
+
+/* queue number and shortlist */
+const BAND_TEXT: Record<QueueBand, string> = { gone: 'likely gone', maybe: 'might be gone', left: 'likely left' }
+const BAND_PILL: Record<QueueBand, string> = { gone: 'bad', maybe: 'warn', left: 'good' }
+const qMemo = new Map<string, { units: QueueUnit[]; r: QueueResult }>()
+/** The queue estimate for a project, once a number is entered for it. */
+function queueFor(id: string) {
+  const set = queue[id]
+  if (!set?.no || !SITES[id]) return null
+  const key = `${id}|${set.type}|${set.no}|${set.share}`
+  let m = qMemo.get(key)
+  if (!m) { const units = siteUnits(SITES[id], set.type); m = { units, r: queueBands(units, set.no, set.share) }; qMemo.set(key, m) }
+  return { set, ...m }
+}
+/** A shortlisted unit's band, if its project has a queue number for its flat type. */
+function bandOf(s: ShortlistUnit): QueueBand | undefined {
+  const q = queueFor(s.site)
+  return q && flatTypeOf(s.type) === q.set.type ? q.r.band.get(unitKey(s)) : undefined
+}
+/** "all 599 people ahead of you book", "3 in 4 of the 599 people ahead of you book". */
+const aheadText = (share: number, ahead: number) => {
+  const n = ahead.toLocaleString(), who = `${ahead === 1 ? 'person' : 'people'} ahead of you`
+  return share === 1 ? `all ${n} ${who} book` : `${BOOK_SHARES.find((o) => o.value === share)?.label.replace(/ book$/, '') ?? share} of the ${n} ${who} book`
+}
+
+function queueHtml(u: UnitPos) {
+  const q = queueFor(siteId)
+  if (!q) return ''
+  const { set, r } = q, label = QTYPE[set.type] ?? set.type
+  if (!r.total) return `<div class="sec"><h3>Units left at number ${set.no}</h3><p class="note" style="margin:0">No ${label} flats in this project.</p></div>`
+  const me = flatTypeOf(u.unit.type) === set.type ? r.band.get(unitKey({ block: u.block.id, unit: u.unit.no, storey: u.storey })) : undefined
+  const sl = shortlist.filter((x) => x.site === siteId && flatTypeOf(x.type) === set.type), slKeys = new Set(sl.map(unitKey))
+  const meKey = unitKey({ block: u.block.id, unit: u.unit.no, storey: u.storey })
+  const blocks = site.blocks.map((b) => {
+    const stacks = b.units.filter((x) => flatTypeOf(x.type) === set.type)
+    if (!stacks.length) return ''
+    const range = stacks.map((x) => unitStoreys(b, x)), lo = Math.min(...range.map((x) => x[0])), hi = Math.max(...range.map((x) => x[1]))
+    let cells = ''
+    for (let st = hi; st >= lo; st--) stacks.forEach((x, i) => {
+      if (st < range[i][0] || st > range[i][1]) { cells += '<span class="qc"></span>'; return }
+      const k = unitKey({ block: b.id, unit: x.no, storey: st }), band = r.band.get(k)!
+      cells += `<span class="qc ${band}${k === meKey ? ' me' : ''}${slKeys.has(k) ? ' sl' : ''}" data-q="${esc(k)}" title="#${String(st).padStart(2, '0')}-${esc(x.no)}: ${BAND_TEXT[band]}"></span>`
+    })
+    return `<div class="qb"><b>Block ${esc(b.id)}</b><div class="qg" style="grid-template-columns:repeat(${stacks.length},11px)" aria-hidden="true">${cells}</div>storeys ${lo}–${hi}</div>`
+  }).join('')
+  const slLeft = sl.filter((x) => bandOf(x) === 'left').length
+  return `<div class="sec"><h3>Units left at number ${set.no}</h3>
+    <p class="note" style="margin-top:0">${r.total.toLocaleString()} ${label} flats on the block plans. If ${aheadText(set.share, set.no - 1)}, about <b>${r.taken.toLocaleString()}</b> are booked before your turn.${set.no - 1 >= r.total ? ' Your number is past the number of flats, so you’d get one only if enough people ahead don’t book.' : ''}</p>
+    ${me ? `<p class="note"><span class="pill ${BAND_PILL[me]}">This unit: ${BAND_TEXT[me]}</span></p>` : `<p class="note">This unit is a ${TYPE[u.unit.type] ?? u.unit.type} flat; the map below is for ${label} flats.</p>`}
+    ${sl.length ? `<p class="note">${slLeft} of your ${sl.length} shortlisted ${label} units here ${slLeft === 1 ? 'is' : 'are'} likely left.</p>` : ''}
+    <div class="qbs">${blocks}</div>
+    <p class="note qkey"><i style="background:color-mix(in srgb,var(--danger) 55%,var(--line))"></i>likely gone<i style="background:var(--warn)"></i>might be gone<i style="background:var(--good)"></i>likely left. Each column is a stack, top floor at the top; click one to pick it. Outlined: this unit (thick) and your shortlist (thin).</p>
+    <p class="note">A rough guide. Units are taken as booked from the highest floor down, with west-facing stacks counted 6 storeys lower and south-west or north-west ones 3 lower, for the afternoon sun. HDB sets flats aside for different groups, and people choose for price, stack and view in their own ways. Before your appointment, check which units are still available on HDB’s site.</p></div>`
+}
+
+function shortlistHtml() {
+  if (!shortlist.length) return `<div class="sec"><h3>Your shortlist</h3><p class="note" style="margin:0">Add units in the order you’d pick them, with backups, for your flat selection appointment. Up to ${SHORTLIST_MAX}, from any project.</p></div>`
+  // Projects whose surroundings aren't loaded yet load now, so the printout can give their sun and view.
+  for (const id of new Set(shortlist.map((x) => x.site))) if (SITES[id] && !ctxOf(id).osm) loadCtx(id).catch(() => {})
+  const multi = shortlist.some((x) => x.site !== siteId)
+  return `<div class="sec"><h3>Your shortlist</h3>${shortlist.map((x, i) => {
+    const b = bandOf(x), name = `${multi ? `${esc(SITES[x.site]?.name ?? x.site)} ` : ''}${esc(unitLabel(x))}`
+    return `<div class="slr"><span class="n">${i + 1}</span><button type="button" class="go" data-slgo="${i}" title="Open this unit"><b>${name}</b><small>${TYPE[x.type] ?? esc(x.type)}${x.facing ? `, faces ${esc(x.facing)}` : ''}${b ? ` · <span class="pill ${BAND_PILL[b]}">${BAND_TEXT[b]}</span>` : ''}</small></button>
+      <span class="mv"><button class="btn" data-slmv="${i}|-1" aria-label="Move ${name} up"${i === 0 ? ' disabled' : ''}>↑</button><button class="btn" data-slmv="${i}|1" aria-label="Move ${name} down"${i === shortlist.length - 1 ? ' disabled' : ''}>↓</button><button class="btn" data-slrm="${i}" aria-label="Remove ${name}">×</button></span></div>`
+  }).join('')}
+    <div class="acts"><button class="btn" id="slPrint">Print the shortlist</button></div>
+    <p class="note">First choice at the top. Saved in this browser; the money plan’s printed summary lists it too.</p></div>`
+}
+
+/** One page for the selection appointment: the units in order, with a box to tick what's still available. */
+async function printShortlist() {
+  await Promise.allSettled([...new Set(shortlist.map((x) => x.site))].filter((id) => SITES[id]).map(loadCtx))
+  const queues = Object.keys(SITES).map((id) => ({ id, q: queueFor(id) })).filter((x) => x.q && shortlist.some((s) => s.site === x.id))
+  const rows = shortlist.map((x, i) => {
+    const c = SITES[x.site] ? ctxOf(x.site) : null, u = c ? unitPos(c.site, x) : null, m = c?.osm && u ? metricsOf(c, u) : null, b = bandOf(x)
+    return `<tr><td>${i + 1}</td><td>${esc(SITES[x.site]?.name ?? x.site)}<br><b>${esc(unitLabel(x))}</b></td><td>${TYPE[x.type] ?? esc(x.type)}${x.facing ? `<br>faces ${esc(x.facing)}` : ''}${u ? `, ${Math.round(u.floorZ)} m up` : ''}</td>
+      <td>${m ? `${hrs(m.sun)} sun a day, ${hrs(m.pm)} after 3 pm<br>View clear 300 m+: ${m.far}%<br>MRT: ${m.mrt < 99 ? `${m.mrt} min walk` : '—'}` : ''}</td><td>${b ? BAND_TEXT[b] : ''}</td><td class="box"></td></tr>`
+  }).join('')
+  $('#print').innerHTML = `<h1>Unit shortlist</h1>
+    <p>Printed ${today.toLocaleDateString('en-SG', { day: 'numeric', month: 'short', year: 'numeric' })}. In order of choice: tick what’s still available on the day and take the first one left.</p>
+    ${queues.map(({ id, q }) => `<p>${esc(SITES[id].name)}: queue number ${q!.set.no}, ${QTYPE[q!.set.type] ?? q!.set.type}, if ${aheadText(q!.set.share, q!.set.no - 1)} (a rough guess).</p>`).join('')}
+    <table><tr><th>#</th><th>Unit</th><th>Type</th><th>Sun, view, MRT (year average)</th><th>At your number</th><th>Available?</th></tr>${rows}</table>
+    <p>From Surroundings: a planning aid, not a survey. Check units, prices and availability with HDB.</p>`
+  window.print()
+}
+
 function compareHtml() {
   const rows = compare.map((p) => ({ c: ctxOf(p.site), u: unitPos(SITES[p.site], p) })).filter((r): r is { c: Ctx; u: UnitPos } => !!r.u)
   if (!rows.length) return `<div class="sec"><h3>Compare units</h3><p class="note" style="margin:0">Add up to 3 units, from any of the projects, to compare their sun, view and distances side by side.</p></div>`
@@ -262,14 +376,7 @@ function compareHtml() {
   if (waiting.length) return `<div class="sec"><h3>Compare units</h3><p class="note" style="margin:0">Loading the surroundings of ${[...new Set(waiting.map((r) => esc(r.c.site.name)))].join(' and ')}…</p></div>`
   const multi = new Set(rows.map((r) => r.c.id)).size > 1
   const y = today.getFullYear(), data = rows.map(({ c: ctx, u }) => {
-    const key = `${obsKey(ctx)}|${u.block.id}|${u.unit.no}|${u.storey}`
-    let c = cmpCache.get(key)
-    if (!c) {
-      const obs = getObstacles(ctx), yr = yearSun(ctx.site, u, obs, y), v = view(u, obs), r = roadDistances(ctx.site, u)[0], mrt = nearest(u, 'mrt', undefined, ctx)
-      c = { sun: yr.avgSun, pm: yr.avgAfternoon, far: v.farPct, road: r.dist, mrt: mrt ? mrt.walkMin : 99 }
-      cmpCache.set(key, c)
-    }
-    return { u, ctx, ...c }
+    return { u, ctx, ...metricsOf(ctx, u, y) }
   })
   const best = (k: keyof (typeof data)[number], hi: boolean) => { const vals = data.map((x) => x[k] as number); return hi ? Math.max(...vals) : Math.min(...vals) }
   const cell = (v: number, b: number, s: string) => `<td class="${data.length > 1 && v === b ? 'best' : ''}">${s}</td>`
@@ -298,7 +405,13 @@ async function loadOsm() {
   scene?.setOsm(c.osm!)
   update()
 }
-$('#site').addEventListener('change', (e) => { siteId = (e.target as HTMLSelectElement).value; site = SITES[siteId]; cx = ctxOf(siteId); shown = { future: -1, places: '' }; pick = { block: site.blocks[0].id, unit: site.blocks[0].units[0].no, storey: Math.round(site.blocks[0].storeys / 2) }; scene?.setSite(site); map.setSite(site); update(); loadOsm() })
+/** Open another project, at a unit (else the first block, halfway up). */
+function openSite(id: string, at?: Pick) {
+  siteId = id; site = SITES[siteId]; cx = ctxOf(siteId); shown = { future: -1, places: '' }
+  pick = at ?? { block: site.blocks[0].id, unit: site.blocks[0].units[0].no, storey: Math.round(site.blocks[0].storeys / 2) }
+  scene?.setSite(site); map.setSite(site); update(); loadOsm()
+}
+$('#site').addEventListener('change', (e) => openSite((e.target as HTMLSelectElement).value))
 $('#block').addEventListener('change', (e) => { pick.block = (e.target as HTMLSelectElement).value; update(); scene?.reset() })
 $('#unit').addEventListener('change', (e) => { pick.unit = (e.target as HTMLSelectElement).value; update() })
 for (const id of ['#storey', '#storeyR']) $(id).addEventListener('input', (e) => { const v = parseInt((e.target as HTMLInputElement).value); if (isFinite(v)) { pick.storey = v; updateSoon() } })
@@ -318,10 +431,39 @@ $('#addCmp').addEventListener('click', () => {
   if (compare.some((p) => p.site === siteId && p.block === pick.block && p.unit === pick.unit && p.storey === pick.storey)) { toast('Already in the comparison'); return }
   compare = [...compare, { ...pick, site: siteId }].slice(-3); update(); toast(compare.length === 1 ? 'Added to the comparison. Units from other projects can join it too.' : 'Added to the comparison')
 })
+$('#addSl').addEventListener('click', () => {
+  const u = current()
+  if (!u) return
+  const r = addToShortlist(shortlist, { site: siteId, block: u.block.id, unit: u.unit.no, storey: u.storey, type: u.unit.type, facing: u.facing })
+  if (!r.added) { toast(shortlist.length >= SHORTLIST_MAX ? `The shortlist is full (${SHORTLIST_MAX} units)` : 'Already on the shortlist'); return }
+  shortlist = r.list; saveShortlist(shortlist); update(); toast(`Added to the shortlist as choice ${shortlist.length}`)
+})
+function readQueue() {
+  const no = parseInt($<HTMLInputElement>('#qNo').value)
+  queue[siteId] = { no: no > 0 ? no : 0, type: $<HTMLSelectElement>('#qType').value, share: +$<HTMLSelectElement>('#qShare').value }
+  updateSoon()
+}
+$('#qNo').addEventListener('input', readQueue)
+$('#qType').addEventListener('change', readQueue)
+$('#qShare').addEventListener('change', readQueue)
 bindPlaces($('#results'), () => update())
 $('#results').addEventListener('click', (e) => {
   const t = e.target as HTMLElement, b = t.closest<HTMLElement>('[data-rm]')
   if (b) { compare.splice(+b.dataset.rm!, 1); update(); return }
+  const qc = t.closest<HTMLElement>('[data-q]')
+  if (qc) { const [block, unit, storey] = qc.dataset.q!.split('|'); pick = { block, unit, storey: +storey }; update(); return }
+  const go = t.closest<HTMLElement>('[data-slgo]')
+  if (go) {
+    const x = shortlist[+go.dataset.slgo!]
+    if (!x || !SITES[x.site]) return
+    if (x.site === siteId) { pick = { block: x.block, unit: x.unit, storey: x.storey }; update() } else openSite(x.site, { block: x.block, unit: x.unit, storey: x.storey })
+    return
+  }
+  const mv = t.closest<HTMLElement>('[data-slmv]')
+  if (mv) { const [i, by] = mv.dataset.slmv!.split('|').map(Number); shortlist = moveInShortlist(shortlist, i, by as -1 | 1); saveShortlist(shortlist); update(); return }
+  const rm = t.closest<HTMLElement>('[data-slrm]')
+  if (rm) { shortlist = shortlist.filter((_, i) => i !== +rm.dataset.slrm!); saveShortlist(shortlist); update(); return }
+  if (t.closest('#slPrint')) { printShortlist(); return }
   const am = t.closest<HTMLElement>('[data-am]')
   if (am) {
     const a = places().find((x) => x.name === am.dataset.am)

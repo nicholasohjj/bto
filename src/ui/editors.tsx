@@ -3,12 +3,13 @@ import { CHOSEN_UNIT_KEY, readChosenUnit, surroundingsUnitUrl, unitFlatType, uni
 import { useStored } from './useStored'
 import { useState, type ReactNode } from 'react'
 import type { FlatType, Policy } from '../config/policy'
-import { LAUNCHES, TYPICAL_WAIT_MONTHS, type Launch } from '../config/launches'
+import { LAUNCHES, TYPICAL_MONTHS_BETWEEN_LAUNCHES, TYPICAL_WAIT_MONTHS, type Launch } from '../config/launches'
 import { ageInMonths, estimatedLivingCosts, prYear, ratesFor } from '../engine/cpf'
 import { assessmentMonth, autoAmount, downpaymentSchedule, effectiveLtv, grantAmount, grantSplitA, hdbMaxTenure, loanChangesOf, maxLtvFor, voluntaryList } from '../engine/payments'
-import { assessEligibility, hfeMonth } from '../engine/eligibility'
+import { assessEligibility, hfeMonth, hfeValidUntil } from '../engine/eligibility'
+import { applyWindow } from '../engine/applyWindow'
 import { applyProject, offeredTypes, pickedLaunch, pickedProject, setLaunchDates } from '../engine/launch'
-import { GROUP_LABEL, oddsText, planOdds, rateGroups, townHistory } from '../engine/ballot'
+import { GROUP_LABEL, latestMedian, oddsText, planOdds, rateGroups, townHistory } from '../engine/ballot'
 import { isCompleted, isResale, isSingle, isSinglesPurchase, leaseFactor, normalizeScenario, typicalDates } from '../engine/saleType'
 import { addMonths, formatYm } from '../engine/dates'
 import { money } from '../engine/format'
@@ -434,6 +435,60 @@ function ProjectPicker({ scenario, update }: { scenario: Scenario; update: Updat
   )
 }
 
+const LIMIT_TEXT = { cash: 'cash runs short', msr: 'the loan is over the MSR limit', tdsr: 'the loan is over the TDSR limit' } as const
+
+/**
+ * "Apply now or wait?": each launch while the HFE letter is valid (and the first after), with its keys
+ * and whether the plan still works if it applied then.
+ */
+function ApplyWindowCard({ scenario, update, policy }: { scenario: Scenario; update: Update; policy: Policy }) {
+  const w = applyWindow(scenario, policy)
+  if (!w.launches.length) return null
+  const typeLabel = FLAT_TYPES.find((x) => x.value === scenario.flat.type)?.label ?? scenario.flat.type
+  const med = latestMedian(scenario, scenario.flat.type)
+  const moveTo = (l: (typeof w.launches)[number]) => update((d) => {
+    setLaunchDates(d, l.month)
+    if (l.launch) d.flat.project = { launch: l.launch.id }
+    else delete d.flat.project
+  })
+  return (
+    <Card>
+      <div className="mb-1 flex items-center text-sm font-semibold">Launches while your HFE letter is valid <InfoTip term="HFE" /></div>
+      <p className="mb-2 text-xs text-ink-2">
+        Valid until <b className="text-ink">{formatYm(w.validUntil)}</b>{w.fromLetter ? ' (from your letter)' : ' (worked out: enter the date from your letter above)'}:{' '}
+        {w.chances === 0 ? 'no launch before then.' : w.chances === 1 ? 'one launch to apply in.' : `${w.chances} launches to apply in: if you don’t get a flat in one, you can try the next.`}
+      </p>
+      <ol className="space-y-2 text-xs">
+        {w.launches.map((l) => (
+          <li key={l.month} className={`rounded-lg border p-2 ${l.isPlan ? 'border-accent' : 'border-line'} ${l.hfe === 'expired' ? 'opacity-70' : ''}`}>
+            <div className="flex flex-wrap items-baseline justify-between gap-x-2">
+              <b className="text-ink">{l.launch ? l.launch.name : <>About {formatYm(l.month)} <span className="font-normal text-muted">(not announced)</span></>}</b>
+              {l.isPlan
+                ? <span className="font-medium text-accent">Your plan</span>
+                : <button type="button" className="font-medium text-accent underline" onClick={() => moveTo(l)}>Plan for this one</button>}
+            </div>
+            <div className="text-ink-2">
+              {l.hfe === 'valid' && <span className="text-good-ink">Letter valid. </span>}
+              {l.hfe === 'lastMonth' && <span className="text-serious">Letter’s last month: check its exact date against the application dates. </span>}
+              {l.hfe === 'expired' && <span className="text-serious">Letter expired: you’d need a new one, and HDB would look at your income again (grants can change). </span>}
+              Keys {l.statedWait ? 'from' : 'about'} {formatYm(l.keys)}{l.statedWait ? ' (shortest wait HDB stated)' : ` (a typical ${Math.round(TYPICAL_WAIT_MONTHS / 12 * 10) / 10} years)`}.{' '}
+              {l.ok
+                ? <span className="text-good-ink">Your plan works at {money(scenario.flat.price)}.</span>
+                : <span className="text-serious">At {money(scenario.flat.price)}, {LIMIT_TEXT[l.limit ?? 'cash']}{l.firstShortYm ? ` (${formatYm(l.firstShortYm)})` : ''}.</span>}
+              {l.launch?.towns && <span className="text-muted"> Towns: {l.launch.towns.join(', ')}.</span>}
+            </div>
+          </li>
+        ))}
+      </ol>
+      <p className="mt-2 text-[11px] text-muted">
+        Each launch keeps your price, {typeLabel} flat and everything else; only the dates move.
+        {med && <> In the {med.launch.name}, the median was {med.median.toFixed(1)} {typeLabel} applicants per flat for {GROUP_LABEL[med.group]}: each launch is a fresh ballot, and projects draw very differently.</>}
+        {' '}Launches HDB hasn’t announced are spaced about {TYPICAL_MONTHS_BETWEEN_LAUNCHES} months apart, as HDB has held three a year; the real dates may differ.
+      </p>
+    </Card>
+  )
+}
+
 function formatDay(ymd: string): string {
   const [y, m, d] = ymd.split('-').map(Number)
   return `${d} ${MONTH_NAMES[m - 1]} ${y}`
@@ -599,10 +654,15 @@ export function FlatEditor({ scenario, update, policy, brief = false }: { scenar
             <Field label="HFE letter applied" tip="HFE" hint="Apply before the sales exercise opens; valid 9 months">
               <MonthInput value={hfeMonth(scenario, policy)} onChange={(v) => update((d) => { d.flat.hfeMonth = v })} ariaLabel="HFE letter applied" />
             </Field>
+            <Field label="HFE letter valid until" tipText="The expiry date on your HFE letter. Leave it to be worked out (9 months after you apply) until you have the letter."
+              hint={f.hfeValidUntil ? <button type="button" className="text-accent underline" onClick={() => update((d) => { delete d.flat.hfeValidUntil })}>Work it out instead</button> : 'Worked out; enter it from your letter'}>
+              <MonthInput value={hfeValidUntil(scenario, policy)} onChange={(v) => update((d) => { d.flat.hfeValidUntil = v })} ariaLabel="HFE letter valid until" />
+            </Field>
           </div>
         )}
         <p className="mt-2 text-[11px] text-muted">Simulation runs from {scenario.startMonth} to 12 months after key collection.</p>
       </Card>
+      {saleType === 'BTO' && more && <ApplyWindowCard scenario={scenario} update={update} policy={policy} />}
       {!more && (
         <button type="button" className="text-sm font-medium text-accent" onClick={() => setMore(true)}>
           More details: grants ({money(f.grants.reduce((s, g) => s + grantAmount(g, el), 0))}, worked out for you), classification, HFE letter date ▾

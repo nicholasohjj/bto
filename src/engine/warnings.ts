@@ -3,7 +3,7 @@ import { addMonths, formatYm, monthsBetween, ymToIndex } from './dates'
 import { money } from './format'
 import { hdbMaxTenure, loanChangesOf, maxLtvFor, preKeysSwitch, weightedAge } from './payments'
 import { monthlyInstalment } from './loan'
-import { hfeMonth, householdIncome } from './eligibility'
+import { hfeMonth, hfeValidUntil, householdIncome } from './eligibility'
 import { pickedProject } from './launch'
 import { isBuilt, isCompleted, isResale, isSingle, isSinglesPurchase, leaseFactor } from './saleType'
 import { simulateCore, type CoreResult, type LoanStep } from './simulate'
@@ -770,12 +770,15 @@ export function buildWarnings(core: CoreResult, extras: WarningExtras = {}): War
       explanation: `You need a valid HFE letter when you apply for the flat (${formatYm(s.flat.dates.application)}), and it can take up to a month to process.`,
       fixes: [`Set the HFE letter to ${formatYm(addMonths(s.flat.dates.application, -core.policy.hfe.monthsBeforeApplication))} or earlier (Flat section, Key dates).`],
     })
-  } else if (monthsBetween(hfe, s.flat.dates.application) > core.policy.hfe.validityMonths) {
+  } else if (hfeValidUntil(s, core.policy) < s.flat.dates.application) {
+    const until = hfeValidUntil(s, core.policy)
     warnings.push({
       id: 'hfe-expired', severity: 'warning', ym: s.flat.dates.application,
       title: `The HFE letter would expire before you apply`,
-      explanation: `An HFE letter is valid for ${core.policy.hfe.validityMonths} months. Applied for in ${formatYm(hfe)}, it runs out before ${formatYm(s.flat.dates.application)}, so you’d need a fresh one and HDB would look at your income then.`,
-      fixes: ['Move the HFE letter date closer to the flat application (Flat section, Key dates).'],
+      explanation: s.flat.hfeValidUntil
+        ? `Your HFE letter is valid until ${formatYm(until)}, before ${formatYm(s.flat.dates.application)}, so you’d need a fresh one and HDB would look at your income then.`
+        : `An HFE letter is valid for ${core.policy.hfe.validityMonths} months. Applied for in ${formatYm(hfe)}, it runs out before ${formatYm(s.flat.dates.application)}, so you’d need a fresh one and HDB would look at your income then.`,
+      fixes: [s.flat.hfeValidUntil ? 'Apply in an earlier sales exercise, or plan for a new HFE letter.' : 'Move the HFE letter date closer to the flat application (Flat section, Key dates).'],
     })
   }
 

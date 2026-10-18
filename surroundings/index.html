@@ -34,7 +34,14 @@
         <input id="storeyR" type="range" min="2" step="1" aria-label="Storey">
         <p class="note tip">Or click a block in the 3D view (at the height you want) or on the map: the unit nearest your click is picked.</p>
         <p class="note" id="unitNote"></p>
-        <div class="acts"><a class="btn primary" id="toStudio" href="/studio/">Plan this unit in Flat Studio</a><button class="btn" id="addCmp">Add to compare</button></div>
+        <div class="acts"><a class="btn primary" id="toStudio" href="/studio/">Plan this unit in Flat Studio</a><button class="btn" id="addSl">Add to shortlist</button><button class="btn" id="addCmp">Add to compare</button></div>
+      </div>
+      <div class="sec">
+        <h3>Your queue number</h3>
+        <label class="row"><span>Number</span><input id="qNo" type="number" min="1" step="1" inputmode="numeric" placeholder="from your ballot result"></label>
+        <label class="row"><span>Flat type</span><select id="qType"></select></label>
+        <label class="row"><span>Ahead of you</span><select id="qShare"></select></label>
+        <p class="note">See which units are likely still left when your number comes up. "All book" is the worst case.</p>
       </div>
       <div class="sec">
         <h3>Sun</h3>
@@ -64,6 +71,7 @@
   </main>
 </div>
 <div id="toast" role="status" aria-live="polite"></div>
+<div id="print"></div>
 <script type="module" src="/src/surroundings/main.ts"></script>
 </body>
 </html>

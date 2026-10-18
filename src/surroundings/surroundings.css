@@ -135,3 +135,36 @@ button.am{width:100%;background:none;border:0;border-bottom:1px dotted var(--lin
 .rs-list{list-style:none;margin:4px 0 6px;padding:0 0 0 14px;font-size:12px;color:var(--ink2)}
 .rs-list li{display:flex;justify-content:space-between;gap:8px;padding:2px 0}
 .rs-list b{color:var(--ink);font-variant-numeric:tabular-nums}
+/* queue number: units likely left, block by block */
+.qbs{display:flex;flex-wrap:wrap;gap:10px 14px;margin:6px 0}
+.qb{font-size:10px;color:var(--ink2)}
+.qb b{display:block;font:600 11px var(--f-body);color:var(--ink);margin-bottom:3px}
+.qg{display:grid;gap:1px;cursor:pointer}
+.qc{width:11px;height:5px;border-radius:1px;background:transparent}
+.qc.gone{background:color-mix(in srgb,var(--danger) 55%,var(--line))}
+.qc.maybe{background:var(--warn)}
+.qc.left{background:var(--good)}
+.qc.sl{outline:1px solid var(--ink);outline-offset:0}
+.qc.me{outline:2px solid var(--sel);outline-offset:0;position:relative;z-index:1}
+.qkey i{display:inline-block;width:11px;height:6px;border-radius:1px;margin:0 4px 1px 8px;vertical-align:middle}
+.qkey i:first-child{margin-left:0}
+.pill.bad{background:color-mix(in srgb,var(--danger) 18%,transparent);color:var(--danger)}
+/* shortlist */
+.slr{display:grid;grid-template-columns:22px minmax(0,1fr) auto;gap:6px;align-items:center;padding:5px 0;border-bottom:1px dotted var(--line)}
+.slr .n{font:600 12px var(--f-mono);color:var(--ink2);text-align:right}
+.slr .go{background:none;border:0;padding:0;text-align:left;min-width:0}
+.slr .go:hover b{text-decoration:underline}
+.slr .go small{display:block;color:var(--ink2)}
+.slr .mv{display:flex;gap:2px}
+.slr .mv .btn{padding:1px 7px;min-width:26px}
+#print{display:none}
+@media print{
+  body{overflow:visible;background:#fff;color:#000;font-size:11px}
+  #app,#toast{display:none!important}
+  #print{display:block}
+  #print h1{font:700 16px var(--f-display);margin:0 0 2px}
+  #print table{width:100%;border-collapse:collapse;margin-top:8px}
+  #print th,#print td{border-bottom:1px solid #999;padding:5px 4px;text-align:left;vertical-align:top}
+  #print td.box{width:60px}
+  #print p{margin:4px 0}
+}

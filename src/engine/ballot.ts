@@ -90,3 +90,11 @@ export function oddsText(o: Odds): string {
   if (o.rate <= 2) return `${per}. With up to twice as many applicants as flats shortlisted, most may have got a queue number, but about ${outOf10(1 / o.rate)} in 10 had a flat for them unless others dropped out.`
   return `${per}. At most about ${outOf10(2 / o.rate)} in 10 got a queue number, and about ${outOf10(1 / o.rate)} in 10 had a flat for them unless others dropped out.`
 }
+
+/** The latest published median rate for the plan's group and this flat type: a guide to a typical launch. */
+export function latestMedian(s: Scenario, type: FlatType): { launch: Launch; group: RateGroup; median: number } | null {
+  const group = rateGroups(s, type).groups[0]
+  const launch = LAUNCHES.find((l) => l.applicationRates)
+  const median = group && launch?.applicationRates!.median[type === '2R' ? 'flexi' : 'bigger'][group]
+  return launch && group && median !== undefined ? { launch, group, median } : null
+}

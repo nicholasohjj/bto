@@ -219,6 +219,13 @@ const NOVEMBER_2026: Launch = {
 /** Newest first. */
 export const LAUNCHES: Launch[] = [NOVEMBER_2026, JUNE_2026]
 
+/**
+ * Months between BTO sales exercises, for estimating launches HDB hasn't announced yet.
+ * HDB has held three a year (February, July and October in 2025; February, June and November
+ * in 2026), so about one every 4 months. UNVERIFIED as a rule: HDB announces each date itself.
+ */
+export const TYPICAL_MONTHS_BETWEEN_LAUNCHES = 4
+
 /** Typical months from a BTO launch to key collection when HDB doesn't state one. */
 export const TYPICAL_WAIT_MONTHS = 46
 
