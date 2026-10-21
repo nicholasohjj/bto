@@ -60,6 +60,22 @@ describe('elevations', () => {
     expect(vChain(n).map((v) => +v.toFixed(3))).toContain(2.3)
     expect(elevPanels(S, CATALOG, z, new Set(['nope']))).toHaveLength(0)
   })
+  it('draws loose built-ins from their model parts and dimensions the big ones, not taps', () => {
+    const S = loadState({ H: 2.6, walls: [], rooms: [{ name: 'Bath', x: 0, y: 0, w: 2, h: 2 }], items: [{ type: 'vanity', x: 1, y: 0.25, rot: 0, w: 0.6, d: 0.45 }] }, (i) => CATALOG[i.type])
+    // Cabinet 0.35–0.85, a tap above it, a mirror 1.05–1.95 on the wall.
+    const parts = () => [[0.7, 1.3, 0, 0.45, 0.35, 0.85, '#b9a58a'], [0.98, 1.02, 0.05, 0.1, 0.85, 1.0, '#9aa2a6'], [0.7, 1.3, 0, 0.03, 1.05, 1.95, '#cfe0e6']] as never
+    const north = elevPanels(S, CATALOG, () => [0, 1.95], undefined, parts)[0]
+    const v = north.its[0]
+    expect(v.parts).toHaveLength(3)
+    expect([v.z0, v.z1]).toEqual([0.35, 1.95])
+    expect(vChain(north).map((x) => +x.toFixed(2))).toEqual([0, 0.35, 0.85, 1.05, 1.95, 2.6])
+  })
+  it('clips an opening that straddles the corner to the wall', () => {
+    const S = loadState({ H: 2.6, walls: [], rooms: [{ name: 'Room', x: 0, y: 0, w: 3, h: 3 }], openings: [{ kind: 'door', axis: 'h', c: 0, p: 0.1, w: 0.9, dt: 'single' }] }, (i) => CATALOG[i.type])
+    const o = elevPanels(S, CATALOG, z)[0].ops[0]
+    expect([o.u1, +o.u2.toFixed(2)]).toEqual([0, 0.55])
+    expect(hChain(elevPanels(S, CATALOG, z)[0]).map((x) => +x.toFixed(2))).toEqual([0, 0.55, 3])
+  })
   it('merges near-duplicate breaks', () => {
     expect(chain([0.5, 0.505, 2.995], 0, 3)).toEqual([0, 0.5, 3])
   })

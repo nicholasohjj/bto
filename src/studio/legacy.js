@@ -979,7 +979,11 @@ const cvBlob=(c,t='image/png')=>new Promise(r=>c.toBlob(r,t,.92));
 /* elevations */
 function itemYRange(it){const e=itemMap.get(it.id);if(e){e.g.updateMatrixWorld(true);const b=new THREE.Box3().setFromObject(e.g);if(isFinite(b.min.y)&&isFinite(b.max.y))return [Math.max(0,b.min.y),Math.min(S.H,Math.max(b.max.y,b.min.y+.02))];}return [0,.8];}
 let elevRoom='';
-const elevPanels=rooms=>elevPanelsOf(S,CAT,itemYRange,rooms);
+/** An item's model as boxes in plan coordinates (x, plan y, height) with colours, for elevations. */
+function itemParts(it){const e=itemMap.get(it.id);if(!e)return null;e.g.updateMatrixWorld(true);const out=[],b=new THREE.Box3();
+  e.g.traverse(m=>{if(!m.isMesh||!m.visible)return;b.setFromObject(m,true);if(!isFinite(b.min.x))return;const mt=Array.isArray(m.material)?m.material[0]:m.material;
+    out.push([b.min.x,b.max.x,b.min.z,b.max.z,Math.max(0,b.min.y),Math.min(S.H,b.max.y),mt&&mt.color?'#'+mt.color.getHexString(THREE.SRGBColorSpace):it.color]);});return out;}
+const elevPanels=rooms=>{if(renderer)sync3D();return elevPanelsOf(S,CAT,itemYRange,rooms,itemParts);};
 const elevSheetSvg=(panels,wpx)=>elevSheetSvgOf(panels,S.name,wpx);
 /* export dialog */
 function openExport(){

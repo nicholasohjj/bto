@@ -18,7 +18,12 @@ const TOP_T = 0.04
 
 export interface CatLite { [type: string]: { n: string; k?: number; carp?: number; svc?: number; flat?: number; top?: number; lamp?: number; elev?: number } | undefined }
 
-export interface ElevOpening { u: number; w: number; kind: 'door' | 'window'; z0: number; z1: number; dt: string; wt: string }
+/** An opening's centre and width along the wall, and its edges clipped to the wall (one can straddle a corner). */
+export interface ElevOpening { u: number; w: number; u1: number; u2: number; kind: 'door' | 'window'; z0: number; z1: number; dt: string; wt: string }
+/** A box of an item's 3D model in plan coordinates: x0, x1, y0, y1 (plan), z0, z1 (height), colour. */
+export type Part = [number, number, number, number, number, number, string]
+/** A part as seen on the wall. */
+export interface ElevPart { u1: number; u2: number; z0: number; z1: number; d: number; c: string }
 export interface ElevItem {
   u1: number; u2: number; z0: number; z1: number
   /** Distance from the wall to the item's back, metres. */
@@ -32,6 +37,8 @@ export interface ElevItem {
   /** Front faces the viewer (otherwise it is seen from the side or back). */
   front: boolean
   cfg?: CarpCfg; type: string
+  /** The model's parts (cabinet, basin, mirror, …) when known; otherwise one box u1–u2, z0–z1. */
+  parts?: ElevPart[]
 }
 export interface ElevPanel {
   /** Letter for cross-referencing (A, B, …). */
@@ -56,9 +63,9 @@ function corners(it: Pick<Item, 'x' | 'y' | 'w' | 'd' | 'rot'>) {
 
 /**
  * One panel per room wall at least 60 cm long. `zRange` gives an item's bottom and top above the
- * floor (from the 3D model); carpentry uses its own settings instead.
+ * floor, and `parts` the boxes of its 3D model (both from the 3D view); carpentry uses its own settings.
  */
-export function elevPanels(S: Design, cat: CatLite, zRange: (it: Item) => [number, number], rooms?: Set<string>): ElevPanel[] {
+export function elevPanels(S: Design, cat: CatLite, zRange: (it: Item) => [number, number], rooms?: Set<string>, parts?: (it: Item) => Part[] | null): ElevPanel[] {
   const out: ElevPanel[] = []
   for (const r of S.rooms) {
     const P = rpts(r), ce = ceilOf(r)
@@ -78,8 +85,9 @@ export function elevPanels(S: Design, cat: CatLite, zRange: (it: Item) => [numbe
         if (Math.abs(D(M[0], M[1])) >= 0.08) continue
         const u = U(M[0], M[1])
         if (u <= -0.05 || u >= L + 0.05) continue
-        if (o.kind === 'door') ops.push({ u, w: o.w, kind: 'door', z0: 0, z1: Math.min(o.dt === 'arch' ? ARCH_H : DOOR_H, S.H), dt: o.dt, wt: o.wt })
-        else { const wt = WTYPES[o.wt as keyof typeof WTYPES] || WTYPES.std, z1 = Math.min(wt.sill + wt.wh, S.H - 0.1); ops.push({ u, w: o.w, kind: 'window', z0: wt.sill, z1, dt: o.dt, wt: o.wt }) }
+        const u1 = Math.max(0, u - o.w / 2), u2 = Math.min(L, u + o.w / 2)
+        if (o.kind === 'door') ops.push({ u, w: o.w, u1, u2, kind: 'door', z0: 0, z1: Math.min(o.dt === 'arch' ? ARCH_H : DOOR_H, S.H), dt: o.dt, wt: o.wt })
+        else { const wt = WTYPES[o.wt as keyof typeof WTYPES] || WTYPES.std, z1 = Math.min(wt.sill + wt.wh, S.H - 0.1); ops.push({ u, w: o.w, u1, u2, kind: 'window', z0: wt.sill, z1, dt: o.dt, wt: o.wt }) }
       }
       ops.sort((a, b) => a.u - b.u)
       const its: ElevItem[] = []
@@ -94,12 +102,23 @@ export function elevPanels(S: Design, cat: CatLite, zRange: (it: Item) => [numbe
         // Fronts face local +y: (-sin, cos) in plan. Facing the viewer means facing into the room.
         const a = it.rot * Math.PI / 180, front = -Math.sin(a) * nx + Math.cos(a) * ny > 0.7
         const kind: ElevItem['kind'] = k.carp ? 'carp' : k.svc ? 'svc' : 'furn'
-        let z0: number, z1: number, cfg: CarpCfg | undefined
+        let z0: number, z1: number, cfg: CarpCfg | undefined, ps: ElevPart[] | undefined
         if (kind === 'carp') { cfg = cfgOf(it); z0 = cfg.elev; z1 = Math.min(S.H, cfg.elev + cfg.h + (cfg.top !== 'none' ? TOP_T : 0)) }
         else[z0, z1] = zRange(it)
+        // Loose items drawn from their model's parts, so a vanity shows its cabinet, basin and mirror.
+        const raw = kind === 'furn' && parts ? parts(it) : null
+        if (raw && raw.length) {
+          ps = []
+          for (const [x0, x1, y0, y1, a0, a1, c] of raw) {
+            const us = [U(x0, y0), U(x1, y0), U(x0, y1), U(x1, y1)], pu1 = Math.max(0, Math.min(...us)), pu2 = Math.min(L, Math.max(...us))
+            if (pu2 - pu1 < 0.005 || a1 - a0 < 0.005) continue
+            ps.push({ u1: pu1, u2: pu2, z0: a0, z1: a1, d: Math.max(0, Math.min(D(x0, y0), D(x1, y0), D(x0, y1), D(x1, y1))), c })
+          }
+          if (ps.length) { z0 = Math.min(...ps.map((q) => q.z0)); z1 = Math.max(...ps.map((q) => q.z1)) } else ps = undefined
+        }
         // Services face the wall they sit on: skip ones on the other walls of the room.
         if (kind === 'svc' && (d1 > 0.2 || !front)) continue
-        its.push({ u1: Math.max(0, u1), u2: Math.min(L, u2), z0, z1, d: Math.max(0, d1), c: it.color, n: it.nm || k.n, kind, on: d1 < 0.2, built: !!(k.carp || k.k), front, cfg, type: it.type })
+        its.push({ u1: Math.max(0, u1), u2: Math.min(L, u2), z0, z1, d: Math.max(0, d1), c: it.color, n: it.nm || k.n, kind, on: d1 < 0.2, built: !!(k.carp || k.k), front, cfg, type: it.type, parts: ps })
       }
       // Wall finish: the drawn wall that lies along this edge.
       const wall = S.walls.find((w) => { const a = D(w.x1, w.y1), b = D(w.x2, w.y2); if (Math.abs(a) > 0.15 || Math.abs(b) > 0.15) return false; const p = U(w.x1, w.y1), q = U(w.x2, w.y2); return Math.min(Math.max(p, q), L) - Math.max(Math.min(p, q), 0) > 0.3 })
@@ -124,7 +143,7 @@ const mm = (m: number) => String(Math.round(m * 1000))
 /** Horizontal break points: wall ends, opening edges and the edges of carpentry against the wall. */
 export function hChain(p: ElevPanel) {
   const pts: number[] = []
-  for (const o of p.ops) pts.push(o.u - o.w / 2, o.u + o.w / 2)
+  for (const o of p.ops) pts.push(o.u1, o.u2)
   for (const it of p.its) if (it.built && it.on) pts.push(it.u1, it.u2)
   return chain(pts, 0, p.L)
 }
@@ -132,7 +151,12 @@ export function hChain(p: ElevPanel) {
 export function vChain(p: ElevPanel) {
   const pts: number[] = []
   for (const o of p.ops) pts.push(o.z0, o.z1)
-  for (const it of p.its) if (it.built && it.on) pts.push(it.z0, it.z1)
+  for (const it of p.its) {
+    if (!it.built || !it.on) continue
+    // Parts big enough to matter (a cabinet, a mirror, a TV), not taps and handles.
+    if (it.parts) { for (const q of it.parts) if ((q.u2 - q.u1) * (q.z1 - q.z0) >= 0.1) pts.push(q.z0, q.z1) }
+    else pts.push(it.z0, it.z1)
+  }
   if (p.drop) pts.push(p.H - p.drop)
   return chain(pts, 0, p.H)
 }
@@ -233,20 +257,23 @@ export function elevPanelSvg(p: ElevPanel, ox: number, oy: number) {
     s += `<text x=".08" y="${f3(p.drop / 2 + 0.03)}" font-size="${fs}" fill="${INK2}">${p.box ? 'Ceiling box' : 'False ceiling'}${p.cove ? ' with cove light' : ''}</text>`
   }
   for (const o of p.ops) {
-    const x0 = f3(o.u - o.w / 2)
+    const x0 = f3(o.u1), ow = f3(o.u2 - o.u1)
+    if (ow <= 0) continue
     if (o.kind === 'door') {
-      s += `<rect x="${x0}" y="${Y(o.z1)}" width="${f3(o.w)}" height="${f3(o.z1)}" fill="${o.dt === 'arch' ? '#fff' : '#e6dccb'}" ${sk} stroke-width=".018"/>`
+      s += `<rect x="${x0}" y="${Y(o.z1)}" width="${ow}" height="${f3(o.z1)}" fill="${o.dt === 'arch' ? '#fff' : '#e6dccb'}" ${sk} stroke-width=".018"/>`
       if (o.dt === 'double') s += `<line x1="${f3(o.u)}" y1="${Y(o.z1)}" x2="${f3(o.u)}" y2="${Y(0)}" ${sk} stroke-width=".012"/>`
       if (o.dt === 'slide') s += `<path d="M${f3(o.u - o.w * 0.2)} ${Y(1.05)}h${f3(o.w * 0.4)}m-.05 -.03l.05 .03l-.05 .03" fill="none" stroke="${INK2}" stroke-width=".01"/>`
-      s += `<text x="${f3(o.u)}" y="${Y(o.z1 / 2)}" font-size="${fs}" text-anchor="middle" fill="${INK2}">${o.dt === 'arch' ? 'Opening' : 'Door'}</text>`
+      if (ow > 0.4) s += `<text x="${f3((o.u1 + o.u2) / 2)}" y="${Y(o.z1 / 2)}" font-size="${fs}" text-anchor="middle" fill="${INK2}">${o.dt === 'arch' ? 'Opening' : 'Door'}</text>`
     } else {
-      s += `<rect x="${x0}" y="${Y(o.z1)}" width="${f3(o.w)}" height="${f3(o.z1 - o.z0)}" fill="#cfe6ee" ${sk} stroke-width=".018"/>`
+      s += `<rect x="${x0}" y="${Y(o.z1)}" width="${ow}" height="${f3(o.z1 - o.z0)}" fill="#cfe6ee" ${sk} stroke-width=".018"/>`
       if (o.w > 1.4 || o.wt === 'slide') s += `<line x1="${f3(o.u)}" y1="${Y(o.z1)}" x2="${f3(o.u)}" y2="${Y(o.z0)}" ${sk} stroke-width=".01"/>`
     }
   }
   // Loose furniture: further from the wall drawn first and lighter; things in front are dashed.
   for (const it of p.its.filter((i) => i.kind === 'furn').sort((a, b) => b.d - a.d)) {
-    s += `<rect x="${f3(it.u1)}" y="${Y(it.z1)}" width="${f3(it.u2 - it.u1)}" height="${f3(it.z1 - it.z0)}" fill="${it.c}" fill-opacity="${it.on ? 0.7 : 0.35}" ${sk} stroke-width=".01"${it.on ? '' : ' stroke-dasharray=".04 .03"'}/>`
+    const dash = it.on ? '' : ' stroke-dasharray=".04 .03"', op = it.on ? 0.8 : 0.35
+    if (it.parts) for (const q of it.parts.slice().sort((a, b) => b.d - a.d)) s += `<rect x="${f3(q.u1)}" y="${Y(q.z1)}" width="${f3(q.u2 - q.u1)}" height="${f3(q.z1 - q.z0)}" fill="${q.c}" fill-opacity="${op}" ${sk} stroke-width=".006"${dash}/>`
+    else s += `<rect x="${f3(it.u1)}" y="${Y(it.z1)}" width="${f3(it.u2 - it.u1)}" height="${f3(it.z1 - it.z0)}" fill="${it.c}" fill-opacity="${op}" ${sk} stroke-width=".01"${dash}/>`
     if (it.u2 - it.u1 > 0.45 && it.z1 - it.z0 > 0.18) s += `<text x="${f3((it.u1 + it.u2) / 2)}" y="${Y((it.z0 + it.z1) / 2 - 0.03)}" font-size="${fs}" text-anchor="middle" fill="${INK}">${esc(it.n)}</text>`
   }
   for (const it of p.its.filter((i) => i.kind === 'carp')) {
@@ -269,7 +296,7 @@ export function elevPanelSvg(p: ElevPanel, ox: number, oy: number) {
 }
 
 /** Room for one panel on a sheet, metres. */
-export const panelSize = (p: ElevPanel) => ({ w: p.L + 1.2, h: p.H + 1.4 })
+export const panelSize = (p: ElevPanel) => ({ w: Math.max(p.L + 1.2, 0.6 + p.title.length * 0.095), h: p.H + 1.4 })
 
 /** A sheet of panels laid out in rows, with a title, notes and a 1 m scale bar. */
 export function elevSheetSvg(panels: ElevPanel[], name: string, wpx: number) {
