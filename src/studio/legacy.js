@@ -23,6 +23,7 @@ import { electricalSvg, electricalChecks, electricalCounts } from './electrical'
 import { zipStore, pdfBuild, dxfBuild as dxfBuildOf } from './files'
 import { money, budgetSummary as budgetSummaryOf, budgetText as budgetTextOf } from './budget'
 import { checksText as checksTextOf } from './checks'
+import { floorPhoto, detail, rep as repTex, onLoad as onTexLoad } from './textures'
 import { elevPanels as elevPanelsOf, elevSheetSvg as elevSheetSvgOf } from './elevation'
 /** Extra checks from feature modules (ceiling, electrical). */
 const CHECKS=[ceilingChecks,electricalChecks];
@@ -550,7 +551,11 @@ const keys=new Set();
 const texBase={};
 function rng(seed){return ()=>{seed|=0;seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
 /** A floor material from the finishes library: painted colour and bump maps, repeated at the material's real size. */
-function floorMat(k,w,h,poly){const sp=FLOORS[k]||FLOORS.oak;if(!texBase[k]){const p=paintFloor(k),mk=(cv,srgb)=>{const t=new THREE.CanvasTexture(cv);t.wrapS=t.wrapT=THREE.RepeatWrapping;if(srgb)t.colorSpace=THREE.SRGBColorSpace;t.anisotropy=8;return t;};texBase[k]={map:mk(p.map,true),bump:mk(p.bump,false)};}
+function floorMat(k,w,h,poly){const sp=FLOORS[k]||FLOORS.oak;
+  // Photo finish once loaded (textures.ts); the painted one stands in until then.
+  const ph=floorPhoto(k);if(ph){const W=poly?1:w,Hh=poly?1:h,r=t=>t&&repTex(t,W,Hh,ph.size);
+    const m=new THREE.MeshStandardMaterial({map:r(ph.map),normalMap:r(ph.normalMap),roughnessMap:r(ph.roughnessMap),roughness:sp.r/ph.rMean,side:THREE.DoubleSide});
+    if(ENVMAP&&sp.r<=.45){m.envMap=ENVMAP;m.envMapIntensity=.35;}return m;}if(!texBase[k]){const p=paintFloor(k),mk=(cv,srgb)=>{const t=new THREE.CanvasTexture(cv);t.wrapS=t.wrapT=THREE.RepeatWrapping;if(srgb)t.colorSpace=THREE.SRGBColorSpace;t.anisotropy=8;return t;};texBase[k]={map:mk(p.map,true),bump:mk(p.bump,false)};}
   const rep=(t)=>{const c=t.clone();c.needsUpdate=true;c.repeat.set(poly?1/sp.size:w/sp.size,poly?1/sp.size:h/sp.size);return c;};
   const m=new THREE.MeshStandardMaterial({map:rep(texBase[k].map),bumpMap:rep(texBase[k].bump),bumpScale:1.2,roughness:sp.r,side:THREE.DoubleSide});
   if(ENVMAP&&sp.r<=.45){m.envMap=ENVMAP;m.envMapIntensity=.35;}return m;}
@@ -561,9 +566,14 @@ function grainTex(kind){if(grainT[kind])return grainT[kind];const N=256,cv=docum
   else{for(let i=0;i<4000;i++){x.fillStyle=`rgba(0,0,0,${R()*.07})`;x.fillRect(R()*N,R()*N,1.5,1.5);}}
   const t=new THREE.CanvasTexture(cv);t.colorSpace=THREE.SRGBColorSpace;t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(2,2);return grainT[kind]=t;}
 const MTP={wood:{r:.55,m:0,map:'wood'},fabric:{r:1,m:0,map:'fabric'},leather:{r:.5,m:0,map:'leather'},metal:{r:.25,m:.85,map:null},gloss:{r:.12,m:.05,map:null}};
-function applyMt(g,it){const p=MTP[it.mt];if(!p)return;const hex=new THREE.Color(it.color).getHexString(),cache={};
+// Upholstered items get a woven surface by default once the fabric photo has loaded.
+const SOFT=new Set(['sofa','arm','lsofa','recl','pouf','ottoman','bed_q','bed_k','bed_s','bed_ss','bunk','curtain']);
+const mtOf=it=>it.mt||(SOFT.has(it.type)&&detail('linen')?'fabric':'');
+function applyMt(g,it,mt){const p=MTP[mt];if(!p)return;const hex=new THREE.Color(it.color).getHexString(),cache={};
+  // Photo detail (timber grain, woven fabric) when loaded, else the painted grain.
+  const d=p.map==='wood'?detail('oak'):p.map==='fabric'?detail('linen'):null,sz=p.map==='wood'?.9:.35;
   g.traverse(m=>{if(!m.isMesh||!m.material||Array.isArray(m.material)||m.material.transparent)return;if(m.material.color.getHexString()!==hex)return;
-    const k=m.material.uuid;if(!cache[k]){cache[k]=new THREE.MeshStandardMaterial({color:it.color,roughness:p.r,metalness:p.m,map:p.map?grainTex(p.map):null});}m.material=cache[k];});}
+    const k=m.material.uuid;if(!cache[k]){cache[k]=d?new THREE.MeshStandardMaterial({color:it.color,roughness:p.r,metalness:p.m,map:d.map?repTex(d.map,1,1,sz):null,normalMap:repTex(d.normalMap,1,1,sz),normalScale:new THREE.Vector2(.6,.6)}):new THREE.MeshStandardMaterial({color:it.color,roughness:p.r,metalness:p.m,map:p.map?grainTex(p.map):null});}m.material=cache[k];});}
 const wtBase={};
 function wallTexBase(kind){const N=512,cv=document.createElement('canvas');cv.width=cv.height=N;const x=cv.getContext('2d'),R=rng(kind.length*313+kind.charCodeAt(1));
   if(kind==='tile'){x.fillStyle='#e9ecea';x.fillRect(0,0,N,N);const tw=128,th=64;for(let j=0;j<N/th;j++)for(let i=-1;i<N/tw;i++){const ox=(j%2)*tw/2;x.fillStyle=`hsl(170 6% ${88+R()*5}%)`;x.fillRect(i*tw+ox+2,j*th+2,tw-4,th-4);}}
@@ -573,7 +583,10 @@ function wallTexBase(kind){const N=512,cv=document.createElement('canvas');cv.wi
     x.strokeStyle='rgba(50,52,52,.35)';x.lineWidth=2;x.strokeRect(1,1,N-2,N-2);}
   const t=new THREE.CanvasTexture(cv);t.colorSpace=THREE.SRGBColorSpace;t.wrapS=t.wrapT=THREE.RepeatWrapping;return t;}
 function wallFaceMats(w,len,hh){
-  const base=mat(w.col||S.wallColor,.95);if(!w.fin||w.fin==='paint')return base;
+  const base=mat(w.col||S.wallColor,.95);
+  // Painted walls: a plaster surface once its photo has loaded.
+  if(!w.fin||w.fin==='paint'){const pd=detail('plaster');if(!pd)return base;
+    return new THREE.MeshStandardMaterial({color:w.col||S.wallColor,roughness:.95/pd.rMean,normalMap:repTex(pd.normalMap,len,hh,pd.size),normalScale:new THREE.Vector2(.45,.45),roughnessMap:repTex(pd.roughnessMap,len,hh,pd.size)});}
   if(!wtBase[w.fin])wtBase[w.fin]=wallTexBase(w.fin);const t=wtBase[w.fin].clone();t.needsUpdate=true;t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(Math.max(.2,len/1.2),Math.max(.2,hh/1.2));
   const fm=new THREE.MeshStandardMaterial({map:t,roughness:w.fin==='tile'?.3:.85});return (w.x1===w.x2&&w.y1!==w.y2)?[fm,fm,base,base,base,base]:[base,base,base,base,fm,fm];}
 function disposeG(o){o.traverse(m=>{if(m.geometry&&!m.geometry.userData.shared)m.geometry.dispose();if(m.material&&!m.material.userData.cached&&!m.material.userData.shared){if(m.material.map)m.material.map.dispose();m.material.dispose();}});}
@@ -686,13 +699,15 @@ function buildStructure(){
   const rad=Math.max(b.w,b.h)*.75+2;sunC={x:b.cx,z:b.cy,rad};
   const sc=sun.shadow.camera;sc.left=-rad;sc.right=rad;sc.top=rad;sc.bottom=-rad;sc.near=1;sc.far=rad*5;sc.updateProjectionMatrix();applyEnv();
 }
+// Photo textures load on first use; each one that arrives rebuilds the 3D view.
+let texRev=0;onTexLoad(()=>{texRev++;dirty3=true;dirty=true;});
 function sync3D(){
   if(!renderer)return;
-  const sig=JSON.stringify([S.walls,S.openings,S.rooms,S.wallColor,S.H,S.skirt,S.skirtCol,S.ceilCol]);
+  const sig=JSON.stringify([S.walls,S.openings,S.rooms,S.wallColor,S.H,S.skirt,S.skirtCol,S.ceilCol,texRev]);
   if(sig!==structSig){structSig=sig;buildStructure();}
   const seen=new Set();
-  for(const it of S.items){seen.add(it.id);const sg=it.type+'|'+it.w+'|'+it.d+'|'+it.color+'|'+S.H+'|'+(it.mt||'')+'|'+(it.h||0)+'|'+(CAT[it.type].missing?1:0)+'|'+modelRev+'|'+(it.cfg?JSON.stringify(it.cfg):'');let e=itemMap.get(it.id);CH=S.H;
-    if(!e||e.sig!==sg){if(e){itemsG.remove(e.g);disposeG(e.g);}const g=new THREE.Group();CAT[it.type].b(g,it.w,it.d,it.color,it);if(it.mt)applyMt(g,it);g.userData.id=it.id;itemsG.add(g);e={g,sig:sg};itemMap.set(it.id,e);}
+  for(const it of S.items){seen.add(it.id);const sg=it.type+'|'+it.w+'|'+it.d+'|'+it.color+'|'+S.H+'|'+(it.mt||'')+'|'+(it.h||0)+'|'+(CAT[it.type].missing?1:0)+'|'+modelRev+'|'+texRev+'|'+(it.cfg?JSON.stringify(it.cfg):'');let e=itemMap.get(it.id);CH=S.H;
+    if(!e||e.sig!==sg){if(e){itemsG.remove(e.g);disposeG(e.g);}const g=new THREE.Group();CAT[it.type].b(g,it.w,it.d,it.color,it);const mt=mtOf(it);if(mt)applyMt(g,it,mt);g.userData.id=it.id;itemsG.add(g);e={g,sig:sg};itemMap.set(it.id,e);}
     e.g.position.set(it.x,0,it.y);e.g.rotation.y=-it.rot*Math.PI/180;}
   for(const [id,e] of itemMap)if(!seen.has(id)){itemsG.remove(e.g);disposeG(e.g);itemMap.delete(id);}
   syncLamps();

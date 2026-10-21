@@ -94,6 +94,9 @@ src/studio/
   electrical.ts   Electrical points, checks and the electrical plan sheet
   quotes.ts       Pasted contractor quotes: parsing, categories, comparison
   materials.ts    Painted floor materials (colour + bump) and style presets
+  textures.ts     Photo textures for floors, walls, fabric and timber, loaded on first use
+  elevation.ts    Wall elevations with millimetre dimension chains (viewer and PDF pack)
+  sizes.ts        Common sizes: SG mattresses, TV widths, typical appliances, IKEA pieces
   brochure.ts     Reading HDB brochure PDFs with pdf.js (vector paths, text, scale bar)
   vectorize.ts    Brochure drawing → walls, doors, windows, rooms
   importer.ts     The brochure import dialog
@@ -102,6 +105,11 @@ src/studio/
   share.ts        Design share links (#d=…, without prices, budget or quotes)
   layouts.json    Unit layouts redrawn from brochures (the Layout menu)
 ```
+
+Photo textures are CC0 from [Poly Haven](https://polyhaven.com) (laminate_floor_02, herringbone_parquet,
+marble_01, scuffed_cement, painted_plaster_wall, rough_linen, oak_veneer_01), kept in `public/studio/tex/`
+and fetched by `node scripts/fetch-textures.mjs`. Plank floors share one photo, recoloured per finish.
+Tiles, terrazzo and hex mosaic stay painted, so their tile sizes match the finish.
 
 ## Surroundings (`/surroundings/`)
 
