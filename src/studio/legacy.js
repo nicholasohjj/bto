@@ -741,7 +741,8 @@ function walkStep(dt){
 function frame(t){
   requestAnimationFrame(frame);const dt=Math.min(.05,(t-last)/1000||0);last=t;
   if(!renderer||!S)return;walkStep(dt);
-  if(!dirty)return;const p=$('#viewPane');if(!p.clientWidth||!p.clientHeight)return;
+  // A photo render owns the canvas until it finishes.
+  if(!dirty||photoJob)return;const p=$('#viewPane');if(!p.clientWidth||!p.clientHeight)return;
   dirty=false;if(dirty3){sync3D();dirty3=false;}draw3D();
 }
 /* 3D pointer */
@@ -1111,13 +1112,17 @@ const checksText=()=>checksTextOf(S,CAT,CHECKS);
 
 /* ───────── photo render: accumulated passes (soft shadows + antialiasing) ───────── */
 let photoJob=null;
-function photoDialog(){dialog(`<h2>Render photo</h2><p class="note" style="margin:0 0 10px">Renders the current 3D view in high quality: soft shadows and smooth edges, built up over many passes. Keep this tab open.</p>
-  <div class="row" style="grid-template-columns:92px 1fr"><span>Quality</span><select id="phq"><option value="24">Draft (24 passes)</option><option value="64" selected>Good (64 passes)</option><option value="160">Best (160 passes)</option></select></div>
+const PHQ={trace:[[96,'Draft (96 samples)'],[320,'Good (320 samples)'],[1000,'Best (1000 samples, slow)']],quick:[[24,'Draft (24 passes)'],[64,'Good (64 passes)'],[160,'Best (160 passes)']]};
+const phqOpts=e=>PHQ[e].map(([v,n],i)=>`<option value="${v}"${i===1?' selected':''}>${n}</option>`).join('');
+function photoDialog(){dialog(`<h2>Render photo</h2><p class="note" style="margin:0 0 10px">Renders the current 3D view. Realistic light traces how sunlight, sky and lamps bounce around the room, like a photo; it takes one to a few minutes, and the 3D view shows it building up. Quick adds soft shadows and smooth edges in a few seconds. Keep this tab open.</p>
+  <div class="row" style="grid-template-columns:92px 1fr"><span>Light</span><select id="phe"><option value="trace" selected>Realistic (ray traced)</option><option value="quick">Quick</option></select></div>
+  <div class="row" style="grid-template-columns:92px 1fr"><span>Quality</span><select id="phq">${phqOpts('trace')}</select></div>
   <div class="row" style="grid-template-columns:92px 1fr"><span>Size</span><select id="phs"><option value="1600">1600 px wide</option><option value="2400">2400 px wide</option></select></div>
   <div id="phprog" style="height:6px;background:var(--line);border-radius:3px;margin:12px 0 4px;overflow:hidden"><i style="display:block;height:100%;width:0;background:var(--accent)"></i></div><p id="pht" class="note" style="margin:0"></p>
   <div class="acts"><button class="btn primary" data-ph="go">Start</button><button class="btn" data-ph="stop">Close</button></div>`);}
 async function photoRun(){
   if(!renderer){toast('The 3D view is not available.');return;}
+  if($('#phe').value==='trace')return traceRun();
   const N=+$('#phq').value,W=+$('#phs').value,asp=camera.aspect||1.5,H=Math.round(W/asp);
   const prog=$('#phprog i'),txt=$('#pht'),go=$('[data-ph=go]');go.disabled=true;
   const job=photoJob={stop:false};
@@ -1145,6 +1150,32 @@ async function photoRun(){
   go.disabled=false;txt.textContent=job.stop?`Stopped at pass ${done}.`:'Done.';
   const bl=await cvBlob(acc);await saveFile(safeName()+'-render.png',bl);
 }
+/* ray-traced photo (trace.ts, loaded on first use) */
+/** Ray-trace the current view at W px wide; resolves to a canvas, or null if stopped before the first sample. */
+async function tracePhoto(N,W,onProgress,job){
+  // Same framing as the 3D view (the photo keeps the view's shape).
+  const H=Math.round(W/(camera.aspect||1.5)),wasSel=selBox.visible;photoJob=job;
+  sync3D();selBox.visible=false;
+  // Sky through the windows: daylight by the sun slider, dusk and night darker and bluer.
+  const h=env.hour,el=Math.max(0,Math.sin((h-6)/12*Math.PI)),night=h<6||h>18.5;
+  const sky=night?{top:'#26324f',bottom:'#141a26',intensity:.12}:{top:h<7||h>17.5?'#e9c3a0':'#bcd5ec',bottom:'#d8d4ca',intensity:.35+.75*el};
+  try{return await traceOf({renderer,scene,camera,width:W,height:H,samples:N,sky,exposure:mode==='walk'?1.5:1.1,denoise:N<200?1:.5,stopped:()=>job.stop,onProgress});}
+  finally{selBox.visible=wasSel;photoJob=null;resize3D();dirty=true;}}
+async function traceRun(){
+  const N=+$('#phq').value,W=+$('#phs').value;
+  const prog=$('#phprog i'),txt=$('#pht'),go=$('[data-ph=go]');go.disabled=true;$('#phe').disabled=true;
+  const job={stop:false};txt.textContent='Loading the ray tracer…';
+  let cv=null;
+  try{cv=await tracePhoto(N,W,(ph,d,t)=>{if(ph==='prepare'){txt.textContent='Preparing the scene…';prog.style.width=(d*10)+'%';}else{prog.style.width=(10+d/t*90)+'%';txt.textContent=`Sample ${d} of ${t}`;}},job);}
+  catch(e){toast('Ray tracing is not available here: '+(e&&e.message||e),5000);}
+  if(!$('#phe'))return;
+  go.disabled=false;$('#phe').disabled=false;
+  if(!cv){txt.textContent='Stopped.';return;}
+  txt.textContent=job.stop?'Stopped early: saved what was done.':'Done.';
+  await saveFile(safeName()+'-render.png',await cvBlob(cv));
+}
+const traceOf=o=>import('./trace').then(m=>m.trace(o));
+$('#dcard').addEventListener('change',e=>{if(e.target.id==='phe')$('#phq').innerHTML=phqOpts(e.target.value);});
 $('#rPhoto').addEventListener('click',photoDialog);
 let vsig='';
 function fillViews(){const sel=$('#viewSel');if(!sel||!S)return;const vs=S.views||[];const sg=JSON.stringify([vs.map(v=>v.id+v.n),S.rooms.map(r=>r.id+r.name)]);if(sg===vsig)return;vsig=sg;
@@ -1162,7 +1193,7 @@ $('#dcard').addEventListener('click',e=>{const b=e.target.closest('[data-vw]');i
 $('#dcard').addEventListener('click',e=>{const b=e.target.closest('[data-ph]');if(!b)return;
   if(b.dataset.ph==='go')photoRun();else{if(photoJob)photoJob.stop=true;closeDlg();}});
 // Development-only hooks for checking the 3D output in a browser (not in production builds).
-if(import.meta.env.DEV)window.__studio={design:()=>S,pano:(w=1024)=>{setMode('walk');sync3D();ceilG.visible=true;wallsG.scale.y=1;return renderPanorama(renderer,scene,new THREE.Vector3(walk.x,1.5,walk.y),walk.yaw,w).toDataURL('image/jpeg',.8);}};
+if(import.meta.env.DEV)window.__studio={design:()=>S,photo:async(n=64,w=900)=>{const c=await tracePhoto(n,w,()=>{},{stop:false});return c&&c.toDataURL('image/jpeg',.85);},pano:(w=1024)=>{setMode('walk');sync3D();ceilG.visible=true;wallsG.scale.y=1;return renderPanorama(renderer,scene,new THREE.Vector3(walk.x,1.5,walk.y),walk.yaw,w).toDataURL('image/jpeg',.8);}};
 /* opening a shared design link (#d=…): keep the current design as a version, then open the copy */
 async function openShared(){const code=sharedDesignCode(location.hash);if(!code)return;history.replaceState(null,'',location.pathname+location.search);
   try{const o=await readSharedDesign(code);if(S&&S.walls.length){const v=vers();v.unshift({id:'v'+Date.now().toString(36),name:('Before shared '+String(o.name||'design')).slice(0,40),t:Date.now(),json:JSON.stringify(S)});vstore(v);}

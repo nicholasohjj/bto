@@ -102,6 +102,8 @@ src/studio/
   importer.ts     The brochure import dialog
   files.ts        ZIP, PDF and DXF writers
   pano.ts         360° panorama export
+  trace.ts        Ray-traced photo (three-gpu-pathtracer, loaded on first use): sky, sun and
+                  lamps bouncing around the room, clear glass, light denoise
   share.ts        Design share links (#d=…, without prices, budget or quotes)
   layouts.json    Unit layouts redrawn from brochures (the Layout menu)
 ```
