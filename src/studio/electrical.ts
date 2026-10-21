@@ -43,14 +43,14 @@ export function electricalChecks(S: Design): Check[] {
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!)
 /** One symbol at (x, y), metres; `rot` turns wall-mounted symbols to face into the room. */
 export function symbol(sym: string, x: number, y: number, rot = 0): string {
-  const t = `transform="translate(${x} ${y}) rotate(${rot})"`, s = 'stroke="#14242a" stroke-width=".02" fill="none"'
+  const t = `transform="translate(${x} ${y}) rotate(${rot})"`, k = 'stroke="#14242a" stroke-width=".02"', s = k + ' fill="none"', w = k + ' fill="#fff"'
   switch (sym) {
-    case 'socket': return `<g ${t}><circle r=".11" ${s} fill="#fff"/><path d="M-.04 -.05V.05M.04 -.05V.05" ${s}/></g>`
-    case 'ac': return `<g ${t}><rect x="-.13" y="-.09" width=".26" height=".18" ${s} fill="#fff"/><text y=".04" font-size=".11" text-anchor="middle" fill="#14242a" font-family="Arial">AC</text></g>`
-    case 'light': return `<g ${t}><circle r=".12" ${s} fill="#fff"/><path d="M-.085 -.085L.085 .085M-.085 .085L.085 -.085" ${s}/></g>`
-    case 'switch': return `<g ${t}><circle r=".07" ${s} fill="#fff"/><text y=".035" font-size=".1" text-anchor="middle" fill="#14242a" font-family="Arial">S</text></g>`
-    case 'data': return `<g ${t}><path d="M0 -.11L.11 .08H-.11Z" ${s} fill="#fff"/><text y=".06" font-size=".08" text-anchor="middle" fill="#14242a" font-family="Arial">D</text></g>`
-    case 'wh': return `<g ${t}><rect x="-.12" y="-.08" width=".24" height=".16" ${s} fill="#fff"/><text y=".035" font-size=".09" text-anchor="middle" fill="#14242a" font-family="Arial">WH</text></g>`
+    case 'socket': return `<g ${t}><circle r=".11" ${w}/><path d="M-.04 -.05V.05M.04 -.05V.05" ${s}/></g>`
+    case 'ac': return `<g ${t}><rect x="-.13" y="-.09" width=".26" height=".18" ${w}/><text y=".04" font-size=".11" text-anchor="middle" fill="#14242a" font-family="Arial">AC</text></g>`
+    case 'light': return `<g ${t}><circle r=".12" ${w}/><path d="M-.085 -.085L.085 .085M-.085 .085L.085 -.085" ${s}/></g>`
+    case 'switch': return `<g ${t}><circle r=".07" ${w}/><text y=".035" font-size=".1" text-anchor="middle" fill="#14242a" font-family="Arial">S</text></g>`
+    case 'data': return `<g ${t}><path d="M0 -.11L.11 .08H-.11Z" ${w}/><text y=".06" font-size=".08" text-anchor="middle" fill="#14242a" font-family="Arial">D</text></g>`
+    case 'wh': return `<g ${t}><rect x="-.12" y="-.08" width=".24" height=".16" ${w}/><text y=".035" font-size=".09" text-anchor="middle" fill="#14242a" font-family="Arial">WH</text></g>`
     default: return ''
   }
 }
