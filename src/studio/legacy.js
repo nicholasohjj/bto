@@ -23,6 +23,7 @@ import { electricalSvg, electricalChecks, electricalCounts } from './electrical'
 import { zipStore, pdfBuild, dxfBuild as dxfBuildOf } from './files'
 import { money, budgetSummary as budgetSummaryOf, budgetText as budgetTextOf } from './budget'
 import { checksText as checksTextOf } from './checks'
+import { elevPanels as elevPanelsOf, elevSheetSvg as elevSheetSvgOf } from './elevation'
 /** Extra checks from feature modules (ceiling, electrical). */
 const CHECKS=[ceilingChecks,electricalChecks];
 import { detectRoom as detectRoomOf } from './model'
@@ -829,7 +830,7 @@ const TOUR=[['Start from your flat','Pick Layout to start from a brochure unit, 
 function tour(i=0){const t=TOUR[i];dialog(`<p class="note" style="margin:0 0 4px">${i+1} of ${TOUR.length}</p><h2>${esc(t[0])}</h2><p class="note" style="margin:0 0 6px">${esc(t[1])}</p><div class="acts">${i<TOUR.length-1?`<button class="btn primary" data-tour="${i+1}">Next</button>`:'<button class="btn primary" data-d="close">Start</button>'}<button class="btn" data-d="close">Skip</button></div><p class="note">Press ? any time for keyboard shortcuts.</p>`);}
 $('#dcard').addEventListener('click',e=>{const b=e.target.closest('[data-tour]');if(b)tour(+b.dataset.tour);});
 /* ───────── dialogs / header ───────── */
-function dialog(html){$('#dcard').innerHTML=html;$('#dlg').classList.add('on');const f=$('#dcard input,#dcard textarea');if(f)f.focus();}
+function dialog(html,wide){$('#dcard').innerHTML=html;$('#dcard').classList.toggle('wide',!!wide);$('#dlg').classList.add('on');const f=$('#dcard input,#dcard textarea');if(f)f.focus();}
 function closeDlg(){$('#dlg').classList.remove('on');}
 $('#dlg').addEventListener('pointerdown',e=>{if(e.target.id==='dlg'){if(photoJob)photoJob.stop=true;closeDlg();}});
 $('#dcard').addEventListener('click',e=>{
@@ -961,32 +962,9 @@ function svgToCanvas(str,w,h){return new Promise((res,rej)=>{const im=new Image(
 const cvBlob=(c,t='image/png')=>new Promise(r=>c.toBlob(r,t,.92));
 /* elevations */
 function itemYRange(it){const e=itemMap.get(it.id);if(e){e.g.updateMatrixWorld(true);const b=new THREE.Box3().setFromObject(e.g);if(isFinite(b.min.y)&&isFinite(b.max.y))return [Math.max(0,b.min.y),Math.min(S.H,Math.max(b.max.y,b.min.y+.02))];}return [0,.8];}
-const compass=(fx,fy)=>Math.abs(fx)<.25?(fy<0?'north':'south'):Math.abs(fy)<.25?(fx>0?'east':'west'):'angled';
-function elevPanels(){const out=[];
-  for(const r of S.rooms){const P=rpts(r);
-    for(let i=0;i<P.length;i++){const A=P[i],B=P[(i+1)%P.length],L=Math.hypot(B[0]-A[0],B[1]-A[1]);if(L<.6)continue;
-      const ex=(B[0]-A[0])/L,ey=(B[1]-A[1])/L;let nx=ey,ny=-ex;const mx=(A[0]+B[0])/2,my=(A[1]+B[1])/2;if(!pip(mx+nx*.1,my+ny*.1,P)){nx=-nx;ny=-ny;}
-      const rx=ny,ry=-nx,u0=Math.min(A[0]*rx+A[1]*ry,B[0]*rx+B[1]*ry),d0=A[0]*nx+A[1]*ny,U=(x,y)=>x*rx+y*ry-u0,D=(x,y)=>x*nx+y*ny-d0;
-      const ops=[];for(const o of S.openings){const M=o.axis==='h'?[o.p,o.c]:[o.c,o.p];if(Math.abs(D(M[0],M[1]))<.08){const u=U(M[0],M[1]);if(u>-.05&&u<L+.05)ops.push({u,w:o.w,kind:o.kind,wt:o.wt,dt:o.dt});}}
-      const its=[];for(const it of S.items){const k=CAT[it.type];if(!k||k.flat)continue;const a=it.rot*Math.PI/180,c=Math.cos(a),s=Math.sin(a);let u1=1e9,u2=-1e9,d1=1e9,d2=-1e9;
-        for(const [qx,qy] of [[-1,-1],[1,-1],[1,1],[-1,1]]){const px=it.x+qx*it.w/2*c-qy*it.d/2*s,py=it.y+qx*it.w/2*s+qy*it.d/2*c,uu=U(px,py),dd=D(px,py);u1=Math.min(u1,uu);u2=Math.max(u2,uu);d1=Math.min(d1,dd);d2=Math.max(d2,dd);}
-        if(d2>-.05&&d1<1.0&&u2>.05&&u1<L-.05){const [z0,z1]=itemYRange(it);its.push({u1:Math.max(0,u1),u2:Math.min(L,u2),z0,z1,d:d1,c:it.color,n:k.n});}}
-      out.push({title:`${r.name}, ${compass(-nx,-ny)} wall`,L,H:S.H,ops,its});}}
-  return out;}
-function elevPanelSvg(p,ox,oy){const H=p.H,L=p.L,sk='stroke="#14242a"';let s=`<g transform="translate(${ox} ${oy})" font-family="Arial,Helvetica,sans-serif">`;
-  s+=`<text x="0" y="-.2" font-size=".2" font-weight="bold" fill="#14242a">${esc(p.title)}</text><rect x="0" y="0" width="${L}" height="${H}" fill="#fafafa" ${sk} stroke-width=".02"/>`;
-  for(const o of p.ops){const x0=o.u-o.w/2;
-    if(o.kind==='door'){const dh=o.dt==='arch'?2.3:DH;s+=`<rect x="${x0}" y="${H-dh}" width="${o.w}" height="${dh}" fill="#e6dccb" ${sk} stroke-width=".02"/>`;if(o.dt==='double')s+=`<line x1="${o.u}" y1="${H-dh}" x2="${o.u}" y2="${H}" ${sk} stroke-width=".015"/>`;}
-    else{const wt=WTYPES[o.wt]||WTYPES.std,top=Math.min(wt.sill+wt.wh,H-.1);s+=`<rect x="${x0}" y="${H-top}" width="${o.w}" height="${top-wt.sill}" fill="#cfe6ee" ${sk} stroke-width=".02"/>`;if(o.w>1.4||o.wt==='slide')s+=`<line x1="${o.u}" y1="${H-top}" x2="${o.u}" y2="${H-wt.sill}" ${sk} stroke-width=".015"/>`;}}
-  for(const it of p.its.slice().sort((a,b)=>b.d-a.d)){s+=`<rect x="${it.u1}" y="${H-it.z1}" width="${it.u2-it.u1}" height="${it.z1-it.z0}" fill="${it.c}" fill-opacity=".85" ${sk} stroke-width=".012"/>`;
-    if(it.u2-it.u1>.45&&it.z1-it.z0>.2)s+=`<text x="${(it.u1+it.u2)/2}" y="${H-(it.z0+it.z1)/2}" font-size=".09" text-anchor="middle" fill="#14242a">${esc(it.n)}</text>`;}
-  s+=`<line x1="0" y1="${H}" x2="${L}" y2="${H}" ${sk} stroke-width=".05"/>`;
-  s+=`<path d="M0 ${H+.28}H${L}M0 ${H+.2}V${H+.36}M${L} ${H+.2}V${H+.36}M${L+.28} 0V${H}M${L+.2} 0H${L+.36}M${L+.2} ${H}H${L+.36}" stroke="#54686f" stroke-width=".012" fill="none"/><text x="${L/2}" y="${H+.5}" font-size=".14" text-anchor="middle" fill="#54686f">${L.toFixed(2)} m</text><text transform="translate(${L+.5} ${H/2}) rotate(-90)" font-size=".14" text-anchor="middle" fill="#54686f">${H.toFixed(2)} m</text></g>`;
-  return s;}
-function elevSheetSvg(panels,wpx){let x=.6,y=.9,rowH=0,maxW=0,body='';const WMAX=22;
-  for(const p of panels){const pw=p.L+1.2,ph=p.H+1.3;if(x+pw>WMAX&&x>.6){x=.6;y+=rowH;rowH=0;}body+=elevPanelSvg(p,x,y);x+=pw;rowH=Math.max(rowH,ph);maxW=Math.max(maxW,x);}
-  const W=Math.max(maxW+.2,6),Hh=y+rowH+.3,hp=Math.round(wpx*Hh/W);
-  return {svg:`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${Hh}" width="${wpx}" height="${hp}"><rect width="${W}" height="${Hh}" fill="#fff"/><text x=".6" y=".45" font-family="Arial" font-size=".24" font-weight="bold" fill="#14242a">${esc(S.name)} - elevations</text><text x="${W-.3}" y=".45" font-family="Arial" font-size=".14" text-anchor="end" fill="#54686f">Seen from inside each room. Plan top is north. Metres.</text>${body}</svg>`,w:wpx,h:hp};}
+let elevRoom='';
+const elevPanels=rooms=>elevPanelsOf(S,CAT,itemYRange,rooms);
+const elevSheetSvg=(panels,wpx)=>elevSheetSvgOf(panels,S.name,wpx);
 /* export dialog */
 function openExport(){
   dialog(`<h2>Export</h2><p class="note" style="margin:0 0 12px">Drawings are made from the current design. Your browser asks you to confirm each save.</p>
@@ -1005,9 +983,11 @@ async function doExport(k){
       const c=renderPanorama(renderer,scene,new THREE.Vector3(walk.x,1.5,walk.y),walk.yaw,4096);ceilG.visible=wasCeil;wallsG.scale.y=wasScale;if(was!=='walk')setMode(was);dirty=true;
       return saveFile(safeName()+'-360.jpg',await cvBlob(c,'image/jpeg'));}
     if(k==='dxf'){const dx=dxfBuild();return saveFile(safeName()+'-cad.zip',zipStore([{name:safeName()+'.dxf',data:te.encode(dx)}]));}
-    if(k==='elev'){const ps=elevPanels();if(!ps.length){toast('Add rooms first. Elevations are drawn for each room wall.');return;}const sh=elevSheetSvg(ps,1400);
-      dialog(`<h2>Elevations</h2><div style="overflow:auto;max-height:62vh;border:1px solid var(--line);border-radius:8px">${sh.svg.replace(/width="\d+" height="\d+"/,'style="width:100%;min-width:900px;height:auto"')}</div><div class="acts"><button class="btn primary" data-ex="elevpng">Save as PNG</button><button class="btn" data-ex="elevsvg">Save as SVG</button><button class="btn" data-d="close">Close</button></div>`);return;}
-    if(k==='elevpng'||k==='elevsvg'){const ps=elevPanels(),sh=elevSheetSvg(ps,k==='elevpng'?2600:1600);if(k==='elevsvg')return saveFile(safeName()+'-elevations.svg',sh.svg);return saveFile(safeName()+'-elevations.png',await cvBlob(await svgToCanvas(sh.svg,sh.w,sh.h)));}
+    if(k==='elev'){if(!elevPanels().length){toast('Add rooms first. Elevations are drawn for each room wall.');return;}
+      dialog(`<h2>Elevations</h2><div class="row" style="grid-template-columns:70px 1fr;margin:0 0 8px"><span>Room</span><select id="elr"><option value="">All rooms</option>${S.rooms.map(r=>`<option value="${r.id}"${r.id===elevRoom?' selected':''}>${esc(r.name)}</option>`).join('')}</select></div><div id="elv" style="overflow:auto;max-height:70vh;border:1px solid var(--line);border-radius:8px;background:#fff"></div><div class="acts"><button class="btn primary" data-ex="elevpng">Save as PNG</button><button class="btn" data-ex="elevsvg">Save as SVG</button><button class="btn" data-d="close">Close</button></div>`,true);
+      const show=()=>{const ps=elevPanels(elevRoom?new Set([elevRoom]):undefined),sh=elevSheetSvg(ps,1400);$('#elv').innerHTML=sh.svg.replace(/width="\d+" height="\d+"/,`style="width:100%;min-width:${ps.length>2?900:500}px;height:auto;display:block"`);};
+      if(elevRoom&&!S.rooms.some(r=>r.id===elevRoom))elevRoom='';show();$('#elr').addEventListener('change',e=>{elevRoom=e.target.value;show();});return;}
+    if(k==='elevpng'||k==='elevsvg'){const ps=elevPanels(elevRoom?new Set([elevRoom]):undefined),sh=elevSheetSvg(ps,k==='elevpng'?2600:1600),nm=safeName()+(elevRoom?'-'+(S.rooms.find(r=>r.id===elevRoom)?.name||'room').replace(/[^\w]+/g,'-'):'')+'-elevations';if(k==='elevsvg')return saveFile(nm+'.svg',sh.svg);return saveFile(nm+'.png',await cvBlob(await svgToCanvas(sh.svg,sh.w,sh.h)));}
     if(k==='elec'||k==='elecsvg'){if(!Object.keys(electricalCounts(S)).length){toast('Add sockets, switches or lights first (Services and Lighting).');return;}const e2=electricalSvg(S,k==='elec'?2600:1600);if(k==='elecsvg')return saveFile(safeName()+'-electrical.svg',e2.svg);return saveFile(safeName()+'-electrical.png',await cvBlob(await svgToCanvas(e2.svg,e2.w,e2.h)));}
     if(k==='pdf'){toast('Building PDF…',2500);return saveFile(safeName()+'-pack.pdf',await buildPdf());}
   }catch(e){toast('Export failed: '+(e&&e.message||e),4500);}
@@ -1029,7 +1009,8 @@ async function buildPdf(){
   pages.push({w:pw,h:ph,img:im,ops,text:[{x:ncx-4,y:ncy+30,s:10,t:'N',b:1},tl(ph-2*M-20,S.name.slice(0,26),12,1),tl(ph-2*M-36,'Floor plan'),tl(ph-2*M-50,`Scale 1:${scale} at ${a3?'A3':'A4'}`),tl(ph-2*M-64,date),
     tl(ph-2*M-92,'Check all dimensions on site.',7),tl(ph-2*M-102,'Planning drawing, not for construction.',7),{x:bx0-2,y:by0+9,s:7,t:'0'},{x:bx0+5*bm-6,y:by0+9,s:7,t:'5 m'},tl(100,`Floor area ${S.rooms.reduce((a,q)=>a+area(q),0).toFixed(1)} m2`,8),tl(88,`Ceiling ${S.H.toFixed(2)} m`,8),tl(20,'Flat Studio',8,1)]});
   if(Object.keys(electricalCounts(S)).length){const e2=electricalSvg(S,2600),c=await svgToCanvas(e2.svg,e2.w,e2.h);pages.push({w:pw,h:ph,img:fitImg(c,M+10),text:[{x:M,y:ph-M+2,s:9,t:`Electrical plan. ${S.name}. ${date}`}]});}
-  const ps=elevPanels();for(let i=0;i<ps.length;i+=6){const sh=elevSheetSvg(ps.slice(i,i+6),2400),c=await svgToCanvas(sh.svg,sh.w,sh.h);pages.push({w:pw,h:ph,img:fitImg(c,M+10),text:[{x:M,y:ph-M+2,s:9,t:`Elevations, sheet ${i/6+1}. ${S.name}. ${date}`}]});}
+  // Elevations: a sheet per room (up to four walls each), so each wall stays large enough to read.
+  {let n=0;for(const r of S.rooms){const ps=elevPanels(new Set([r.id]));for(let i=0;i<ps.length;i+=4){const sh=elevSheetSvg(ps.slice(i,i+4),2400),c=await svgToCanvas(sh.svg,sh.w,sh.h);n++;pages.push({w:pw,h:ph,img:fitImg(c,M+10),text:[{x:M,y:ph-M+2,s:9,t:`Elevations ${n}: ${r.name}. ${S.name}. ${date}`}]});}}}
   let txt=scheduleText();if(typeof budgetText==='function')txt+='\n\n'+budgetText();if(typeof checksText==='function')txt+='\n\n'+checksText();
   const lines=[];txt.split('\n').forEach(l=>{l=l.replace(/\t/g,'  ');while(l.length>100){lines.push(l.slice(0,100));l='    '+l.slice(100);}lines.push(l);});
   for(let i=0;i<lines.length;i+=62){pages.push({w:595,h:842,img:null,text:lines.slice(i,i+62).map((t,j)=>({x:40,y:802-j*12.2,s:8.5,t}))});}
