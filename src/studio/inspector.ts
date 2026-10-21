@@ -5,6 +5,7 @@
  */
 import { budgetLines, budgetTotal, money } from './budget'
 import { carpHtml, setCfg } from './carpentry'
+import { applySize, sizeHtml } from './sizes'
 import { DTYPES, FINS, FLOORS, SW, WALLS, WTYPES } from './catalog'
 import { ceilHtml, ceilOf, setCeil } from './ceiling'
 import { lightPlan, lightSpots, runChecks } from './checks'
@@ -52,7 +53,7 @@ function flatHtml() {
 
 function itemHtml(e: Item) {
   const k = app.cat[e.type]
-  return `<div class="sec"><h3>${esc(k.n)}</h3>${row('Width (m)', num('w', e.w))}${row('Depth (m)', num('d', e.d))}${k.m ? row('Height (m)', num('h', e.h || k.h || 0.5)) : ''}${row('Rotation °', num('rot', e.rot, 15, 0, 359).replace('.00', ''))}
+  return `<div class="sec"><h3>${esc(k.n)}</h3>${row('Width (m)', num('w', e.w))}${row('Depth (m)', num('d', e.d))}${sizeHtml(e)}${k.m ? row('Height (m)', num('h', e.h || k.h || 0.5)) : ''}${row('Rotation °', num('rot', e.rot, 15, 0, 359).replace('.00', ''))}
     ${k.carp ? carpHtml(e, app.S.H) : k.m ? '' : `<div style="margin-bottom:6px;color:var(--ink2)">Colour</div>${sw('col', SW, e.color)}${row('Material', `<select data-k="mt"><option value="">Plain</option>${MATS.map(([v, n]) => `<option value="${v}"${e.mt === v ? ' selected' : ''}>${n}</option>`).join('')}</select>`)}`}
     ${row('Product name', `<input type="text" data-k="nm" value="${esc(e.nm || '')}" maxlength="40" placeholder="optional">`)}${row('Your price ($)', `<input type="number" data-k="pr" value="${e.pr || ''}" min="0" step="any" inputmode="decimal" placeholder="overrides unit price">`)}
     <div class="acts"><button class="btn" data-act="rot90">Rotate 90°</button><button class="btn" data-act="dup">Duplicate</button><button class="btn danger" data-act="del">Delete</button></div>
@@ -332,6 +333,7 @@ function checksHtml() {
 function onChange(t: HTMLInputElement) {
   const S = app.S, ds = t.dataset, sel = app.sel
   if (ds.k) return onField(t)
+  if (ds.size && t.value) { const it = sel?.t === 'item' ? app.getE('item', sel.id) as Item | undefined : undefined; if (it) app.mut(() => { applySize(it, +t.value) }); return }
   if (ds.preset && t.value) { const k = t.value; app.mut(() => { applyPreset(S, k, new Set(Object.keys(app.cat).filter((x) => app.cat[x].carp))) }); app.toast(PRESETS[k].n + ' style applied'); return }
   if ((ds.ceil || ds.ceilck) && sel?.t === 'room') {
     const r = app.getE('room', sel.id) as Room | undefined
