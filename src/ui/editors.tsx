@@ -414,7 +414,7 @@ function ProjectPicker({ scenario, update }: { scenario: Scenario; update: Updat
                     const mix = [...(Object.keys(v.flats) as FlatType[]).map((t) => `${v.flats[t]!.toLocaleString()} ${typeLabel(t)}`), ...(v.cca ? [`${v.cca} Community Care Apartment`] : [])].join(', ')
                     return (
                       <li key={i} title={v.source}>
-                        {v.area ? <a className="font-medium text-accent underline" href={areaUrl(v.area)}>{v.town}</a> : <b className="font-medium text-ink">{v.town}</b>}: {v.where}.{' '}
+                        {v.area ? <a className="font-medium text-accent underline" href={areaUrl(v.area)}>{v.town}</a> : <b className="font-medium text-ink">{v.town}</b>}{v.name && <> ({v.name})</>}: {v.where}.{' '}
                         <span className="text-muted">{flats.toLocaleString()} flats ({mix}).</span>
                       </li>
                     )

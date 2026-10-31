@@ -148,6 +148,7 @@ function siteHtml() {
   const label = (t: string) => FLAT_TYPES.find((x) => x.value === t)?.label ?? t
   return `<div class="sec"><h3>${esc(area.name)}</h3>
     <div class="kv"><span>Launch</span><b>${esc(launchName(area))}</b></div>
+    ${v?.name ? `<div class="kv"><span>Project</span><b>${esc(v.name)}</b></div>` : ''}
     ${v ? `<div class="kv"><span>Flats</span><b>${[...Object.entries(v.flats).map(([t, n]) => `${n!.toLocaleString()} ${esc(label(t))}`), ...(v.cca ? [`${v.cca} Community Care Apartment`] : [])].join('<br>')}</b></div>` : ''}
     <div class="kv"><span>Site</span><b>about ${(size / 1e4).toFixed(1)} ha, ${km(w)} across</b></div>
     ${v?.note ? `<p class="note">${esc(v.note)}.</p>` : ''}

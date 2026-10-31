@@ -33,6 +33,8 @@ export interface LaunchProject {
 /** A site HDB has shown ahead of a launch (town map or preview), before its name and prices are out. */
 export interface LaunchPreview {
   town: string
+  /** The project's name, once HDB has given it ahead of the launch. */
+  name?: string
   /** Where it is, in the words of the map. */
   where: string
   /** Flats by type, as HDB's flat mix gives them. */
@@ -160,15 +162,16 @@ const JUNE_2026: Launch = {
 }
 
 // Announced as October 2026 in the June release (para 17), with an HFE deadline of 15 Sep 2026 for that date.
-// Since moved to November 2026 (UNVERIFIED: date change not yet read on hdb.gov.sg; HFE deadline for November not known).
+// Moved to November 2026: VERIFIED 2026-10-31 from HDB's Toa Payoh West master plan release (31 Oct 2026, para 8),
+// which names Toa Payoh Hillside as a November 2026 project. HFE deadline for November not known.
 const NOVEMBER_2026: Launch = {
   id: '2026-11',
   name: 'November 2026 BTO',
   applicationMonth: '2026-11',
   towns: ['Bedok', 'Geylang', 'Sembawang', 'Tengah', 'Toa Payoh', 'Yishun'],
   note: 'About 7,960 flats, plus Community Care Apartments in Toa Payoh. First planned for October 2026.',
-  source: 'hdb.gov.sg news release, 17 June 2026, para 17 (towns and flat count); move to November not yet checked on hdb.gov.sg',
-  verified: '2026-10-13',
+  source: 'hdb.gov.sg news release, 17 June 2026, para 17 (towns and flat count); November date from hdb.gov.sg news release, 31 October 2026 (Toa Payoh West master plan), para 8',
+  verified: '2026-10-31',
   previews: [
     {
       area: 'yishun-khatib', town: 'Yishun', where: 'Yishun Street 82 and Lorong Chencharu, next to Yishun Walk, about a 5-minute walk from Khatib MRT',
@@ -177,10 +180,10 @@ const NOVEMBER_2026: Launch = {
       source: 'HDB Yishun town map, issued June 2026 (checked 2026-10-14)',
     },
     {
-      area: 'toa-payoh-caldecott', town: 'Toa Payoh', where: 'Toa Payoh Rise and Thomson Road, beside Caldecott MRT (Thomson–East Coast and Circle lines)',
+      area: 'toa-payoh-caldecott', town: 'Toa Payoh', name: 'Toa Payoh Hillside', where: 'Toa Payoh Rise and Thomson Road, beside Caldecott MRT (Thomson–East Coast and Circle lines)',
       flats: { '2R': 590, '4R': 580 }, cca: 260,
-      note: '1,430 flats including one rental block; food court, supermarket, fast food restaurant, 4 shops, preschool, Residents’ Network Centre and Active Ageing Centre',
-      source: 'HDB Toa Payoh town map, issued June 2026 (checked 2026-10-14)',
+      note: '1,430 flats for sale plus about 230 rental flats (about 1,600 in all) in five blocks of 31 to 43 storeys; the first Community Care Apartments in Toa Payoh, in a block linked to the Active Ageing Centre, Residents’ Network Centre and a sheltered walk to Caldecott MRT. Food court, supermarket, fast food restaurant, 4 shops, preschool',
+      source: 'HDB Toa Payoh town map, issued June 2026 (checked 2026-10-14); name, blocks, rental count and CCA count (260, up from 240 first announced) from hdb.gov.sg news release, 31 October 2026 (Toa Payoh West master plan), paras 8–10',
     },
     {
       area: 'tengah-garden-avenue', town: 'Tengah', where: 'Tengah Garden Avenue by the Pan-Island Expressway, about a 10-minute walk from Tengah Plantation and Tengah Park stations on the Jurong Region Line (being built)',

@@ -121,7 +121,8 @@ describe('sites shown before a launch', () => {
   })
   it('adds up the Toa Payoh flat mix, Community Care Apartments included', () => {
     const t = LAUNCHES.find((l) => l.id === '2026-11')!.previews!.find((v) => v.town === 'Toa Payoh')!
-    // 260 Community Care Apartments, 590 2-room Flexi, 580 4-room (1,430 flats).
+    // 260 Community Care Apartments, 590 2-room Flexi, 580 4-room (1,430 flats for sale; HDB's
+    // 31 Oct 2026 release adds about 230 rental flats for "about 1,600").
     expect(Object.values(t.flats).reduce((a, b) => a + b!, 0) + t.cca!).toBe(1430)
   })
   it('adds up the Tengah flat mix', () => {
