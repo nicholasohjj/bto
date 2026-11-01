@@ -416,6 +416,7 @@ function ProjectPicker({ scenario, update }: { scenario: Scenario; update: Updat
                       <li key={i} title={v.source}>
                         {v.area ? <a className="font-medium text-accent underline" href={areaUrl(v.area)}>{v.town}</a> : <b className="font-medium text-ink">{v.town}</b>}{v.name && <> ({v.name})</>}: {v.where}.{' '}
                         <span className="text-muted">{flats.toLocaleString()} flats ({mix}).</span>
+                        {v.waitMonths !== undefined && <> Keys {formatYm(addMonths(launch.applicationMonth, v.waitMonths))} <span className="text-muted">({v.waitText ?? `${v.waitMonths} months`})</span>.</>}
                       </li>
                     )
                   })}

@@ -145,6 +145,12 @@ describe('sites shown before a launch', () => {
     // 890 2-room Flexi, 90 3-room, 660 4-room (1,640 flats); 350 2-room Flexi, 510 4-room (860 flats).
     expect(b.map((t) => Object.values(t.flats).reduce((a, n) => a + n!, 0))).toEqual([1640, 860])
   })
+  it('gives the shorter waits HDB stated on 1 Nov 2026', () => {
+    const l = LAUNCHES.find((x) => x.id === '2026-11')!
+    const w = Object.fromEntries(l.previews!.filter((v) => v.waitMonths).map((v) => [v.name, v.waitMonths]))
+    // Sembawang Anchor 2 years 10 months; Bayshore Oasis and Plantation Dew 3 years 2 months.
+    expect(w).toEqual({ 'Sembawang Anchor': 34, 'Bayshore Oasis': 38, 'Plantation Dew': 38 })
+  })
   it('has a site for every town the launch names', () => {
     const l = LAUNCHES.find((x) => x.id === '2026-11')!
     expect([...new Set(l.previews!.map((v) => v.town))].sort()).toEqual([...l.towns!].sort())
