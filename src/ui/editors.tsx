@@ -374,9 +374,10 @@ function ProjectPicker({ scenario, update }: { scenario: Scenario; update: Updat
           <option value="">None — I’ll enter the details</option>
           {LAUNCHES.map((l) => (
             <optgroup key={l.id} label={`${l.name}${l.projects.length ? (closed(l) ? ' (closed)' : '') : ' (upcoming)'}`}>
-              {l.projects.length
-                ? l.projects.map((x) => <option key={x.id} value={`${l.id}/${x.id}`}>{x.name} · {x.town} · {x.classification}</option>)
-                : <option value={`${l.id}/`}>{l.name} · projects not announced yet</option>}
+              {l.projects.map((x) => <option key={x.id} value={`${l.id}/${x.id}`}>{x.name} · {x.town} · {x.classification}</option>)}
+              {!l.projects.length
+                ? <option value={`${l.id}/`}>{l.name} · projects not announced yet</option>
+                : !closed(l) && <option value={`${l.id}/`}>{l.name} · project not decided yet</option>}
             </optgroup>
           ))}
         </select>
@@ -391,6 +392,7 @@ function ProjectPicker({ scenario, update }: { scenario: Scenario; update: Updat
                 ? <>{formatYm(addMonths(launch.applicationMonth, p.waitMonths))} <span className="text-muted">({p.waitText ?? `${p.waitMonths} months`})</span></>
                 : <>About {formatYm(addMonths(launch.applicationMonth, TYPICAL_WAIT_MONTHS))} <span className="text-muted">(a typical {years(TYPICAL_WAIT_MONTHS)}: HDB gave no waiting time; the Flat Portal project page usually does)</span></>)}
               <BallotRows scenario={scenario} row={row} />
+              {!launch.applicationRates && <TownBallotRows scenario={scenario} towns={[p.town]} before={launch.applicationMonth} row={row} />}
               {p.subsidyRecoveryPct !== undefined && row('On resale', `${p.subsidyRecoveryPct}% of the price goes back to HDB (subsidy recovery)`)}
               {p.fittingsIncluded && row('Included', 'Floor finishes, internal doors, sanitary fittings')}
               {mine ? row('Your unit', <>
@@ -400,7 +402,8 @@ function ProjectPicker({ scenario, update }: { scenario: Scenario; update: Updat
                 {myLayout && <> · <a className="text-accent underline" href={studioUrl(scenario, myLayout.key)}>Plan it in Flat Studio</a></>}
                 <span className="text-muted"> · picked in Surroundings</span>
               </>)
-                : SURROUNDINGS.has(p.id) && row('Surroundings', <a className="text-accent underline" href={surroundingsUrl(p.id)}>See the view, sun, roads and amenities for each unit, and pick yours</a>)}
+                : SURROUNDINGS.has(p.id) ? row('Surroundings', <a className="text-accent underline" href={surroundingsUrl(p.id)}>See the view, sun, roads and amenities for each unit, and pick yours</a>)
+                : p.area && row('Surroundings', <a className="text-accent underline" href={areaUrl(p.area)}>See walking times, primary schools and noise around the site</a>)}
             </>
           ) : (
             <>
@@ -421,14 +424,15 @@ function ProjectPicker({ scenario, update }: { scenario: Scenario; update: Updat
                     )
                   })}
                 </ul>
-                <p className="mt-1 text-muted">From HDB’s town maps. Open a town for walking times, primary schools within 1 km and 2 km, and the roads and trains near the site.</p>
+                <p className="mt-1 text-muted">Open a town for walking times, primary schools within 1 km and 2 km, and the roads and trains near the site.</p>
               </>) : null}
-              {row('Dates', <>From {formatYm(launch.applicationMonth)}, with a typical wait of {years(TYPICAL_WAIT_MONTHS)}. Keep your own price and flat type, and pick the project once HDB announces it.</>)}
+              {row('Dates', <>From {formatYm(launch.applicationMonth)}, with a typical wait of {years(TYPICAL_WAIT_MONTHS)}. Keep your own price and flat type, and pick the project {launch.projects.length ? 'when you’ve decided' : 'once HDB announces it'}.</>)}
             </>
           )}
+          {!closed(launch) && launch.applicationsClose && row('Apply by', <b className="text-ink">{formatDay(launch.applicationsClose)}</b>)}
           {!closed(launch) && row('HFE letter', launch.hfeBy
             ? <>Apply with all documents by <b className="text-ink">{formatDay(launch.hfeBy)}</b> to have it in time.</>
-            : <>Deadline not announced yet, so apply early. You need a valid letter when you apply, and the e-service closes while applications are open.</>)}
+            : <>{!launch.applicationsClose && 'Deadline not announced yet, so apply early. '}You need a valid letter when you apply, and the e-service closes while applications are open.</>)}
           <p className="pt-1 text-[11px] text-muted">Source: {launch.source}.</p>
         </dl>
       )}

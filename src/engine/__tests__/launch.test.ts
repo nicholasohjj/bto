@@ -104,52 +104,66 @@ describe('which projects fit', () => {
   })
 })
 
-describe('upcoming launch without projects', () => {
+describe('November 2026 projects', () => {
+  const nov = LAUNCHES.find((l) => l.id === '2026-11')!
+  it('adds up to HDB’s "about 7,960" flats, with each project matching its site', () => {
+    const count = (v: (typeof nov.previews & object)[number]) => Object.values(v.flats).reduce((a, n) => a + n!, 0) + (v.cca ?? 0)
+    expect(nov.previews!.reduce((t, v) => t + count(v), 0)).toBe(7964)
+    expect(nov.projects).toHaveLength(7)
+    for (const p of nov.projects) {
+      const v = nov.previews!.find((x) => x.area === p.area)!
+      expect([v.name, v.town, v.waitMonths]).toEqual([p.name, p.town, p.waitMonths])
+      expect(Object.keys(v.flats).sort()).toEqual(Object.keys(p.fromPrices).sort())
+    }
+  })
+  it('fills in a project with its price and stated wait', () => {
+    const s = newPlan('nov')
+    s.flat.type = '4R'
+    const { launch, project } = findProject('2026-11', 'chencharu-acres')!
+    applyProject(s, launch, project)
+    expect(s.flat).toMatchObject({ classification: 'Standard', type: '4R', price: 353000 })
+    expect(s.flat.dates.keys).toBe(addMonths('2026-11', 39))
+  })
+})
+
+describe('a launch month without a project', () => {
   it('sets BTO dates from the launch month', () => {
     const s = newPlan('nov')
     setLaunchDates(s, '2026-11')
     expect(s.flat.dates).toEqual({ application: '2026-11', booking: '2027-04', afl: '2027-09', keys: addMonths('2026-11', TYPICAL_WAIT_MONTHS) })
-    expect(LAUNCHES.find((l) => l.id === '2026-11')!.projects).toEqual([])
   })
 })
 
 describe('sites shown before a launch', () => {
   it('adds up the Yishun flat mix from the town map', () => {
     const y = LAUNCHES.find((l) => l.id === '2026-11')!.previews!.find((v) => v.town === 'Yishun')!
-    // 390 2-room Flexi, 80 3-room, 460 4-room, 650 5-room (1,580 flats).
-    expect(Object.values(y.flats).reduce((a, b) => a + b!, 0)).toBe(1580)
+    expect(Object.values(y.flats).reduce((a, b) => a + b!, 0)).toBe(1582)
   })
   it('adds up the Toa Payoh flat mix, Community Care Apartments included', () => {
     const t = LAUNCHES.find((l) => l.id === '2026-11')!.previews!.find((v) => v.town === 'Toa Payoh')!
-    // 260 Community Care Apartments, 590 2-room Flexi, 580 4-room (1,430 flats for sale; HDB's
-    // 31 Oct 2026 release adds about 230 rental flats for "about 1,600").
-    expect(Object.values(t.flats).reduce((a, b) => a + b!, 0) + t.cca!).toBe(1430)
+    // 1,432 flats for sale; HDB's 31 Oct 2026 release adds about 230 rental flats for "about 1,600".
+    expect(Object.values(t.flats).reduce((a, b) => a + b!, 0) + t.cca!).toBe(1432)
   })
   it('adds up the Tengah flat mix', () => {
     const t = LAUNCHES.find((l) => l.id === '2026-11')!.previews!.find((v) => v.town === 'Tengah')!
-    // 180 2-room Flexi, 80 3-room, 170 4-room, 250 5-room, 30 3Gen (710 flats).
     expect(Object.values(t.flats).reduce((a, b) => a + b!, 0)).toBe(710)
   })
   it('adds up the Sembawang flat mix', () => {
     const t = LAUNCHES.find((l) => l.id === '2026-11')!.previews!.find((v) => v.town === 'Sembawang')!
-    // 330 2-room Flexi, 100 3-room, 460 4-room, 420 5-room (1,310 flats).
     expect(Object.values(t.flats).reduce((a, b) => a + b!, 0)).toBe(1310)
   })
   it('adds up the Geylang flat mix', () => {
     const t = LAUNCHES.find((l) => l.id === '2026-11')!.previews!.find((v) => v.town === 'Geylang')!
-    // 170 2-room Flexi, 270 4-room (440 flats).
-    expect(Object.values(t.flats).reduce((a, b) => a + b!, 0)).toBe(440)
+    expect(Object.values(t.flats).reduce((a, b) => a + b!, 0)).toBe(438)
   })
   it('adds up the flat mix of both Bedok sites', () => {
     const b = LAUNCHES.find((l) => l.id === '2026-11')!.previews!.filter((v) => v.town === 'Bedok')
-    // 890 2-room Flexi, 90 3-room, 660 4-room (1,640 flats); 350 2-room Flexi, 510 4-room (860 flats).
-    expect(b.map((t) => Object.values(t.flats).reduce((a, n) => a + n!, 0))).toEqual([1640, 860])
+    expect(b.map((t) => Object.values(t.flats).reduce((a, n) => a + n!, 0))).toEqual([1637, 855])
   })
-  it('gives the shorter waits HDB stated on 1 Nov 2026', () => {
+  it('gives the waits HDB stated', () => {
     const l = LAUNCHES.find((x) => x.id === '2026-11')!
     const w = Object.fromEntries(l.previews!.filter((v) => v.waitMonths).map((v) => [v.name, v.waitMonths]))
-    // Sembawang Anchor 2 years 10 months; Bayshore Oasis and Plantation Dew 3 years 2 months.
-    expect(w).toEqual({ 'Sembawang Anchor': 34, 'Bayshore Oasis': 38, 'Plantation Dew': 38 })
+    expect(w).toEqual({ 'Chencharu Acres': 39, 'Toa Payoh Hillside': 45, 'Plantation Dew': 38, 'Sembawang Anchor': 34, 'Merpati Meadow': 39, 'Bayshore Sails': 44, 'Bayshore Oasis': 38 })
   })
   it('has a site for every town the launch names', () => {
     const l = LAUNCHES.find((x) => x.id === '2026-11')!

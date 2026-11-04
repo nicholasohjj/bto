@@ -28,6 +28,8 @@ export interface LaunchProject {
   waitText?: string
   /** Prices include floor finishes, internal doors and sanitary fittings. */
   fittingsIncluded?: boolean
+  /** Its page under /surroundings/area/, while the site is placed from the town map only. */
+  area?: string
 }
 
 /** A site HDB has shown ahead of a launch (town map or preview), before its name and prices are out. */
@@ -56,6 +58,8 @@ export interface Launch {
   name: string
   /** Month applications open ("YYYY-MM"). */
   applicationMonth: string
+  /** Last day of applications ("YYYY-MM-DD"), once HDB has stated it. */
+  applicationsClose?: string
   /** Apply for the HFE letter, with all documents, by this date ("YYYY-MM-DD") to be processed in time. */
   hfeBy?: string
   /** Announced before its projects: the towns, and anything else known. */
@@ -170,62 +174,106 @@ const JUNE_2026: Launch = {
 // which names Toa Payoh Hillside as a November 2026 project. HFE deadline for November not known.
 // Sembawang Anchor, Bayshore Oasis and Plantation Dew (names, waits, blocks): VERIFIED 2026-11-01 from HDB's
 // Shorter Waiting Time release (1 Nov 2026), which also confirms seven projects and about 7,960 flats (paras 3, 11).
+// Projects, prices, waits, subsidy recovery rates, unit counts (7,964 in all) and the 11 Nov closing date: VERIFIED
+// 2026-11-04 from each project's HDB Flat Portal page. Prices are the 99-year range's lower end for the cheaper 2-room
+// Flexi type, leaving out short leases (2-room Flexi from 15 years; Community Care Apartments, not a flat type here).
 const NOVEMBER_2026: Launch = {
   id: '2026-11',
   name: 'November 2026 BTO',
   applicationMonth: '2026-11',
+  applicationsClose: '2026-11-11',
   towns: ['Bedok', 'Geylang', 'Sembawang', 'Tengah', 'Toa Payoh', 'Yishun'],
-  note: 'About 7,960 flats in seven projects, plus Community Care Apartments in Toa Payoh. 2,875 of them, in Sembawang, Bedok (Bayshore) and Tengah, have waits of about three years or less. First planned for October 2026.',
-  source: 'hdb.gov.sg news release, 17 June 2026, para 17 (towns and flat count); November date from hdb.gov.sg news release, 31 October 2026 (Toa Payoh West master plan), para 8; project count and shorter waits from hdb.gov.sg news release, 1 November 2026 (Shorter Waiting Time flats), paras 3 and 11',
-  verified: '2026-11-01',
+  note: '7,964 flats in seven projects, plus Community Care Apartments in Toa Payoh. 2,875 of them, in Sembawang, Bedok (Bayshore) and Tengah, have waits of about three years or less. First planned for October 2026.',
+  source: 'hdb.gov.sg news release, 17 June 2026, para 17 (towns and flat count); November date from hdb.gov.sg news release, 31 October 2026 (Toa Payoh West master plan), para 8; project count and shorter waits from hdb.gov.sg news release, 1 November 2026 (Shorter Waiting Time flats), paras 3 and 11; projects, prices, waits and flat counts from HDB Flat Portal project pages, November 2026 BTO, checked 4 November 2026',
+  verified: '2026-11-04',
   previews: [
     {
-      area: 'yishun-khatib', town: 'Yishun', where: 'Yishun Street 82 and Lorong Chencharu, next to Yishun Walk, about a 5-minute walk from Khatib MRT',
-      flats: { '2R': 390, '3R': 80, '4R': 460, '5R': 650 },
-      note: '1,580 flats in one rental block and four blocks mixing sold and rental flats; 2 preschools',
-      source: 'HDB Yishun town map, issued June 2026 (checked 2026-10-14)',
+      area: 'yishun-khatib', town: 'Yishun', name: 'Chencharu Acres', where: 'Yishun Street 82 and Lorong Chencharu, next to Yishun Walk, about a 5-minute walk from Khatib MRT',
+      flats: { '2R': 392, '3R': 84, '4R': 462, '5R': 644 },
+      waitMonths: 39, waitText: '39 months for blocks 996A to 997C; 41 months for blocks 992A to 995C',
+      note: '1,582 flats for sale in 11 blocks of 15 storeys, four of them mixing sold and rental flats, plus one rental block; 2 multi-storey car parks with preschools and roof gardens, a hard court and a central green. A bus interchange, hawker centre and shops are planned in an Integrated Development across the road',
+      source: 'HDB Yishun town map, issued June 2026 (checked 2026-10-14); name, mix, wait and blocks from HDB Flat Portal project page (checked 2026-11-04)',
     },
     {
       area: 'toa-payoh-caldecott', town: 'Toa Payoh', name: 'Toa Payoh Hillside', where: 'Toa Payoh Rise and Thomson Road, beside Caldecott MRT (Thomson–East Coast and Circle lines)',
-      flats: { '2R': 590, '4R': 580 }, cca: 260,
-      note: '1,430 flats for sale plus about 230 rental flats (about 1,600 in all) in five blocks of 31 to 43 storeys; the first Community Care Apartments in Toa Payoh, in a block linked to the Active Ageing Centre, Residents’ Network Centre and a sheltered walk to Caldecott MRT. Food court, supermarket, fast food restaurant, 4 shops, preschool',
-      source: 'HDB Toa Payoh town map, issued June 2026 (checked 2026-10-14); name, blocks, rental count and CCA count (260, up from 240 first announced) from hdb.gov.sg news release, 31 October 2026 (Toa Payoh West master plan), paras 8–10',
+      flats: { '2R': 592, '4R': 584 }, cca: 256,
+      waitMonths: 45, waitText: '45 months',
+      note: '1,432 flats for sale plus about 230 rental flats (about 1,600 in all) in five blocks of 31 to 43 storeys; the first Community Care Apartments in Toa Payoh, in a block linked to the Active Ageing Centre, Residents’ Network Centre and a sheltered walk to Caldecott MRT (priced $88,000 to $201,000 by lease length). Food court, supermarket, fast food restaurant, 4 shops, preschool',
+      source: 'HDB Toa Payoh town map, issued June 2026 (checked 2026-10-14); name, blocks, rental count and CCA count (260, up from 240 first announced) from hdb.gov.sg news release, 31 October 2026 (Toa Payoh West master plan), paras 8–10; final mix (256 Community Care Apartments, down from 260), wait and prices from HDB Flat Portal project page (checked 2026-11-04)',
     },
     {
       area: 'tengah-garden-avenue', town: 'Tengah', name: 'Plantation Dew', where: 'Tengah Garden Avenue by the Pan-Island Expressway, about a 10-minute walk from Tengah Plantation and Tengah Park stations on the Jurong Region Line (being built)',
-      flats: { '2R': 180, '3R': 80, '4R': 170, '5R': 250, '3Gen': 30 },
+      flats: { '2R': 178, '3R': 84, '4R': 168, '5R': 252, '3Gen': 28 },
       waitMonths: 38, waitText: '3 years and 2 months',
       note: '710 flats in five blocks with sold and rental flats, bounded by Tengah Garden Avenue, Plantation Walk and a future park. White Flats (open plan, no internal walls between living and bedrooms) offered for 3-room, 4-room and, for the first time, 5-room. Eating house, minimart, 4 shops, preschool, kidney dialysis centre; the JE2 station on the Jurong Region Line within walking distance',
-      source: 'HDB Tengah town map, issued June 2026 (checked 2026-10-14); name, wait, White Flats and blocks from hdb.gov.sg news release, 1 November 2026 (Shorter Waiting Time flats), paras 8–10',
+      source: 'HDB Tengah town map, issued June 2026 (checked 2026-10-14); name, wait, White Flats and blocks from hdb.gov.sg news release, 1 November 2026 (Shorter Waiting Time flats), paras 8–10; final mix from HDB Flat Portal project page (checked 2026-11-04)',
     },
     {
       area: 'sembawang-admiralty-lane', town: 'Sembawang', name: 'Sembawang Anchor', where: 'Admiralty Lane and Sembawang Drive, by Jelutung Harbour Park, about a 16-minute walk from Sembawang MRT',
-      flats: { '2R': 330, '3R': 100, '4R': 460, '5R': 420 },
+      flats: { '2R': 333, '3R': 96, '4R': 464, '5R': 417 },
       waitMonths: 34, waitText: '2 years and 10 months',
       note: '1,310 flats in six blocks, one of them mixing sold and rental flats, in the new Sembawang North housing area; eating house, supermarket, 5 shops, preschool. A new neighbourhood centre and a one-hectare park are planned nearby; Bukit Canberra (hawker centre, polyclinic, sports hall, gym, pool) and Sun Plaza are in the area',
-      source: 'HDB Sembawang town map, issued June 2026 (checked 2026-10-14); name, wait and blocks from hdb.gov.sg news release, 1 November 2026 (Shorter Waiting Time flats), paras 4–5',
+      source: 'HDB Sembawang town map, issued June 2026 (checked 2026-10-14); name, wait and blocks from hdb.gov.sg news release, 1 November 2026 (Shorter Waiting Time flats), paras 4–5; final mix from HDB Flat Portal project page (checked 2026-11-04)',
     },
     {
-      area: 'geylang-aljunied', town: 'Geylang', where: 'Aljunied Road and Jalan Raya, about a 4-minute walk from Mattar MRT (Downtown line)',
-      flats: { '2R': 170, '4R': 270 },
-      note: '440 flats; preschool',
-      source: 'HDB Geylang town map, issued June 2026 (checked 2026-10-14)',
+      area: 'geylang-aljunied', town: 'Geylang', name: 'Merpati Meadow', where: 'Aljunied Road and Jalan Raya, about a 4-minute walk from Mattar MRT (Downtown line)',
+      flats: { '2R': 167, '4R': 271 },
+      waitMonths: 39, waitText: '39 months',
+      note: '438 flats; preschool',
+      source: 'HDB Geylang town map, issued June 2026 (checked 2026-10-14); name, mix and wait from HDB Flat Portal project page (checked 2026-11-04)',
     },
     {
-      area: 'bedok-upper-east-coast', town: 'Bedok', where: 'Upper East Coast Road and Bayshore Road, beside Bayshore MRT (Thomson–East Coast line)',
-      flats: { '2R': 890, '3R': 90, '4R': 660 },
-      note: '1,640 flats, one block mixing sold and rental flats; eating house, 2 shops, 2 preschools, Residents’ Network Centre, Active Ageing Centre (Care), kidney dialysis centre',
-      source: 'HDB Bedok town map, issued June 2026 (checked 2026-10-14)',
+      area: 'bedok-upper-east-coast', town: 'Bedok', name: 'Bayshore Sails', where: 'Upper East Coast Road and Bayshore Road, beside Bayshore MRT (Thomson–East Coast line)',
+      flats: { '2R': 890, '3R': 90, '4R': 657 },
+      waitMonths: 44, waitText: '44 months',
+      note: '1,637 flats, one block mixing sold and rental flats; eating house, 2 shops, 2 preschools, Residents’ Network Centre, Active Ageing Centre (Care), kidney dialysis centre',
+      source: 'HDB Bedok town map, issued June 2026 (checked 2026-10-14); name, mix and wait from HDB Flat Portal project page (checked 2026-11-04)',
     },
     {
       area: 'bedok-bayshore-walk', town: 'Bedok', name: 'Bayshore Oasis', where: 'Bayshore Drive and Bayshore Walk, beside Bayshore MRT (Thomson–East Coast line), across Bayshore Drive from the other Bedok site and by East Coast Park',
-      flats: { '2R': 350, '4R': 510 },
+      flats: { '2R': 347, '4R': 508 },
       waitMonths: 38, waitText: '3 years and 2 months',
-      note: '855 flats for sale (the town map\'s mix adds up to 860) in four blocks, one of them mixing sold and rental flats; minimart, 2 shops, preschool. A park is proposed next to it, with walking and cycling paths to East Coast Park; Bedok South station (Thomson–East Coast line) is coming',
-      source: 'HDB Bedok town map for this site, issued June 2026 (checked 2026-10-14); name, wait, blocks and 855 for sale from hdb.gov.sg news release, 1 November 2026 (Shorter Waiting Time flats), paras 6–7',
+      note: '855 flats for sale in four blocks, one of them mixing sold and rental flats; minimart, 2 shops, preschool. A park is proposed next to it, with walking and cycling paths to East Coast Park; Bedok South station (Thomson–East Coast line) is coming',
+      source: 'HDB Bedok town map for this site, issued June 2026 (checked 2026-10-14); name, wait, blocks and 855 for sale from hdb.gov.sg news release, 1 November 2026 (Shorter Waiting Time flats), paras 6–7; final mix from HDB Flat Portal project page (checked 2026-11-04)',
     },
   ],
-  projects: [],
+  projects: [
+    {
+      id: 'chencharu-acres', name: 'Chencharu Acres', town: 'Yishun', classification: 'Standard', area: 'yishun-khatib',
+      fromPrices: { '2R': 151000, '3R': 297000, '4R': 353000, '5R': 484000 },
+      waitMonths: 39, waitText: '39 months for blocks 996A to 997C; 41 months for blocks 992A to 995C',
+    },
+    {
+      id: 'sembawang-anchor', name: 'Sembawang Anchor', town: 'Sembawang', classification: 'Standard', area: 'sembawang-admiralty-lane',
+      fromPrices: { '2R': 156000, '3R': 274000, '4R': 312000, '5R': 479000 },
+      waitMonths: 34, waitText: '2 years and 10 months', fittingsIncluded: true,
+    },
+    {
+      id: 'plantation-dew', name: 'Plantation Dew', town: 'Tengah', classification: 'Standard', area: 'tengah-garden-avenue',
+      fromPrices: { '2R': 131000, '3R': 266000, '4R': 339000, '5R': 494000, '3Gen': 551000 },
+      waitMonths: 38, waitText: '3 years and 2 months',
+    },
+    {
+      id: 'merpati-meadow', name: 'Merpati Meadow', town: 'Geylang', classification: 'Plus', subsidyRecoveryPct: 8, area: 'geylang-aljunied',
+      fromPrices: { '2R': 253000, '4R': 545000 },
+      waitMonths: 39,
+    },
+    {
+      id: 'bayshore-sails', name: 'Bayshore Sails', town: 'Bedok', classification: 'Plus', subsidyRecoveryPct: 9, area: 'bedok-upper-east-coast',
+      fromPrices: { '2R': 208000, '3R': 409000, '4R': 580000 },
+      waitMonths: 44,
+    },
+    {
+      id: 'bayshore-oasis', name: 'Bayshore Oasis', town: 'Bedok', classification: 'Plus', subsidyRecoveryPct: 9, area: 'bedok-bayshore-walk',
+      fromPrices: { '2R': 230000, '4R': 559000 },
+      waitMonths: 38, waitText: '3 years and 2 months',
+    },
+    {
+      id: 'toa-payoh-hillside', name: 'Toa Payoh Hillside', town: 'Toa Payoh', classification: 'Prime', subsidyRecoveryPct: 11, area: 'toa-payoh-caldecott',
+      fromPrices: { '2R': 243000, '4R': 558000 },
+      waitMonths: 45,
+    },
+  ],
 }
 
 /** Newest first. */

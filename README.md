@@ -192,7 +192,7 @@ for each unit type, and storeys within each stack.
 
 ### Upcoming sites (`/surroundings/area/`)
 
-Before a project's brochure is out, HDB's town map shows only where the site is and its flat mix. For
+Until a project's blocks are traced from its brochure, the app knows only where the site is and its flat mix. For
 those sites (`launches.ts` previews with an `area`), this page shows walking times from the edge of the
 site to the nearest MRT exits and other places, primary schools within 1 km and 2 km (of the whole site,
 or only part of it, since the blocks aren't known), and expressways, main roads and above-ground train

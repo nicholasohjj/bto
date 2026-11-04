@@ -654,6 +654,11 @@ const FIT_LIMIT: Record<AffordLimit, string> = {
   tdsr: 'Over the TDSR limit',
 }
 
+/** Today in the viewer's time zone ("YYYY-MM-DD"), to compare with a stated date. */
+function localDay(now = new Date()): string {
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+}
+
 /** Rows separated by 1px lines; two columns on wider screens (a lone last row spans both). */
 const ROWS = 'grid gap-px overflow-hidden rounded-lg bg-line md:grid-cols-2 md:[&>li:last-child:nth-child(odd)]:col-span-2'
 
@@ -663,7 +668,9 @@ export function LaunchFitCard({ scenario, onCompare }: { scenario: Scenario; onC
   const [picks, setPicks] = useState<string[]>([])
   const launch = launches.find((l) => l.id === launchId)
   // A launch that has closed is checked as if it opened next month; otherwise its payments would count as already made.
-  const closed = !!launch && launch.applicationMonth <= scenario.startMonth
+  // In its own month it counts as open until the closing date, when HDB has given one.
+  const stillOpen = !!launch?.applicationsClose && localDay() <= launch.applicationsClose
+  const closed = !!launch && (launch.applicationMonth < scenario.startMonth || (launch.applicationMonth === scenario.startMonth && !stillOpen))
   const applicationMonth = launch ? (closed ? addMonths(scenario.startMonth, 1) : launch.applicationMonth) : ''
   const fits = useMemo(() => (launch ? launchFit(scenario, launch, { applicationMonth }) : []), [scenario, launch, applicationMonth])
   const types = FLAT_TYPES.filter((t) => fits.some((f) => f.type === t.value))
@@ -672,8 +679,8 @@ export function LaunchFitCard({ scenario, onCompare }: { scenario: Scenario; onC
   const [filterTouched, setFilterTouched] = useState(false)
   const filter = filterTouched ? typeFilter : types.some((t) => t.value === scenario.flat.type) && types.length > 1 ? scenario.flat.type : 'all'
   if (!launch) return null
-  // The next launch's sites that have a page before their projects are announced.
-  const next = LAUNCHES.find((l) => !l.projects.length && l.previews?.some((v) => v.area))
+  // The newest launch's sites placed from a town map, which have a page of their own.
+  const next = LAUNCHES.find((l) => l.previews?.some((v) => v.area))
   const upcoming = next?.previews?.flatMap((v) => (v.area ? [v.area] : [])) ?? []
   const upcomingName = next?.name ?? ''
   const key = (f: ProjectFit) => `${f.project.id}/${f.type}`
@@ -777,7 +784,7 @@ export function LaunchFitCard({ scenario, onCompare }: { scenario: Scenario; onC
       </>}
       <p className="mt-3 text-xs text-ink-2">
         Before you choose: <a className="text-accent underline" href="/surroundings/">Surroundings</a> shows each unit’s view, sun and walk to the MRT
-        {upcoming.length > 0 && <>, and <a className="text-accent underline" href={areaUrl(upcoming[0])}>upcoming sites</a> shows walking, schools and noise around the {upcomingName} sites before their brochures are out</>}.
+        {upcoming.length > 0 && <>, and <a className="text-accent underline" href={areaUrl(upcoming[0])}>site pages</a> show walking, schools and noise around the {upcomingName} sites</>}.
       </p>
       {!planShort && <p className="mt-3 text-[11px] text-muted">
         Starting prices are the cheapest unit of each type, before grants. Keeps your loan, CPF slider, costs and grants; each project’s dates come from

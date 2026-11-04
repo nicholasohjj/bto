@@ -153,7 +153,7 @@ function siteHtml() {
     ${v ? `<div class="kv"><span>Flats</span><b>${[...Object.entries(v.flats).map(([t, n]) => `${n!.toLocaleString()} ${esc(label(t))}`), ...(v.cca ? [`${v.cca} Community Care Apartment`] : [])].join('<br>')}</b></div>` : ''}
     <div class="kv"><span>Site</span><b>about ${(size / 1e4).toFixed(1)} ha, ${km(w)} across</b></div>
     ${v?.note ? `<p class="note">${esc(v.note)}.</p>` : ''}
-    <p class="note">HDB hasn't shown the blocks yet, so distances here are from the edge of the site. A block on the far side could be up to ${km(w)} (about ${Math.max(1, Math.round(w / 80))} min) further. Units, views and sun come once the brochure is out.</p></div>`
+    <p class="note">This site is placed from HDB's town map, without its blocks, so distances here are from the edge of the site. A block on the far side could be up to ${km(w)} (about ${Math.max(1, Math.round(w / 80))} min) further. Unit views and sun aren't available here yet.</p></div>`
 }
 function render(c: Ctx | null) {
   let h = siteHtml()
