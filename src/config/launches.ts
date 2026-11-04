@@ -276,8 +276,55 @@ const NOVEMBER_2026: Launch = {
   ],
 }
 
+// Sites and flat mixes: VERIFIED 2026-11-04 from HDB's town maps issued November 2026 and the five "Upcoming BTO"
+// listings on the HDB Flat Portal (4,280 flats). The portal gives no date: February 2027, about 4,300 flats and the
+// 15 Dec 2026 HFE date are SECONDARY (AsiaOne's report of HDB's 4 Nov 2026 launch announcement).
+const FEBRUARY_2027: Launch = {
+  id: '2027-02',
+  name: 'February 2027 BTO',
+  applicationMonth: '2027-02',
+  hfeBy: '2026-12-15',
+  towns: ['Bishan', 'Tampines', 'Tengah', 'Toa Payoh'],
+  note: 'About 4,300 flats at five sites, alongside a Sale of Balance Flats exercise of about 5,000 flats.',
+  source: 'HDB town maps issued November 2026 and HDB Flat Portal “Upcoming BTO” listings (sites and flat mixes, checked 4 November 2026); month, flat count and HFE date as reported by AsiaOne from HDB’s November 2026 launch announcement',
+  verified: '2026-11-04',
+  previews: [
+    {
+      area: 'bishan-sin-ming', town: 'Bishan', where: 'Sin Ming Street (being built), between Sin Ming Road and Marymount Road',
+      flats: { '2R': 520, '3R': 80, '4R': 470 },
+      note: '1,070 flats; supermarket, preschool. HDB’s map shows existing and proposed industries and heavy vehicle parks within 500 m, and the North-South Corridor being built along Marymount Road',
+      source: 'HDB Bishan town map, issued November 2026 (checked 2026-11-04)',
+    },
+    {
+      area: 'tampines-changkat', town: 'Tampines', where: 'Tampines Street 11, beside Tampines Changkat Community Club, north of the Pan-Island Expressway',
+      flats: { '4R': 90 }, cca: 240,
+      note: '330 flats, in one block mixing sold and rental flats; proposed health and medical care next door',
+      source: 'HDB Tampines town map, issued November 2026 (checked 2026-11-04)',
+    },
+    {
+      area: 'tampines-upper-changi', town: 'Tampines', where: 'Simei Road and Upper Changi Road East, near Upper Changi MRT (Downtown line)',
+      flats: { '2R': 120, '3R': 100, '4R': 120, '5R': 120 },
+      note: '460 flats, with two blocks mixing sold and rental flats; eating house, minimart, 4 shops, preschool, Residents’ Network Centre',
+      source: 'HDB Tampines town map, issued November 2026 (checked 2026-11-04)',
+    },
+    {
+      town: 'Tengah', where: 'Brickland Crescent, Brickland Close (being built) and Bukit Batok Road, near Brickland MRT (North-South line, being built)',
+      flats: { '2R': 410, '3R': 80, '4R': 350, '5R': 440 },
+      note: '1,280 flats, with one rental block and three blocks mixing sold and rental flats; preschool, Residents’ Network Centre',
+      source: 'HDB Tengah town map, issued November 2026 (checked 2026-11-04)',
+    },
+    {
+      town: 'Toa Payoh', where: 'Mount Pleasant Avenue, beside the future Mount Pleasant MRT station (Thomson–East Coast line)',
+      flats: { '2R': 450, '3R': 90, '4R': 600 },
+      note: '1,140 flats, with two blocks mixing sold and rental flats; eating house, preschool, Residents’ Network Centre, fire post, Active Ageing Centre. HDB’s map marks Mount Pleasant station as future, with no opening date',
+      source: 'HDB Toa Payoh town map, issued November 2026 (checked 2026-11-04)',
+    },
+  ],
+  projects: [],
+}
+
 /** Newest first. */
-export const LAUNCHES: Launch[] = [NOVEMBER_2026, JUNE_2026]
+export const LAUNCHES: Launch[] = [FEBRUARY_2027, NOVEMBER_2026, JUNE_2026]
 
 /**
  * Months between BTO sales exercises, for estimating launches HDB hasn't announced yet.

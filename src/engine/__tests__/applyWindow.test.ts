@@ -20,13 +20,13 @@ describe('apply window', () => {
     expect(w.fromLetter).toBe(true)
     expect(w.launches.map((l) => [l.month, !!l.launch, l.hfe])).toEqual([
       ['2026-11', true, 'valid'],
-      ['2027-03', false, 'valid'],
-      ['2027-07', false, 'lastMonth'],
-      ['2027-11', false, 'expired'],
+      ['2027-02', true, 'valid'],
+      ['2027-06', false, 'valid'],
+      ['2027-10', false, 'expired'],
     ])
     expect(w.chances).toBe(3)
     expect(w.launches[0].isPlan).toBe(true)
-    expect(w.launches[1].keys).toBe('2031-01') // typical 46-month wait
+    expect(w.launches[1].keys).toBe('2030-12') // typical 46-month wait
   })
 
   it('works out the letter from the HFE month when it isn’t set', () => {

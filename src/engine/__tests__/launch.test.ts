@@ -126,6 +126,20 @@ describe('November 2026 projects', () => {
   })
 })
 
+describe('February 2027 sites', () => {
+  const feb = LAUNCHES.find((l) => l.id === '2027-02')!
+  it('adds up each town map’s flat mix, to about the 4,300 flats reported', () => {
+    const count = (v: (typeof feb.previews & object)[number]) => Object.values(v.flats).reduce((a, n) => a + n!, 0) + (v.cca ?? 0)
+    expect(feb.previews!.map(count)).toEqual([1070, 330, 460, 1280, 1140])
+    expect(feb.previews!.reduce((t, v) => t + count(v), 0)).toBe(4280)
+  })
+  it('has a site for every town, and no projects yet', () => {
+    expect([...new Set(feb.previews!.map((v) => v.town))].sort()).toEqual([...feb.towns!].sort())
+    expect(feb.projects).toEqual([])
+    expect(LAUNCHES[0]).toBe(feb)
+  })
+})
+
 describe('a launch month without a project', () => {
   it('sets BTO dates from the launch month', () => {
     const s = newPlan('nov')
