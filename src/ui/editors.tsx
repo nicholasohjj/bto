@@ -431,7 +431,9 @@ function ProjectPicker({ scenario, update }: { scenario: Scenario; update: Updat
           )}
           {!closed(launch) && launch.applicationsClose && row('Apply by', <b className="text-ink">{formatDay(launch.applicationsClose)}</b>)}
           {!closed(launch) && row('HFE letter', launch.hfeBy
-            ? <>Apply with all documents by <b className="text-ink">{formatDay(launch.hfeBy)}</b> to have it in time.</>
+            ? launch.applicationsClose
+              ? <>HDB asked for all documents by <b className="text-ink">{formatDay(launch.hfeBy)}</b>. Later applications are still processed, but those in by then come first. You need a valid letter when you apply, and the e-service closes while applications are open.</>
+              : <>Apply with all documents by <b className="text-ink">{formatDay(launch.hfeBy)}</b> to have it in time.</>
             : <>{!launch.applicationsClose && 'Deadline not announced yet, so apply early. '}You need a valid letter when you apply, and the e-service closes while applications are open.</>)}
           <p className="pt-1 text-[11px] text-muted">Source: {launch.source}.</p>
         </dl>

@@ -395,7 +395,7 @@ Users can override any figure for a single scenario under **Advanced settings**.
 | CPF rates for PRs in years 1–2; low-wage (≤ $750) formulas | Verified (cpf.gov.sg 2026 rate tables) |
 | OA share for PR graduated rates (assumed = citizen ratios) | **Not verified** |
 | 2-room Flexi ceiling $7,000 (Feb 2026; may have risen in Aug 2026) | Verified for Feb 2026 (HDB Annex B) |
-| Income ceilings $16,000 families / $24,000 extended families / $8,000 singles | Verified (hdb.gov.sg HDB housing loan eligibility, checked 2026-09-26) |
+| Income ceilings $16,000 families / $24,000 extended families / $8,000 singles | Verified (hdb.gov.sg HDB housing loan eligibility, checked 2026-09-26; families and singles again in HDB's Nov 2026 BTO release) |
 | CPF Annual Limit $37,740; voluntary top-ups allocated like normal contributions | Secondary (cpf.gov.sg search snippet) |
 | EHG: families up to $120k (ceiling $9,000); FT+ST couples get EHG (Singles) up to $60k on half the income (ceiling $4,500), paid to the first-timer; pro-rated if the lease doesn't cover the youngest to 95 | Verified (hdb.gov.sg EHG page; the app's tables reproduce HDB's 5 worked examples, checked 2026-09-26). Band values between the examples are secondary |
 | Top-Up Grant: singles who bought a 2-room Flexi and later marry: up to $15,000 (income ≤ $8,000; apply within 6 months) — shown as a note, not added. Resale-only grants (Family Grant, Proximity) are flagged on new flats | Verified (hdb.gov.sg CPF Housing Grant for resale flats page, checked 2026-09-26) |

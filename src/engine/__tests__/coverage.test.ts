@@ -55,6 +55,13 @@ describe('CPF: low wages, PRs, self-employed', () => {
 })
 
 describe('eligibility and grants', () => {
+  it('gives the grants in the worked examples of HDB’s Nov 2026 BTO release', () => {
+    expect([4000, 7000, 9000].map((i) => tierAmount(i, P.eligibility.ehgFamilies))).toEqual([80000, 30000, 5000])
+    expect([3500, 4500].map((i) => tierAmount(i, P.eligibility.ehgSingles))).toEqual([15000, 2500])
+    expect(P.eligibility.incomeCeilingFamilies).toBe(16000)
+    expect(P.eligibility.incomeCeilingSingles).toBe(8000)
+    expect(P.hdbLoan.maxLtv).toBe(0.75)
+  })
   it('reads the EHG tiers', () => {
     expect(tierAmount(1500, P.eligibility.ehgFamilies)).toBe(120000)
     expect(tierAmount(8400, P.eligibility.ehgFamilies)).toBe(10000)

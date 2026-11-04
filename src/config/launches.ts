@@ -171,20 +171,25 @@ const JUNE_2026: Launch = {
 
 // Announced as October 2026 in the June release (para 17), with an HFE deadline of 15 Sep 2026 for that date.
 // Moved to November 2026: VERIFIED 2026-10-31 from HDB's Toa Payoh West master plan release (31 Oct 2026, para 8),
-// which names Toa Payoh Hillside as a November 2026 project. HFE deadline for November not known.
+// which names Toa Payoh Hillside as a November 2026 project.
 // Sembawang Anchor, Bayshore Oasis and Plantation Dew (names, waits, blocks): VERIFIED 2026-11-01 from HDB's
 // Shorter Waiting Time release (1 Nov 2026), which also confirms seven projects and about 7,960 flats (paras 3, 11).
 // Projects, prices, waits, subsidy recovery rates, unit counts (7,964 in all) and the 11 Nov closing date: VERIFIED
 // 2026-11-04 from each project's HDB Flat Portal page. Prices are the 99-year range's lower end for the cheaper 2-room
 // Flexi type, leaving out short leases (2-room Flexi from 15 years; Community Care Apartments, not a flat type here).
+// VERIFIED 2026-11-04 from HDB's launch release (4 Nov 2026): flat count, classifications and subsidy recovery (Tables 1-2),
+// prices (Table 3), application dates and the HFE date (paras 12, 16). Table 3 gives Bayshore Sails and Oasis one row, the
+// lower price of the two, so their separate prices are the portal's. The text supplied had no Toa Payoh Hillside 2-room
+// Flexi or 4-room rows, so those two prices are from the portal only; its 4-room comes with and without balconies.
 const NOVEMBER_2026: Launch = {
   id: '2026-11',
   name: 'November 2026 BTO',
   applicationMonth: '2026-11',
   applicationsClose: '2026-11-11',
+  hfeBy: '2026-09-25',
   towns: ['Bedok', 'Geylang', 'Sembawang', 'Tengah', 'Toa Payoh', 'Yishun'],
-  note: '7,964 flats in seven projects, plus Community Care Apartments in Toa Payoh. 2,875 of them, in Sembawang, Bedok (Bayshore) and Tengah, have waits of about three years or less. First planned for October 2026.',
-  source: 'hdb.gov.sg news release, 17 June 2026, para 17 (towns and flat count); November date from hdb.gov.sg news release, 31 October 2026 (Toa Payoh West master plan), para 8; project count and shorter waits from hdb.gov.sg news release, 1 November 2026 (Shorter Waiting Time flats), paras 3 and 11; projects, prices, waits and flat counts from HDB Flat Portal project pages, November 2026 BTO, checked 4 November 2026',
+  note: '7,964 flats in seven projects, including 256 Community Care Apartments in Toa Payoh, now open from age 55. The 1,310 Shorter Waiting Time flats at Sembawang Anchor have waits under three years, and the other six projects under four. First planned for October 2026.',
+  source: 'hdb.gov.sg news release, 17 June 2026, para 17 (towns and flat count); November date from hdb.gov.sg news release, 31 October 2026 (Toa Payoh West master plan), para 8; project count and shorter waits from hdb.gov.sg news release, 1 November 2026 (Shorter Waiting Time flats), paras 3 and 11; projects, prices and dates from hdb.gov.sg news release, 4 November 2026 (November 2026 BTO launch), Tables 1-3 and paras 12 and 16; separate prices, waits and flat mixes from HDB Flat Portal project pages, checked 4 November 2026',
   verified: '2026-11-04',
   previews: [
     {
@@ -198,15 +203,15 @@ const NOVEMBER_2026: Launch = {
       area: 'toa-payoh-caldecott', town: 'Toa Payoh', name: 'Toa Payoh Hillside', where: 'Toa Payoh Rise and Thomson Road, beside Caldecott MRT (Thomson–East Coast and Circle lines)',
       flats: { '2R': 592, '4R': 584 }, cca: 256,
       waitMonths: 45, waitText: '45 months',
-      note: '1,432 flats for sale plus about 230 rental flats (about 1,600 in all) in five blocks of 31 to 43 storeys; the first Community Care Apartments in Toa Payoh, in a block linked to the Active Ageing Centre, Residents’ Network Centre and a sheltered walk to Caldecott MRT (priced $88,000 to $201,000 by lease length). Food court, supermarket, fast food restaurant, 4 shops, preschool',
+      note: '1,432 flats for sale plus about 230 rental flats (about 1,600 in all) in five blocks of 31 to 43 storeys; the first Community Care Apartments in Toa Payoh, in a block linked to the Active Ageing Centre, Residents’ Network Centre and a sheltered walk to Caldecott MRT (from age 55; priced $88,000 to $201,000 by lease length, from $151,000 on a 40-year lease). Food court, supermarket, fast food restaurant, 4 shops, preschool',
       source: 'HDB Toa Payoh town map, issued June 2026 (checked 2026-10-14); name, blocks, rental count and CCA count (260, up from 240 first announced) from hdb.gov.sg news release, 31 October 2026 (Toa Payoh West master plan), paras 8–10; final mix (256 Community Care Apartments, down from 260), wait and prices from HDB Flat Portal project page (checked 2026-11-04)',
     },
     {
       area: 'tengah-garden-avenue', town: 'Tengah', name: 'Plantation Dew', where: 'Tengah Garden Avenue by the Pan-Island Expressway, about a 10-minute walk from Tengah Plantation and Tengah Park stations on the Jurong Region Line (being built)',
       flats: { '2R': 178, '3R': 84, '4R': 168, '5R': 252, '3Gen': 28 },
       waitMonths: 38, waitText: '3 years and 2 months',
-      note: '710 flats in five blocks with sold and rental flats, bounded by Tengah Garden Avenue, Plantation Walk and a future park. White Flats (open plan, no internal walls between living and bedrooms) offered for 3-room, 4-room and, for the first time, 5-room. Eating house, minimart, 4 shops, preschool, kidney dialysis centre; the JE2 station on the Jurong Region Line within walking distance',
-      source: 'HDB Tengah town map, issued June 2026 (checked 2026-10-14); name, wait, White Flats and blocks from hdb.gov.sg news release, 1 November 2026 (Shorter Waiting Time flats), paras 8–10; final mix from HDB Flat Portal project page (checked 2026-11-04)',
+      note: '710 flats in five blocks with sold and rental flats, bounded by Tengah Garden Avenue, Plantation Walk and a future park. White Flats (open plan, no internal walls between living and bedrooms) offered for 3-room, 4-room and, for the first time, 5-room, at $6,000, $8,600 and $9,000 less than the same flat with walls. Eating house, minimart, 4 shops, preschool, kidney dialysis centre; the JE2 station on the Jurong Region Line within walking distance',
+      source: 'HDB Tengah town map, issued June 2026 (checked 2026-10-14); name, wait, White Flats and blocks from hdb.gov.sg news release, 1 November 2026 (Shorter Waiting Time flats), paras 8–10; White Flat prices from hdb.gov.sg news release, 4 November 2026 (November 2026 BTO launch), para 9; final mix from HDB Flat Portal project page (checked 2026-11-04)',
     },
     {
       area: 'sembawang-admiralty-lane', town: 'Sembawang', name: 'Sembawang Anchor', where: 'Admiralty Lane and Sembawang Drive, by Jelutung Harbour Park, about a 16-minute walk from Sembawang MRT',
@@ -277,16 +282,16 @@ const NOVEMBER_2026: Launch = {
 }
 
 // Sites and flat mixes: VERIFIED 2026-11-04 from HDB's town maps issued November 2026 and the five "Upcoming BTO"
-// listings on the HDB Flat Portal (4,280 flats). The portal gives no date: February 2027, about 4,300 flats and the
-// 15 Dec 2026 HFE date are SECONDARY (AsiaOne's report of HDB's 4 Nov 2026 launch announcement).
+// listings on the HDB Flat Portal (4,280 flats). February 2027, about 4,300 flats, the towns, the Sale of Balance Flats
+// and the 15 Dec 2026 HFE date: VERIFIED 2026-11-04 from HDB's launch release (4 Nov 2026), para 19.
 const FEBRUARY_2027: Launch = {
   id: '2027-02',
   name: 'February 2027 BTO',
   applicationMonth: '2027-02',
   hfeBy: '2026-12-15',
   towns: ['Bishan', 'Tampines', 'Tengah', 'Toa Payoh'],
-  note: 'About 4,300 flats at five sites, alongside a Sale of Balance Flats exercise of about 5,000 flats.',
-  source: 'HDB town maps issued November 2026 and HDB Flat Portal “Upcoming BTO” listings (sites and flat mixes, checked 4 November 2026); month, flat count and HFE date as reported by AsiaOne from HDB’s November 2026 launch announcement',
+  note: 'About 4,300 flats at five sites, with a Sale of Balance Flats exercise of about 5,000 flats at the same time.',
+  source: 'HDB town maps issued November 2026 and HDB Flat Portal “Upcoming BTO” listings (sites and flat mixes, checked 4 November 2026); month, flat count and HFE date from hdb.gov.sg news release, 4 November 2026 (November 2026 BTO launch), para 19',
   verified: '2026-11-04',
   previews: [
     {

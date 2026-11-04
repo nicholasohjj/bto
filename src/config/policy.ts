@@ -323,7 +323,8 @@ export const DEFAULT_POLICY: Policy = {
     // VERIFIED 2026-09-26); OA rate 2.5% from CPF releases (SECONDARY).
     interestRate: 0.026,
     // LTV limit for HDB loans lowered from 80% to 75% from the Oct 2024 BTO exercise.
-    // Source: hdb.gov.sg Annex C, Oct 2024 BTO sales exercise, footnote 4. VERIFIED 2026-09-23.
+    // Source: hdb.gov.sg Annex C, Oct 2024 BTO sales exercise, footnote 4. VERIFIED 2026-09-23;
+    // still 75% in HDB's Nov 2026 BTO release, para 14 (VERIFIED 2026-11-04).
     maxLtv: 0.75,
     // Interest rate floor HDB uses to work out the loan amount: the higher of 3.0% p.a. and the
     // prevailing HDB rate. Source: hdb.gov.sg "Details on the HDB housing loan". VERIFIED 2026-09-26.
@@ -551,8 +552,7 @@ export const DEFAULT_POLICY: Policy = {
   },
   eligibility: {
     // Household income ceiling for BTO (families): raised from $14,000 to $16,000 from
-    // 24 Aug 2026 (National Day Rally 2026). News reports, confirmed by the user 2026-09-24;
-    // not yet read on hdb.gov.sg ($14,000 VERIFIED in HDB Feb 2026 BTO Annex B, Table B(1)).
+    // 24 Aug 2026 (National Day Rally 2026). $16,000 VERIFIED 2026-11-04 in HDB's Nov 2026 BTO release.
     incomeCeilingFamilies: 16000,
     // HDB loan ceilings on hdb.gov.sg ("HDB housing loan" eligibility, text supplied by the user,
     // VERIFIED 2026-09-26): $16,000 families, $24,000 extended families, $8,000 singles.
@@ -566,6 +566,7 @@ export const DEFAULT_POLICY: Policy = {
     // Enhanced CPF Housing Grant (families), by average gross monthly household income over
     // 12 months. Max $120,000; ceiling $9,000 (unchanged by the Aug 2026 ceiling increase).
     // Source: cpf.gov.sg EHG guide (max + ceiling VERIFIED); band amounts from ohmyhome.com. SECONDARY 2026-09-23.
+    // HDB's Nov 2026 BTO release (para 8) confirms $4,000 → $80,000, $7,000 → $30,000, $9,000 → $5,000. VERIFIED 2026-11-04.
     ehgFamilies: [
       { upTo: 1500, amount: 120000 }, { upTo: 2000, amount: 110000 }, { upTo: 2500, amount: 105000 },
       { upTo: 3000, amount: 95000 }, { upTo: 3500, amount: 90000 }, { upTo: 4000, amount: 80000 },
@@ -576,6 +577,7 @@ export const DEFAULT_POLICY: Policy = {
     ],
     // EHG (Singles): used for first-timer + second-timer couples, on HALF the household income
     // (ceiling $4,500). Source: mynicehome.gov.sg (rule VERIFIED); bands from ohmyhome.com SECONDARY.
+    // HDB's Nov 2026 BTO release (para 8) confirms $3,500 → $15,000, $4,500 → $2,500. VERIFIED 2026-11-04.
     ehgSingles: [
       { upTo: 750, amount: 60000 }, { upTo: 1000, amount: 55000 }, { upTo: 1250, amount: 52500 },
       { upTo: 1500, amount: 47500 }, { upTo: 1750, amount: 45000 }, { upTo: 2000, amount: 40000 },
@@ -596,7 +598,7 @@ export const DEFAULT_POLICY: Policy = {
     stepUpAmount: 15000,
     stepUpIncomeCeiling: 8000,
     // Singles (SC, 35+) buying a 2-room Flexi: $7,000 until 23 Aug 2026, $8,000 from 24 Aug 2026
-    // (National Day Rally 2026). Source: news reports of the change. SECONDARY 2026-09-25.
+    // (National Day Rally 2026). $8,000 VERIFIED 2026-11-04 in HDB's Nov 2026 BTO release.
     incomeCeilingSingles: 8000,
     // Joint Singles Scheme (2–4 singles): assumed the same as the families' ceiling. UNVERIFIED.
     incomeCeilingJointSingles: 16000,
@@ -697,7 +699,7 @@ export const POLICY_META: Record<string, PolicyMeta> = {
   'cpf.oaInterestRate': { label: 'CPF OA interest rate', unit: 'pct', status: 'secondary', source: 'CPF interest rate releases, 2026' },
   'cpf.accruedInterestRate': { label: 'CPF accrued interest rate on housing', unit: 'pct', status: 'secondary', source: 'cpf.gov.sg housing refund pages' },
   'hdbLoan.interestRate': { label: 'HDB loan interest rate (CPF OA rate + 0.1%)', unit: 'pct', status: 'verified', source: 'hdb.gov.sg (peg rule, Sep 2026); OA rate from CPF releases' },
-  'hdbLoan.maxLtv': { label: 'HDB loan max LTV', unit: 'pct', status: 'verified', source: 'HDB BTO Annex C, Oct 2024' },
+  'hdbLoan.maxLtv': { label: 'HDB loan max LTV', unit: 'pct', status: 'verified', source: 'HDB BTO Annex C, Oct 2024; Nov 2026 BTO release, para 14' },
   'hdbLoan.stressRate': { label: 'HDB loan assessment rate floor', unit: 'pct', status: 'verified', source: 'hdb.gov.sg Details on the HDB housing loan (Sep 2026)' },
   'hdbLoan.maxTenureYears': { label: 'HDB loan max tenure (also ≤ 65 − average age, ≤ lease − 20)', unit: 'years', status: 'verified', source: 'hdb.gov.sg Details on the HDB housing loan (Sep 2026)' },
   'hdbLoan.oaRetainMax': { label: 'OA you may keep with HDB loan (per person)', unit: 'sgd', status: 'verified', source: 'hdb.gov.sg Use of CPF savings (Sep 2026)' },
@@ -739,16 +741,16 @@ export const POLICY_META: Record<string, PolicyMeta> = {
   'bankLoan.ltvTenureYears': { label: 'Bank loan: tenure above which LTV is reduced', unit: 'years', status: 'secondary', source: 'MAS explainer (snippet)' },
   'bankLoan.ltvMaxAge': { label: 'Bank loan: age above which LTV is reduced', unit: 'years', status: 'secondary', source: 'MAS explainer (snippet)' },
   'bankLoan.bsdReimburseMonths': { label: 'Bank loan: months until BSD reimbursed from CPF', unit: 'months', status: 'unverified', source: 'Estimate' },
-  'eligibility.incomeCeilingFamilies': { label: 'BTO income ceiling (families)', unit: 'sgd', status: 'verified', source: 'hdb.gov.sg HDB housing loan eligibility (Sep 2026)' },
+  'eligibility.incomeCeilingFamilies': { label: 'BTO income ceiling (families)', unit: 'sgd', status: 'verified', source: 'hdb.gov.sg HDB housing loan eligibility (Sep 2026); Nov 2026 BTO release' },
   'cpf.annualLimit': { label: 'CPF Annual Limit (mandatory + voluntary)', unit: 'sgd', status: 'secondary', source: 'cpf.gov.sg (snippet)' },
   'eligibility.incomeCeiling2RFlexi': { label: 'Income ceiling: 2-room Flexi (99-yr)', unit: 'sgd', status: 'verified', source: 'HDB Feb 2026 Annex B (may have changed Aug 2026)' },
   'eligibility.incomeCeilingExtended': { label: 'Income ceiling: extended family / 3Gen', unit: 'sgd', status: 'verified', source: 'hdb.gov.sg HDB housing loan eligibility (Sep 2026)' },
   'eligibility.scSprPremium': { label: 'SC/SPR household premium on new flat', unit: 'sgd', status: 'secondary', source: 'HDB (snippet)' },
-  'eligibility.ehgFamilies': { label: 'Enhanced CPF Housing Grant (families) by income', unit: 'sgd', status: 'verified', source: 'hdb.gov.sg EHG page: max, $9,000 ceiling and 3 worked examples match' },
+  'eligibility.ehgFamilies': { label: 'Enhanced CPF Housing Grant (families) by income', unit: 'sgd', status: 'verified', source: 'hdb.gov.sg EHG page: max, $9,000 ceiling and 3 worked examples match; 3 more in the Nov 2026 BTO release' },
   'eligibility.ehgSingles': { label: 'EHG (singles table; FT+ST couples use half income)', unit: 'sgd', status: 'verified', source: 'hdb.gov.sg EHG page: $60,000 max, $4,500 half-income ceiling, 2 worked examples match' },
   'eligibility.ehgEmploymentMonths': { label: 'EHG: months of continuous work needed', unit: 'months', status: 'verified', source: 'mynicehome.gov.sg' },
   'eligibility.ehgIncomeLagMonths': { label: 'EHG: income window ends months before HFE', unit: 'months', status: 'verified', source: 'mynicehome.gov.sg' },
-  'eligibility.incomeCeilingSingles': { label: 'Income ceiling: singles', unit: 'sgd', status: 'verified', source: 'hdb.gov.sg HDB housing loan eligibility (Sep 2026)' },
+  'eligibility.incomeCeilingSingles': { label: 'Income ceiling: singles', unit: 'sgd', status: 'verified', source: 'hdb.gov.sg HDB housing loan eligibility (Sep 2026); Nov 2026 BTO release' },
   'eligibility.incomeCeilingJointSingles': { label: 'Income ceiling: Joint Singles Scheme', unit: 'sgd', status: 'unverified', source: 'Assumed = families' },
   'eligibility.singlesMinAge': { label: 'Singles: minimum age', unit: 'years', status: 'secondary', source: 'HDB via guides (snippet)' },
   'eligibility.stepUpAmount': { label: 'Step-Up CPF Housing Grant', unit: 'sgd', status: 'verified', source: 'hdb.gov.sg Step-Up CPF Housing Grant (Sep 2026)' },

@@ -116,6 +116,19 @@ describe('November 2026 projects', () => {
       expect(Object.keys(v.flats).sort()).toEqual(Object.keys(p.fromPrices).sort())
     }
   })
+  it('matches the starting prices and subsidy recovery in HDB’s release (Tables 2 and 3)', () => {
+    const p = (id: string) => nov.projects.find((x) => x.id === id)!
+    expect(p('sembawang-anchor').fromPrices).toEqual({ '2R': 156000, '3R': 274000, '4R': 312000, '5R': 479000 })
+    expect(p('plantation-dew').fromPrices).toEqual({ '2R': 131000, '3R': 266000, '4R': 339000, '5R': 494000, '3Gen': 551000 })
+    expect(p('chencharu-acres').fromPrices).toEqual({ '2R': 151000, '3R': 297000, '4R': 353000, '5R': 484000 })
+    expect(p('merpati-meadow').fromPrices).toEqual({ '2R': 253000, '4R': 545000 })
+    // One row for the two Bayshore projects: the lower price of each type.
+    const bay = [p('bayshore-sails'), p('bayshore-oasis')]
+    expect((['2R', '3R', '4R'] as const).map((t) => Math.min(...bay.flatMap((b) => b.fromPrices[t] ?? [])))).toEqual([208000, 409000, 559000])
+    expect(nov.projects.filter((x) => x.subsidyRecoveryPct).map((x) => [x.id, x.subsidyRecoveryPct]).sort()).toEqual([['bayshore-oasis', 9], ['bayshore-sails', 9], ['merpati-meadow', 8], ['toa-payoh-hillside', 11]])
+    expect(nov.projects.filter((x) => x.fittingsIncluded).map((x) => x.id)).toEqual(['sembawang-anchor'])
+    expect([nov.hfeBy, nov.applicationsClose]).toEqual(['2026-09-25', '2026-11-11'])
+  })
   it('fills in a project with its price and stated wait', () => {
     const s = newPlan('nov')
     s.flat.type = '4R'
@@ -137,6 +150,7 @@ describe('February 2027 sites', () => {
     expect([...new Set(feb.previews!.map((v) => v.town))].sort()).toEqual([...feb.towns!].sort())
     expect(feb.projects).toEqual([])
     expect(LAUNCHES[0]).toBe(feb)
+    expect(feb.hfeBy).toBe('2026-12-15')
   })
 })
 
