@@ -184,6 +184,9 @@ for (const w of R) {
   rail.push({ ...(t.name ? { n: t.name.slice(0, 60) } : {}), ...(under ? { u: 1 } : {}), ...(t.railway === 'construction' ? { f: 1 } : {}), p: pts.map((p) => p.map(Math.round)).flat() })
 }
 
+// Stations a town map shows but this script can't tell are coming (OSM maps them too differently): the site file lists them.
+for (const f of site.futureStations ?? []) if (!amenities.some((x) => x.name === f.name)) amenities.push({ name: f.name, kind: 'mrt', sub: 'future', at: toSite(f.lat, f.lon) })
+
 // Elevated stations often have no exits mapped: the station itself is then the place to walk to. Only where an open
 // track runs above ground beside it: a line being built can have stations tagged as open, and trains pass underground
 // through stations that never opened (Bukit Brown) or haven't yet (Mount Pleasant). Open underground stations have exits.

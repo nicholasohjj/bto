@@ -3,8 +3,7 @@ import { LAUNCHES } from '../config/launches'
 import { areaM2, centroid, edgeDist, noiseSources, type AreaOsm } from './area'
 import { AREA_OSM, AREAS } from './areaList'
 
-// Tengah Brickland and Toa Payoh Mount Pleasant (February 2027) have no area page until their snapshots are in.
-const previews = LAUNCHES.flatMap((l) => (l.previews ?? []).map((v) => ({ l, v }))).filter(({ v }) => v.area)
+const previews = LAUNCHES.flatMap((l) => (l.previews ?? []).map((v) => ({ l, v })))
 
 describe('upcoming sites', () => {
   it('has a placed site for every town-map preview, in the same launch and town', () => {
@@ -30,6 +29,7 @@ describe('upcoming sites', () => {
     ['yishun-khatib', 'Khatib', 700], ['toa-payoh-caldecott', 'Caldecott', 150], ['sembawang-admiralty-lane', 'Sembawang', 1300],
     ['geylang-aljunied', 'Mattar', 500], ['bedok-upper-east-coast', 'Bayshore', 150], ['bedok-bayshore-walk', 'Bayshore', 150],
     ['bishan-sin-ming', 'Upper Thomson', 800], ['tampines-changkat', 'Simei', 800], ['tampines-upper-changi', 'Upper Changi', 250],
+    ['tengah-brickland', 'Brickland', 600], ['toa-payoh-mount-pleasant', 'Mount Pleasant', 100],
   ]
   for (const [id, station, within] of NEAR) {
     it(`puts ${id} within ${within} m of ${station} MRT, as the town map draws it`, async () => {

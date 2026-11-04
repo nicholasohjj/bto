@@ -308,13 +308,13 @@ const FEBRUARY_2027: Launch = {
       source: 'HDB Tampines town map, issued November 2026 (checked 2026-11-04)',
     },
     {
-      town: 'Tengah', where: 'Brickland Crescent, Brickland Close (being built) and Bukit Batok Road, near Brickland MRT (North-South line, being built)',
+      area: 'tengah-brickland', town: 'Tengah', where: 'Brickland Crescent, Brickland Close (being built) and Bukit Batok Road, near Brickland MRT (North-South line, being built)',
       flats: { '2R': 410, '3R': 80, '4R': 350, '5R': 440 },
       note: '1,280 flats, with one rental block and three blocks mixing sold and rental flats; preschool, Residents’ Network Centre',
       source: 'HDB Tengah town map, issued November 2026 (checked 2026-11-04)',
     },
     {
-      town: 'Toa Payoh', where: 'Mount Pleasant Avenue, beside the future Mount Pleasant MRT station (Thomson–East Coast line)',
+      area: 'toa-payoh-mount-pleasant', town: 'Toa Payoh', where: 'Mount Pleasant Avenue, beside the future Mount Pleasant MRT station (Thomson–East Coast line)',
       flats: { '2R': 450, '3R': 90, '4R': 600 },
       note: '1,140 flats, with two blocks mixing sold and rental flats; eating house, preschool, Residents’ Network Centre, fire post, Active Ageing Centre. HDB’s map marks Mount Pleasant station as future, with no opening date',
       source: 'HDB Toa Payoh town map, issued November 2026 (checked 2026-11-04)',
