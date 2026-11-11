@@ -451,8 +451,11 @@ export const DEFAULT_POLICY: Policy = {
   lease: {
     // Age-95 rule: CPF usage (Valuation Limit) and the HDB loan LTV are pro-rated by how far the
     // remaining lease covers the youngest buyer to age 95; no CPF if remaining lease ≤ 20 years.
-    // HDB loan tenure ≤ remaining lease − 20. Source: MND "Updated Rules on CPF Usage and HDB
-    // Housing Loan" (2019) via search snippets. SECONDARY 2026-09-25.
+    // HDB loan tenure ≤ remaining lease − 20. Lease measured at the flat application.
+    // Source: MND Annex A "Updated Rules on CPF Usage and HDB Housing Loan" and Annex B examples
+    // (MND-MOM release, 9 May 2019); cpf.gov.sg FAQ (updated 6 Jul 2026, text supplied by the user)
+    // and housing usage calculator. VERIFIED 2026-11-05. The formula in leaseFactor is inferred
+    // from their worked examples; neither agency publishes it.
     coverToAge: 95,
     minYearsForCpf: 20,
     // Completed SBF / open-booking flats: sign the AFL and collect keys within 9 months of booking.
@@ -719,8 +722,8 @@ export const POLICY_META: Record<string, PolicyMeta> = {
   'downpayment.hdb.dia': { label: 'HDB loan downpayment (Deferred Income Assessment)', unit: 'pct', status: 'verified', source: 'HDB DIA Annex A (2024)' },
   'resale': { label: 'Resale flats: fees, grants and timing', unit: 'sgd', status: 'verified', source: 'hdb.gov.sg resale pages (Sep 2026); ABSD rate for PRs from IRAS (secondary)' },
   'downpayment.bank.dia': { label: 'Bank loan downpayment (Deferred Income Assessment)', unit: 'pct', status: 'verified', source: 'hdb.gov.sg Staggered Downpayment Scheme page (Sep 2026)' },
-  'lease.coverToAge': { label: 'Lease must cover youngest buyer to age', unit: 'years', status: 'secondary', source: 'MND 2019 CPF/HDB loan rules (snippet)' },
-  'lease.minYearsForCpf': { label: 'No CPF / HDB loan if remaining lease ≤', unit: 'years', status: 'secondary', source: 'MND 2019 CPF/HDB loan rules (snippet)' },
+  'lease.coverToAge': { label: 'Lease must cover youngest buyer to age', unit: 'years', status: 'verified', source: 'MND 2019 CPF/HDB loan rules; cpf.gov.sg FAQ and calculator (Nov 2026)' },
+  'lease.minYearsForCpf': { label: 'No CPF / HDB loan if remaining lease ≤', unit: 'years', status: 'verified', source: 'MND 2019 CPF/HDB loan rules; cpf.gov.sg FAQ and calculator (Nov 2026)' },
   'lease.completedKeysWithinMonths': { label: 'Completed flats: keys within (months of booking)', unit: 'months', status: 'secondary', source: 'hdb.gov.sg Key Collection (snippet)' },
   'resaleLevy': { label: 'Resale levy by first subsidised flat (half as a single)', unit: 'sgd', status: 'verified', source: 'hdb.gov.sg Conditions after buying: Resale levy (Sep 2026)' },
   'runningCosts.sccMonthly': { label: 'Service & conservancy charges per month', unit: 'sgd', status: 'verified', source: 'Bishan-Toa Payoh TC (varies by town council)' },

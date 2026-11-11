@@ -114,14 +114,20 @@ export function isBuilt(s: Scenario): boolean {
  * Age-95 rule: share (0–1) of the normal CPF usage / HDB loan limit you get,
  * by how far the remaining lease covers the youngest buyer to age 95.
  * 0 if the remaining lease is 20 years or less.
+ *
+ * Only the years above the 20-year floor count: (lease − 20) ÷ (years to 95 − 20). Neither CPF nor
+ * MND publishes this formula, but it reproduces all their worked examples (25-year-olds: a 55-year
+ * lease gives 70%, 65 gives 90%, 75 gives 100%). Age and lease are taken at the flat application.
  */
 export function leaseFactor(s: Scenario, policy: Policy): { factor: number; lease: number; needed: number; youngest: number } {
   const lease = s.flat.remainingLeaseYears ?? 99
-  const at = s.flat.dates.afl
+  const at = s.flat.dates.application
   const youngest = Math.min(...s.partners.map((p) => Math.floor(ageInMonths(p.birthYearMonth, at) / 12)))
   const needed = Math.max(1, policy.lease.coverToAge - youngest)
-  if (lease <= policy.lease.minYearsForCpf) return { factor: 0, lease, needed, youngest }
-  return { factor: Math.min(1, lease / needed), lease, needed, youngest }
+  const floor = policy.lease.minYearsForCpf
+  if (lease <= floor) return { factor: 0, lease, needed, youngest }
+  if (lease >= needed) return { factor: 1, lease, needed, youngest }
+  return { factor: (lease - floor) / (needed - floor), lease, needed, youngest }
 }
 
 /** Typical milestone dates for each way of buying (you adjust them to your own). */

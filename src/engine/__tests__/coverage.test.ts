@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_POLICY as P } from '../../config/policy'
 import { runScenario, simulateCore } from '../index'
-import { buildSchedule, maxLtvFor } from '../payments'
+import { buildSchedule, cpfCapFor, maxLtvFor } from '../payments'
 import { resolvePolicy } from '../policyOverrides'
 import { ordinaryWageCpf, prYear, ratesFor, salaryAt } from '../cpf'
 import { jobLossImpact, withJobLoss } from '../whatIf'
@@ -436,9 +436,9 @@ describe('SBF and open booking', () => {
 
 describe('remaining lease (age-95 rule)', () => {
   it('pro-rates CPF use and the HDB loan limit when the lease falls short of age 95', () => {
-    // Youngest is ~29 at AFL → needs 66 years; 60-year lease → 60/66
+    // Youngest is ~29 at application → needs 66 years; 60-year lease → (60 − 20) / (66 − 20)
     const s = base((s) => { s.flat.saleType = 'SBF'; s.flat.remainingLeaseYears = 60 })
-    const f = 60 / 66
+    const f = 40 / 46
     expect(maxLtvFor(s, policy).max).toBeCloseTo(0.75 * f, 6)
     const { loan } = buildSchedule(s, policy)
     expect(loan.cpfCap).toBeCloseTo(480000 * f, 2)
@@ -464,6 +464,56 @@ describe('remaining lease (age-95 rule)', () => {
   })
   it('a 99-year lease is unaffected', () => {
     expect(buildSchedule(base(), policy).loan.cpfCap).toBe(Infinity)
+  })
+
+  // Both buyers are 25 at the flat application in all of these.
+  const aged25 = (lease: number, tweak: (s: Scenario) => void = () => {}) => base((s) => {
+    s.flat.saleType = 'SBF'
+    s.flat.remainingLeaseYears = lease
+    s.flat.dates = { ...s.flat.dates, application: '2026-11' }
+    s.partners.forEach((p) => { p.birthYearMonth = '2001-11' })
+    tweak(s)
+  })
+  it('reproduces the MND-MOM worked examples (Annex B, 25-year-olds)', () => {
+    expect(leaseFactor(aged25(55), policy).factor).toBeCloseTo(0.7, 9)
+    expect(leaseFactor(aged25(65), policy).factor).toBeCloseTo(0.9, 9)
+    expect(leaseFactor(aged25(75), policy).factor).toBe(1)
+    // Their loan limits were 63% and 81% of the 90% LTV then in force.
+    expect(0.9 * leaseFactor(aged25(55), policy).factor).toBeCloseTo(0.63, 9)
+    expect(0.9 * leaseFactor(aged25(65), policy).factor).toBeCloseTo(0.81, 9)
+    expect(cpfCapFor('HDB', 430000, false, policy, leaseFactor(aged25(65), policy).factor)).toBeCloseTo(387000, 2)
+    expect(cpfCapFor('HDB', 430000, false, policy, leaseFactor(aged25(55), policy).factor)).toBeCloseTo(301000, 2)
+  })
+  it('reproduces the CPF FAQ example: $550,000, 65-year lease, $495,000 of CPF', () => {
+    const { loan } = buildSchedule(aged25(65, (s) => { s.flat.price = 550000 }), policy)
+    expect(loan.cpfCap).toBeCloseTo(495000, 2)
+  })
+  it('gives full use once the lease reaches age 95, and none at exactly 20 years', () => {
+    expect(leaseFactor(aged25(70), policy).factor).toBe(1)
+    expect(leaseFactor(aged25(69), policy).factor).toBeCloseTo(49 / 50, 9)
+    expect(leaseFactor(aged25(21), policy).factor).toBeCloseTo(1 / 50, 9)
+    expect(leaseFactor(aged25(20), policy).factor).toBe(0)
+  })
+  it('stays at 100% for older buyers whose years to 95 are within the 20-year floor', () => {
+    const s = aged25(21, (s) => { s.partners.forEach((p) => { p.birthYearMonth = '1946-11' }) })
+    expect(leaseFactor(s, policy)).toMatchObject({ factor: 1, youngest: 80 })
+  })
+  it('takes the age at the flat application, not the later AFL', () => {
+    const s = aged25(65, (s) => { s.flat.dates = { ...s.flat.dates, afl: '2029-11' } })
+    expect(leaseFactor(s, policy).youngest).toBe(25)
+  })
+  it('setting aside the BRS doesn’t lift the cap on a short lease', () => {
+    const bank = (brs: boolean, lease: number) => cpfCapFor('bank', 500000, brs, policy, leaseFactor(aged25(lease), policy).factor)
+    expect(bank(true, 65)).toBeCloseTo(450000, 2)
+    expect(bank(false, 65)).toBeCloseTo(450000, 2)
+    expect(bank(true, 75)).toBeCloseTo(500000 * policy.cpf.withdrawalLimitMultiple, 2)
+    const resale = buildSchedule(aged25(65, (s) => {
+      s.flat.saleType = 'resale'
+      s.flat.dates = { application: '2026-11', booking: '2026-11', afl: '2026-11', keys: '2027-02' } // resale runs from the option date
+      s.flat.valuation = 400000 // below the price, so the cap comes from the valuation
+      s.financing.brsSetAside = true
+    }), policy)
+    expect(resale.loan.cpfCap).toBeCloseTo(360000, 2)
   })
 })
 
@@ -714,13 +764,13 @@ describe('Enhanced CPF Housing Grant: HDB’s worked examples (hdb.gov.sg, 2024)
     expect(grantCredits[0].amounts.A).toBe(grantCredits[0].amounts.B)
   })
   it('pro-rates the grant when the lease doesn’t cover the youngest to 95', () => {
-    // A 50-year lease covers the youngest (29 at AFL here) only to 79: 50 of the 66 years needed.
+    // A 50-year lease covers the youngest (29 here) only to 79: (50 − 20) of the (66 − 20) years.
     const full = assessEligibility(ehgPlan(() => {}), policy).ehg
     const s = ehgPlan((s) => { s.flat.saleType = 'SBF'; s.flat.remainingLeaseYears = 50 })
     const short = assessEligibility(s, policy)
     const lf = leaseFactor(s, policy)
     expect(lf.needed).toBe(66)
-    expect(short.ehg).toBe(Math.round(full * 50 / 66))
+    expect(short.ehg).toBe(Math.round(full * 30 / 46))
     expect(short.ehgReason).toMatch(/Pro-rated/)
   })
 })

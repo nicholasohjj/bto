@@ -191,11 +191,13 @@ export function switchCashPct(scenario: Scenario, policy: Policy): number {
 
 /**
  * CPF usable for the flat: no cap with an HDB loan, the Valuation Limit (or
- * 120% with BRS) with a bank loan — both pro-rated by the age-95 lease factor.
+ * 120% with BRS) with a bank loan. If the lease falls short of age 95, either loan is capped at
+ * the pro-rated Valuation Limit, and setting aside the BRS doesn't raise it (cpf.gov.sg).
  */
 export function cpfCapFor(loanType: 'HDB' | 'bank', price: number, brsSetAside: boolean | undefined, policy: Policy, lease = 1): number {
-  if (loanType === 'HDB') return lease >= 1 ? Infinity : price * lease
-  return price * (brsSetAside ? policy.cpf.withdrawalLimitMultiple : 1) * lease
+  if (lease < 1) return price * lease
+  if (loanType === 'HDB') return Infinity
+  return price * (brsSetAside ? policy.cpf.withdrawalLimitMultiple : 1)
 }
 
 /** Far enough ahead for the 15-year accrued-interest run. */
@@ -561,9 +563,10 @@ export function buildSchedule(raw: Scenario, policy: Policy): Schedule {
   const maxLoanUnderMsr = maxInstalment <= 0 ? 0 : r === 0 ? maxInstalment * n : (maxInstalment * (1 - Math.pow(1 + r, -n))) / r
 
   // Resale: CPF is capped at the lower of price and valuation whatever the loan (more after setting aside the BRS).
+  const leaseShare = leaseFactor(scenario, policy).factor
   const cpfCap = resale
-    ? loanBase * (financing.brsSetAside ? policy.cpf.withdrawalLimitMultiple : 1) * leaseFactor(scenario, policy).factor
-    : cpfCapFor(financing.loanType, price, financing.brsSetAside, policy, leaseFactor(scenario, policy).factor)
+    ? cpfCapFor('bank', loanBase, financing.brsSetAside, policy, leaseShare)
+    : cpfCapFor(financing.loanType, price, financing.brsSetAside, policy, leaseShare)
 
   const loan: LoanInfo = {
     price: flat.price,

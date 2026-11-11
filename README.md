@@ -263,7 +263,8 @@ check the PDF importer on a real block plan.
     - No income ceiling to buy, no citizen + PR premium, no staggered scheme or DIA; singles can buy any type except 3Gen (2-room only in Prime). PR couples can buy with a bank loan.
     - Warnings for exercising the option late, cash over valuation, and a missing resale grant; PPHS and HDB's pre-completion check don't apply.
 - **Remaining lease (age-95 rule):**
-    - If the lease won't last the youngest of you to 95, CPF use and the HDB loan limit are pro-rated (lease ÷ years to 95).
+    - If the lease won't last the youngest of you to 95, CPF use and the HDB loan limit are pro-rated, counting only the years above 20: (lease − 20) ÷ (years to 95 − 20), with age and lease taken at the flat application. A 120% Withdrawal Limit doesn't apply.
+    - The formula is inferred: CPF and MND don't publish it, but it reproduces all their worked examples (25-year-olds: 55-year lease 70%, 65 years 90%, 75 years 100%). The EHG uses the same share, which isn't confirmed by HDB.
     - 20 years or less: no CPF and no HDB loan.
 - **Eligibility and grants** (`eligibility.ts`).
   - Household income uses the 12 months ending 2 months before you apply for the HFE letter. Like HDB, each person's gross pay (no bonuses or employer CPF) is averaged over the months they actually worked in that window (no-pay months don't count), then the averages are added. HFE month: set under Key dates (default a month before the flat application, since you need a valid letter to apply and it takes up to a month; valid 9 months, with a warning if it would expire or comes after the application). Under DIA, the assessment month.
@@ -413,7 +414,7 @@ Users can override any figure for a single scenario under **Advanced settings**.
 | Annual values of HDB flats by type | **Not verified** (guides disagree; may be low for 2026) |
 | Completed SBF / open-booking flats: AFL + keys within 9 months of booking | Secondary (hdb.gov.sg key collection page, snippet) |
 | Open booking: first-come-first-served, book from next working day | Secondary (hdb.gov.sg snippet) |
-| Age-95 lease rule: pro-rated CPF use / HDB LTV; no CPF ≤ 20 yrs; HDB tenure ≤ lease − 20 | Secondary (MND 2019 rules, snippets) |
+| Age-95 lease rule: pro-rated CPF use / HDB LTV; no CPF ≤ 20 yrs; HDB tenure ≤ lease − 20 | Verified (MND-MOM release 9 May 2019, Annexes A and B; cpf.gov.sg FAQ and calculator, checked 2026-11-05). The formula is inferred from their worked examples. Not modelled: a youngest co-owner giving up ownership or not using CPF |
 | Typical dates for SBF / open booking (booking +3 months to keys for completed flats) | **Not verified** (defaults to adjust) |
 | Singles: SC, 35+, 2-room Flexi only for new flats (any location); grant up to $60k | Secondary (HDB via guides, snippets) |
 | Singles income ceiling $8,000 from 24 Aug 2026 (was $7,000) | Secondary (NDR 2026 news) |

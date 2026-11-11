@@ -423,7 +423,7 @@ export function buildWarnings(core: CoreResult, extras: WarningExtras = {}): War
     warnings.push({
       id: 'lease-prorated', severity: 'warning',
       title: `Shorter lease: CPF use ${isHdb ? 'and HDB loan ' : ''}limited to ${Math.round(lf.factor * 100)}%`,
-      explanation: `The ${lf.lease}-year remaining lease lasts the youngest of you (${lf.youngest}) only to age ${lf.youngest + lf.lease}, not ${lp.coverToAge}. CPF you can use for the flat${isHdb ? ' and the HDB loan limit are' : ' is'} pro-rated to ${lf.lease}/${lf.needed} = ${Math.round(lf.factor * 100)}%.`,
+      explanation: `The ${lf.lease}-year remaining lease lasts the youngest of you (${lf.youngest}) only to age ${lf.youngest + lf.lease}, not ${lp.coverToAge}. CPF you can use for the flat${isHdb ? ' and the HDB loan limit are' : ' is'} pro-rated to ${Math.round(lf.factor * 100)}%: only the years above ${lp.minYearsForCpf} count, so ${lf.lease - lp.minYearsForCpf} of the ${lf.needed - lp.minYearsForCpf} needed. Check the exact figure with CPF’s housing usage calculator.`,
       fixes: [],
     })
   }
