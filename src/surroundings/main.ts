@@ -239,12 +239,13 @@ function renderResults(u: UnitPos, obs: ReturnType<typeof obstacles>) {
   h += queueHtml(u)
   h += `<div class="sec"><h3>Sun on the main windows</h3><div class="big">${hrs(day.sunHours)} <small>direct sun ${dayText(d)}</small></div>${sunBar(day)}
     <div class="kv"><span>After 3 pm (west sun)</span><b>${hrs(day.afternoonHours)}</b></div>
-    <div class="kv"><span>Year average</span><b>${hrs(yr.avgSun)} a day, ${hrs(yr.avgAfternoon)} after 3 pm</b></div>
+    <div class="kv"><span>Year average</span><b>${hrs(yr.avgSun)} a day</b></div>
+    <div class="kv"><span>Year average after 3 pm</span><b>${hrs(yr.avgAfternoon)}</b></div>
     ${yr.days.map((k) => `<div class="kv"><span>${k.label}</span><b>${hrs(k.sunHours)}</b></div>`).join('')}
     <p class="note"><span class="pill ${westy ? 'warn' : 'good'}">${westy ? 'Afternoon sun most of the year' : 'Little afternoon sun over the year'}</span> ${westy ? 'Rooms on this side warm up in the afternoon; blinds or tinted glass help.' : 'Cooler in the afternoon on most days.'} ${bright ? '' : 'Not much direct sun: rooms stay cooler but can be dimmer.'} Direct sun only, on the side the unit faces; other windows may differ.</p></div>`
   h += `<div class="sec"><h3>View</h3><div class="big">${v.farPct}% <small>of the view clear for 300 m or more</small></div>
     <div class="kv"><span>Clear for 100 m or more</span><b>${v.openPct}%</b></div>
-    <div class="kv"><span>Nearest building in front</span><b>${v.nearest ? `${esc(v.nearest.name.replace(/:.*/, ''))}, ${Math.round(v.nearest.dist)} m` : 'none within 1 km'}</b></div>
+    <div class="kv"><span>Nearest building in front${v.nearest ? `: ${esc(v.nearest.name.replace(/:.*/, ''))}` : ''}</span><b>${v.nearest ? `${Math.round(v.nearest.dist)} m` : 'none within 1 km'}</b></div>
     <p class="note">Looking out across 140° at eye level. Only buildings taller than your floor block the view.${future > 0 && site.zones.some((z) => z.kind === 'future') ? ` Reserved land is assumed to get ${future}-storey blocks.` : ''} ${osm ? `Buildings around the estate are from OpenStreetMap (${guessed} of ${osm.buildings.length} have no height there and are taken as 2 storeys).` : '<b>Loading the buildings around the estate…</b>'}</p></div>`
   const rail = railDistances(u, osm), trains = rail.filter((r) => !r.underground), under = [...new Set([...rail.filter((r) => r.underground && r.dist < 250).map((r) => r.name), ...site.rail.filter((r) => r.underground).map((r) => r.name)].map((n) => n.replace(/ \(.*\)$/, '')))]
   h += `<div class="sec"><h3>Roads and noise</h3>${roads.slice(0, 4).map((r) => `<div class="kv"><span>${esc(r.name)}${r.faces ? ' <span class="pill warn">faces it</span>' : ''}</span><b>${r.dist} m</b></div>`).join('')}

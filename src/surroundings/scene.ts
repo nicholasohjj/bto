@@ -27,9 +27,11 @@ export function createScene(canvas: HTMLCanvasElement): SceneApi | null {
   try { renderer = new THREE.WebGLRenderer({ canvas, antialias: true }) } catch { return null }
   renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2))
   renderer.shadowMap.enabled = true
-  renderer.shadowMap.type = THREE.PCFShadowMap
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap
   renderer.toneMapping = THREE.NeutralToneMapping
   const scene = new THREE.Scene()
+  // Distance haze: far buildings fade towards the sky, which also hides the ground plane's edge.
+  scene.fog = new THREE.Fog('#cfe0ea', 1000, 4500)
   const camera = new THREE.PerspectiveCamera(45, 1, 0.5, 6000)
   const controls = new OrbitControls(camera, canvas)
   controls.enableDamping = true
@@ -314,11 +316,14 @@ export function createScene(canvas: HTMLCanvasElement): SceneApi | null {
       hemi.intensity = s.alt > 0 ? 1.2 : 0.35
       const day = new THREE.Color('#cfe0ea'), dusk = new THREE.Color('#e9c7a6'), night = new THREE.Color('#1c2433')
       scene.background = s.alt > 8 ? day : s.alt > 0 ? dusk.lerp(day, s.alt / 8) : night
+      scene.fog!.color.copy(scene.background as THREE.Color)
       sun.color.set(s.alt < 10 ? '#ffd2a1' : '#fff2dd')
     },
     windowView(on) {
       winMode = on && !!unit
       controls.enabled = !winMode
+      // The unit's own marker would fill the view from inside; the scene shows it only from outside.
+      unitG.visible = !winMode
       look.yaw = 0; look.pitch = 0
       if (winMode) { camera.fov = 70; camera.updateProjectionMatrix(); lookFromWindow() } else reset()
     },
