@@ -74,13 +74,16 @@ async function hdbStoreys() {
   if (existsSync(f)) rows = JSON.parse(readFileSync(f, 'utf8'))
   else {
     rows = []
-    for (let offset = 0; ; offset += 10000) {
-      const u = `https://data.gov.sg/api/action/datastore_search?resource_id=d_17f5382f26140b1fdae0ba2ef6239d2f&limit=10000&offset=${offset}`
+    // The rows are wide, and the API refuses large pages ("Size of row data too large").
+    for (let offset = 0; ; offset += 3000) {
+      const u = `https://data.gov.sg/api/action/datastore_search?resource_id=d_17f5382f26140b1fdae0ba2ef6239d2f&limit=3000&offset=${offset}`
       const r = await (await fetch(u)).json()
+      if (!r.success) throw new Error(`HDB property information: ${JSON.stringify(r.error ?? r)}`)
       const page = (r.result?.records ?? []).map((x) => [x.blk_no, x.street, +x.max_floor_lvl])
       rows.push(...page)
       if (rows.length >= (r.result?.total ?? 0) || !page.length) break
     }
+    if (!rows.length) throw new Error('HDB property information: no rows')
     writeFileSync(f, JSON.stringify(rows))
     console.log(`HDB property information: ${rows.length} blocks`)
   }
