@@ -55,5 +55,7 @@ export default defineConfig({
     include: ['src/**/*.test.ts'],
     // Some tests load whole OpenStreetMap snapshots, which takes a few seconds on a busy machine.
     testTimeout: 20000,
+    // The engine tests are pure functions with no shared state; reusing workers saves ~2s a run.
+    isolate: false,
   },
 })

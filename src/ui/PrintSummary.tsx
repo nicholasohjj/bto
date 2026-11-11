@@ -30,6 +30,7 @@ export function PrintSummary({ scenario, result }: { scenario: Scenario; result:
     <div className="print-summary hidden text-[11px] leading-snug text-black print:block">
       <header className="flex items-baseline justify-between border-b border-black pb-1">
         <h1 className="text-base font-bold">{scenario.name}</h1>
+        {/* oxlint-disable-next-line react/purity -- the print-only page should stamp the moment it's printed */}
         <span>BTO Money Timeline · printed {new Date().toLocaleDateString('en-SG', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
       </header>
 
