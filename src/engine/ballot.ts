@@ -1,4 +1,4 @@
-import { LAUNCHES, type ApplicationRateRow, type Launch, type RateGroup } from '../config/launches'
+import { LAUNCHES, type ApplicationRateRow, type ApplicationRates, type Launch, type RateGroup } from '../config/launches'
 import type { FlatType } from '../config/policy'
 import { monthsBetween } from './dates'
 import type { Scenario } from './types'
@@ -51,9 +51,13 @@ export function oddsFor(launch: Launch, projectId: string, type: FlatType, group
   return { launch, row, group, rate, median, pooledWith: row.projects.filter((p) => p !== projectId), band }
 }
 
-/** The picked project's rates for the plan's flat type and group (empty if none are published). */
-export function planOdds(s: Scenario): { odds: Odds[]; unsure?: boolean; noGroup?: boolean } {
-  const launch = LAUNCHES.find((l) => l.id === s.flat.project?.launch)
+/**
+ * The picked project's rates for the plan's flat type and group (empty if none are published).
+ * `live`: rates fetched from HDB while the launch is open, used only until some are baked in.
+ */
+export function planOdds(s: Scenario, live?: ApplicationRates): { odds: Odds[]; unsure?: boolean; noGroup?: boolean } {
+  const found = LAUNCHES.find((l) => l.id === s.flat.project?.launch)
+  const launch = found && !found.applicationRates && live ? { ...found, applicationRates: live } : found
   const id = s.flat.project?.id
   if (!launch?.applicationRates || !id) return { odds: [] }
   const g = rateGroups(s, s.flat.type)

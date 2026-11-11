@@ -26,6 +26,8 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const req = event.request
   if (req.method !== 'GET' || new URL(req.url).origin !== self.location.origin) return
+  // Live data (/api/rates/…) changes while the app is open: never cache it.
+  if (new URL(req.url).pathname.startsWith('/api/')) return
   if (req.mode === 'navigate') {
     // Flat Studio (/studio/), Surroundings (/surroundings/) and upcoming sites (/surroundings/area/) are their own
     // pages; everything else is the app at '/'.

@@ -47,6 +47,17 @@ function swAssets(): Plugin {
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), tailwindcss(), swAssets()],
+  server: {
+    // In dev there are no Vercel functions, so /api/rates/<id> (api/rates/[id].ts in
+    // production) is proxied straight to HDB's JSON.
+    proxy: {
+      '/api/rates': {
+        target: 'https://services-homes.hdb.gov.sg',
+        changeOrigin: true,
+        rewrite: (p) => p.replace(/^\/api\/rates\/([A-Za-z0-9]+)$/, '/sales/files/apprates/$1.json'),
+      },
+    },
+  },
   build: {
     // The money plan (/), Flat Studio (/studio/), Surroundings (/surroundings/) and upcoming sites (/surroundings/area/).
     rolldownOptions: { input: { main: 'index.html', studio: 'studio/index.html', surroundings: 'surroundings/index.html', area: 'surroundings/area/index.html' } },

@@ -9,6 +9,8 @@ import { assessmentMonth, autoAmount, downpaymentSchedule, effectiveLtv, grantAm
 import { assessEligibility, hfeMonth, hfeValidUntil } from '../engine/eligibility'
 import { applyWindow } from '../engine/applyWindow'
 import { applyProject, offeredTypes, pickedLaunch, pickedProject, setLaunchDates } from '../engine/launch'
+import type { LiveRates } from '../engine/liveRates'
+import { useLiveRates } from './useLiveRates'
 import { GROUP_LABEL, latestMedian, oddsText, planOdds, rateGroups, townHistory } from '../engine/ballot'
 import { isCompleted, isResale, isSingle, isSinglesPurchase, leaseFactor, normalizeScenario, typicalDates } from '../engine/saleType'
 import { addMonths, formatYm } from '../engine/dates'
@@ -306,22 +308,27 @@ function IncomeChanges({ partner: p, startMonth, years, onChange }: {
 type Row = (label: string, value: ReactNode) => ReactNode
 const BAND_CLS = { good: 'text-good-ink', fair: 'text-ink', hard: 'text-serious' } as const
 
-/** The picked project's application rate for this plan's group, once HDB has published it. */
-function BallotRows({ scenario, row }: { scenario: Scenario; row: Row }) {
-  const { odds, unsure, noGroup } = planOdds(scenario)
+/** The picked project's application rate for this plan's group: HDB's published table, or live counts while the launch is open. */
+function BallotRows({ scenario, row, live }: { scenario: Scenario; row: Row; live?: LiveRates | null }) {
+  const { odds, unsure, noGroup } = planOdds(scenario, live?.rates)
   const launch = pickedLaunch(scenario)
-  if (!launch?.applicationRates) return null
+  const ar = launch?.applicationRates ?? live?.rates
+  if (!launch || !ar) return null
+  const isLive = !launch.applicationRates
   const typeLabel = FLAT_TYPES.find((x) => x.value === scenario.flat.type)?.label ?? scenario.flat.type
   if (noGroup) return row('Ballot', <span className="text-muted">HDB’s rates have no group for second-timer singles.</span>)
   if (!odds.length) return row('Ballot', <span className="text-muted">No {typeLabel} rate for this project in HDB’s table.</span>)
   const pooled = odds[0].pooledWith.map((id) => launch.projects.find((x) => x.id === id)?.name ?? id)
-  return row('Ballot', <>
+  return row(isLive ? 'Ballot (live)' : 'Ballot', <>
     {odds.map((o) => <span key={o.group} className={`block ${BAND_CLS[o.band]}`}>{oddsText(o)}</span>)}
     <span className="text-muted">
       {launch.name}, {typeLabel}{pooled.length ? `, counted with ${pooled.join(' and ')}` : ''}: {odds[0].row.applicants.toLocaleString()} applicants for {odds[0].row.units.toLocaleString()} flats.
+      {isLive && (live?.final
+        ? ' HDB’s final count for this exercise.'
+        : ' Applications are still open, so these counts keep changing (HDB updates them a few times a day).')}
       {unsure && ' HDB’s page doesn’t say which group a first-timer + second-timer couple is counted in, so both are shown.'}
       {' '}About 1 in 5 applications are from people who applied before. Extra ballot chances (after unsuccessful tries) and priority schemes aren’t counted here.
-      {' '}Source: {launch.applicationRates.source}.
+      {' '}Source: {ar.source}.
     </span>
   </>)
 }
@@ -351,6 +358,7 @@ function ProjectPicker({ scenario, update }: { scenario: Scenario; update: Updat
   const closed = (l: Launch) => l.applicationMonth < scenario.startMonth
   const p = picked?.project
   const chosen = useStored(CHOSEN_UNIT_KEY, readChosenUnit)
+  const live = useLiveRates(launch)
   const mine = p && chosen?.site === p.id ? chosen : null
   const myLayout = mine && unitLayout(mine)
   const typeLabel = (t: FlatType) => FLAT_TYPES.find((x) => x.value === t)?.label ?? t
@@ -391,8 +399,8 @@ function ProjectPicker({ scenario, update }: { scenario: Scenario; update: Updat
               {row('Keys', p.waitMonths !== undefined
                 ? <>{formatYm(addMonths(launch.applicationMonth, p.waitMonths))} <span className="text-muted">({p.waitText ?? `${p.waitMonths} months`})</span></>
                 : <>About {formatYm(addMonths(launch.applicationMonth, TYPICAL_WAIT_MONTHS))} <span className="text-muted">(a typical {years(TYPICAL_WAIT_MONTHS)}: HDB gave no waiting time; the Flat Portal project page usually does)</span></>)}
-              <BallotRows scenario={scenario} row={row} />
-              {!launch.applicationRates && <TownBallotRows scenario={scenario} towns={[p.town]} before={launch.applicationMonth} row={row} />}
+              <BallotRows scenario={scenario} row={row} live={live} />
+              {!launch.applicationRates && !live && <TownBallotRows scenario={scenario} towns={[p.town]} before={launch.applicationMonth} row={row} />}
               {p.subsidyRecoveryPct !== undefined && row('On resale', `${p.subsidyRecoveryPct}% of the price goes back to HDB (subsidy recovery)`)}
               {p.fittingsIncluded && row('Included', 'Floor finishes, internal doors, sanitary fittings')}
               {mine ? row('Your unit', <>

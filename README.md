@@ -29,7 +29,7 @@ Shared links show a preview card (title, description and `public/og.png`) from t
 
 **⋯ → Print summary** prints one page for an HDB or bank appointment (`ui/PrintSummary.tsx`): key dates, the loan, each payment with its cash/CPF split, and the problems to check. Choose "Save as PDF" in the print dialog to get a PDF.
 
-**Ballot odds**: once a launch closes, `launches.ts` holds HDB's application rates (`applicationRates`: applicants per flat set aside for seniors, first-timer families, first-timer singles and second-timer families, by project and flat type, with the medians). The plan's group comes from its buyers, first-timer status and ages (seniors: everyone 55 or over, 2-room Flexi only). The Flat editor shows the picked project's rate and what it means (HDB shortlists up to twice as many applicants as flats, so a rate of 3.3 means at most about 6 in 10 got a queue number), "Which projects fit" shows it on each project, and an upcoming launch shows the last rates in its towns. Extra ballot chances and priority schemes aren't modelled; a first-timer + second-timer couple sees both family rates, since HDB's page doesn't say which group they're in.
+**Ballot odds**: while a sales exercise is open (and until its final figures are typed in), the Flat editor shows **live** application rates from HDB's own JSON (`engine/liveRates.ts` maps it; `api/rates/[id].ts`, a Vercel function, proxies services-homes.hdb.gov.sg because HDB sends no CORS headers; `npm run dev` proxies the same path itself, and the service worker never caches `/api/`). Live counts are marked as still changing (HDB updates them a few times a day) and aren't hand-checked. Once a launch closes, `launches.ts` holds HDB's application rates (`applicationRates`: applicants per flat set aside for seniors, first-timer families, first-timer singles and second-timer families, by project and flat type, with the medians). The plan's group comes from its buyers, first-timer status and ages (seniors: everyone 55 or over, 2-room Flexi only). The Flat editor shows the picked project's rate and what it means (HDB shortlists up to twice as many applicants as flats, so a rate of 3.3 means at most about 6 in 10 got a queue number), "Which projects fit" shows it on each project, and an upcoming launch shows the last rates in its towns. Extra ballot chances and priority schemes aren't modelled; a first-timer + second-timer couple sees both family rates, since HDB's page doesn't say which group they're in.
 
 **If you sell** tab (`engine/afterMop.ts`, the card at the top of the CPF refund projection): pick when to sell (5, 10 or 15 years after keys; before the minimum occupation period of 5 years, or 10 for Plus and Prime, it says it can't be sold), the price and an agent's fee. It shows the loan still owed (following the plan's mortgage, with any loan changes), Plus/Prime subsidy recovery at the picked project's rate, the CPF to put back (CPF used + accrued interest), the cash left, and the price below which nothing comes back as cash. A sale that doesn't cover the full CPF refund puts back only the price less the loan, shared in proportion to each owner's refund, with no cash top-up for a sale at market value; the agent's fee comes out of the cash, not the refund (cpf.gov.sg "CPF refund when selling or transferring property", checked 2026-10-16). For owners 55 or over, it notes that the refund tops up the Retirement Account first. It names the resale levy for a next subsidised flat. With a picked project, it shows the median recent resale price of that flat type within 1 km, with a button to use it. Legal and HDB resale fees on the sale aren't counted.
 
@@ -62,6 +62,7 @@ src/
     compare.ts          Key-number rows for scenario comparison
     launch.ts           Fills the flat from a picked launch project; "which projects fit?" check across a launch
     ballot.ts           Ballot odds from HDB's application rates: the plan's group, the rate and median, past rates in a town
+    liveRates.ts        HDB's live application-rate JSON (via /api/rates) mapped to the same shape while a launch is open
     policyOverrides.ts  Applies per-scenario "Advanced settings" overrides to the policy
     __tests__/          Vitest tests
   state/                Seed scenarios, localStorage, JSON export/import, share links, renovation stages,
@@ -69,6 +70,7 @@ src/
   ui/                   React components (wizard, editors, charts, tables, glossary tooltips, Renovation tab)
   studio/               Flat Studio (/studio/): renovation planner, see below
 studio/index.html       Flat Studio page (a second Vite entry)
+api/rates/[id].ts       Vercel function: proxies HDB's live application-rate JSON (HDB sends no CORS headers)
 ```
 
 ## Flat Studio (`/studio/`)
