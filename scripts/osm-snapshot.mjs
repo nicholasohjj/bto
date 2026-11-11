@@ -56,6 +56,37 @@ async function fetchOverpass(q) {
 
 const inside = (p, poly) => { let c = false; for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) if ((poly[i][1] > p[1]) !== (poly[j][1] > p[1]) && p[0] < (poly[j][0] - poly[i][0]) * (p[1] - poly[i][1]) / (poly[j][1] - poly[i][1]) + poly[i][0]) c = !c; return c }
 
+// HDB blocks' real storey counts, by block number and street, from data.gov.sg "HDB Property
+// Information" (Open Data Licence): OSM rarely tags building:levels on HDB blocks, but usually has
+// their address. The dataset is cached once in .osm-cache/ and shared by every site.
+// Street names use HDB's abbreviations, so OSM's full words are shortened to match.
+const STREET_ABBREV = [
+  ['STREET', 'ST'], ['AVENUE', 'AVE'], ['ROAD', 'RD'], ['DRIVE', 'DR'], ['CRESCENT', 'CRES'],
+  ['CLOSE', 'CL'], ['PLACE', 'PL'], ['GARDENS', 'GDNS'], ['HEIGHTS', 'HTS'], ['TERRACE', 'TER'],
+  ['NORTH', 'NTH'], ['SOUTH', 'STH'], ['CENTRAL', 'CTRL'], ['UPPER', 'UPP'], ['LORONG', 'LOR'],
+  ['JALAN', 'JLN'], ['BUKIT', 'BT'], ['KAMPONG', 'KG'], ['TANJONG', 'TG'], ['COMMONWEALTH', "C'WEALTH"],
+  ['MARKET', 'MKT'], ['SAINT', 'ST.'],
+]
+const hdbStreet = (s) => STREET_ABBREV.reduce((x, [full, ab]) => x.replace(new RegExp(`\\b${full}\\b`, 'g'), ab), s.toUpperCase().trim())
+async function hdbStoreys() {
+  const f = '.osm-cache/hdb-property-info.json'
+  let rows
+  if (existsSync(f)) rows = JSON.parse(readFileSync(f, 'utf8'))
+  else {
+    rows = []
+    for (let offset = 0; ; offset += 10000) {
+      const u = `https://data.gov.sg/api/action/datastore_search?resource_id=d_17f5382f26140b1fdae0ba2ef6239d2f&limit=10000&offset=${offset}`
+      const r = await (await fetch(u)).json()
+      const page = (r.result?.records ?? []).map((x) => [x.blk_no, x.street, +x.max_floor_lvl])
+      rows.push(...page)
+      if (rows.length >= (r.result?.total ?? 0) || !page.length) break
+    }
+    writeFileSync(f, JSON.stringify(rows))
+    console.log(`HDB property information: ${rows.length} blocks`)
+  }
+  return new Map(rows.filter(([, , lv]) => lv > 0).map(([blk, street, lv]) => [`${blk} ${street}`, lv]))
+}
+
 // The estate itself, which the brochure model covers (OSM has it only as a construction site).
 const want = (p) => parts.includes(p)
 const old = only ? JSON.parse(readFileSync(outFile, 'utf8')) : {}
@@ -64,9 +95,11 @@ const estate = estateWay ? estateWay.geometry.map((p) => toSite(p.lat, p.lon)) :
 
 // The brochure's own blocks and buildings.
 const own = area ? [] : [...site.blocks.flatMap((b) => (b.masses ?? [{ poly: b.footprint }]).map((m) => m.poly)), ...site.buildings.filter((b) => b.poly).map((b) => b.poly)]
-// Buildings: height from "height", else storeys from "building:levels" (3 m each), else assumed 2 storeys.
+// Buildings: height from "height", else storeys from "building:levels" (3 m each), else the block's
+// storey count from HDB Property Information by its OSM address, else assumed 2 storeys.
 const B = want('buildings') ? await overpass('buildings', `[out:json][timeout:120];way["building"](${box(1300)});out tags geom;`) : []
-let known = 0
+const storeys = want('buildings') && !area ? await hdbStoreys() : new Map()
+let known = 0, fromHdb = 0
 const buildings = []
 for (const w of B) {
   const poly = (w.geometry || []).map((p) => toSite(p.lat, p.lon))
@@ -76,9 +109,11 @@ for (const w of B) {
   // OpenStreetMap may already have the estate's own blocks or carpark: the brochure model has them.
   if (own.some((o) => inside(c, o) || poly.some((p) => inside(p, o)))) continue
   const t = w.tags || {}, h = parseFloat(t.height), lv = parseFloat(t['building:levels'])
-  const height = isFinite(h) && h > 0 ? h : isFinite(lv) && lv > 0 ? lv * 3 : 6
-  const has = (isFinite(h) && h > 0) || (isFinite(lv) && lv > 0)
+  const hdbLv = t['addr:housenumber'] && t['addr:street'] ? storeys.get(`${t['addr:housenumber'].toUpperCase()} ${hdbStreet(t['addr:street'])}`) : undefined
+  const height = isFinite(h) && h > 0 ? h : isFinite(lv) && lv > 0 ? lv * 3 : hdbLv ? hdbLv * 3 : 6
+  const has = (isFinite(h) && h > 0) || (isFinite(lv) && lv > 0) || !!hdbLv
   if (has) known++
+  if (!((isFinite(h) && h > 0) || (isFinite(lv) && lv > 0)) && hdbLv) fromHdb++
   poly.pop()   // closed ways repeat the first point
   buildings.push({ h: +height.toFixed(1), ...(has ? {} : { a: 1 }), ...(t.name ? { n: t.name.slice(0, 60) } : {}), p: poly.flat() })
 }
@@ -232,4 +267,4 @@ const out = {
 writeFileSync(outFile, JSON.stringify(out))
 // The run is complete: the saved answers are no longer needed.
 rmSync(cacheDir, { recursive: true, force: true })
-console.log(`${(out.buildings ?? []).length} buildings, ${(out.roads ?? []).length} roads, ${out.walk.nodes.length / 2} path nodes in ${out.walk.ways.length} ways, ${out.amenities.length} amenities, ${(out.rail ?? []).length} railway tracks (${(out.rail ?? []).filter((r) => !r.u).length} above ground)${want('buildings') ? `; ${known} buildings have heights` : ''}`)
+console.log(`${(out.buildings ?? []).length} buildings, ${(out.roads ?? []).length} roads, ${out.walk.nodes.length / 2} path nodes in ${out.walk.ways.length} ways, ${out.amenities.length} amenities, ${(out.rail ?? []).length} railway tracks (${(out.rail ?? []).filter((r) => !r.u).length} above ground)${want('buildings') ? `; ${known} buildings have heights (${fromHdb} from HDB property information)` : ''}`)

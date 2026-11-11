@@ -18,6 +18,7 @@ import { money } from '../engine/format'
 import type { CostItem, Milestone, Partner, Scenario, When } from '../engine/types'
 import { defaultCosts, newId } from '../state/defaults'
 import { FLAT_TYPES, MILESTONES } from './labels'
+import RENTS from '../config/rents.json'
 import { Button, Card, Field, InfoTip, inputCls, MoneyInput, MonthInput, NumberInput, PercentInput, Segmented, Select, Slider, TextInput, Toggle } from './controls'
 
 export type Update = (fn: (draft: Scenario) => void) => void
@@ -1042,6 +1043,35 @@ function DownpaymentPreview({ scenario: raw, policy }: { scenario: Scenario; pol
 
 // ---------------- Costs ----------------
 
+const RENT_TOWNS = RENTS.towns as Record<string, Partial<Record<FlatType, number>>>
+const titleCase = (s: string) => s.toLowerCase().replace(/(^|[\s/])\w/g, (c) => c.toUpperCase())
+
+/** Median declared whole-flat rents for a town (HDB via data.gov.sg), tap to use one. */
+function RentMedians({ scenario, update }: { scenario: Scenario; update: Update }) {
+  const projectTown = pickedProject(scenario)?.project.town.toUpperCase()
+  const [town, setTown] = useState(projectTown && RENT_TOWNS[projectTown] ? projectTown : Object.keys(RENT_TOWNS)[0])
+  const medians = RENT_TOWNS[town] ?? {}
+  return (
+    <div className="mt-2 text-xs text-muted">
+      <label className="flex items-center gap-1">
+        Median rent in
+        <select className={`${inputCls} !w-auto !py-0.5 text-xs`} value={town} aria-label="Town for median rent" onChange={(e) => setTown(e.target.value)}>
+          {Object.keys(RENT_TOWNS).map((t) => <option key={t} value={t}>{titleCase(t)}</option>)}
+        </select>
+      </label>
+      <div className="mt-1 flex flex-wrap gap-1">
+        {FLAT_TYPES.filter((t) => medians[t.value]).map((t) => (
+          <Button key={t.value} variant="ghost" className="!px-2 !py-0.5 text-xs"
+            onClick={() => update((d) => { d.interim.monthlyCost = medians[t.value]! })}>
+            {t.label} {money(medians[t.value]!)}
+          </Button>
+        ))}
+      </div>
+      <p className="mt-1">Whole-flat rents declared to HDB, {RENTS.quarter} — half the flats went for more. Renting a room costs less.</p>
+    </div>
+  )
+}
+
 export function CostsEditor({ scenario, update, policy, brief = false }: { scenario: Scenario; update: Update; policy: Policy; brief?: boolean }) {
   const [more, setMore] = useState(!brief)
   const loanGuess = scenario.flat.price * scenario.financing.ltv
@@ -1073,6 +1103,7 @@ export function CostsEditor({ scenario, update, policy, brief = false }: { scena
                 : undefined}>
               <MoneyInput value={scenario.interim.monthlyCost} onChange={(v) => update((d) => { d.interim.monthlyCost = v })} ariaLabel="Rent" />
             </Field>
+            {scenario.interim.mode === 'rent' && <RentMedians scenario={scenario} update={update} />}
           </div>
         )}
       </Card>
